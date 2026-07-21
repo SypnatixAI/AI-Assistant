@@ -1,4 +1,4 @@
-namespace IA_Saas
+namespace AssistantCore.Service
 {
     public class WeatherForecast
     {

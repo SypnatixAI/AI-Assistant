@@ -1,6 +1,0 @@
-@IA_Saas_HostAddress = http://localhost:5043
-
-GET {{IA_Saas_HostAddress}}/weatherforecast/
-Accept: application/json
-
-###
