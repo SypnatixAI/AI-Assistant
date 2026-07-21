@@ -1,0 +1,87 @@
+# Build results
+[Bb]in/
+[Oo]bj/
+[Ll]og/
+[Ll]ogs/
+artifacts/
+TestResults/
+BenchmarkDotNet.Artifacts/
+
+# Visual Studio
+.vs/
+*.user
+*.rsuser
+*.suo
+*.userosscache
+*.sln.docstates
+*.csproj.user
+*.vbproj.user
+*.fsproj.user
+
+# JetBrains Rider / IntelliJ
+.idea/
+*.sln.iml
+
+# Visual Studio Code local settings
+.vscode/
+
+# .NET tooling and coverage
+.dotnet/
+.store/
+coverage/
+coverage.*
+*.coverage
+*.coveragexml
+*.trx
+*.testlog
+
+# NuGet packages and generated files
+*.nupkg
+*.snupkg
+packages/
+**/packages/*
+!**/packages/build/
+*.nuget.props
+*.nuget.targets
+
+# Publish output
+publish/
+*.Publish.xml
+*.pubxml
+*.pubxml.user
+
+# Local databases
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+*.mdf
+*.ldf
+
+# Secrets and environment-specific local configuration
+.env
+.env.*
+!.env.example
+secrets.json
+appsettings.Local.json
+appsettings.*.Local.json
+
+# Certificates and signing keys
+*.pfx
+*.p12
+*.pem
+*.key
+
+# Operating system files
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Temporary files
+*.tmp
+*.temp
+*.bak
+*.swp
+*.swo
+*~
