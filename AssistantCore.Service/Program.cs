@@ -1,10 +1,29 @@
+using AssistantCore.Service.Application;
+using AssistantCore.Service.Application.Abstractions;
+using AssistantCore.Service.Middleware;
+using AssistantCore.Repository.Persistence;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.Identity.Web;
+using System.Reflection;
+
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
 
+builder.Services
+    .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddMicrosoftIdentityWebApi(builder.Configuration.GetSection("AzureAd"));
+
+builder.Services.AddAuthorization();
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen();
+builder.Services.AddSwaggerGen(options =>
+{
+    options.EnableAnnotations();
+});
+builder.Services.AddApplication();
+builder.Services.AddDispatcher(Assembly.GetExecutingAssembly());
+builder.Services.AddPersistence(builder.Configuration);
 
 var app = builder.Build();
 
@@ -15,8 +34,11 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
+app.UseMiddleware<ExceptionMiddleware>();
+
 app.UseHttpsRedirection();
 
+app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapGet("/", () => Results.Redirect("/swagger"));

@@ -1,0 +1,54 @@
+services:
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: assistantcore-sqlserver
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_SA_PASSWORD: "${SQL_SERVER_PASSWORD}"
+      MSSQL_PID: "Developer"
+    ports:
+      - "1433:1433"
+    volumes:
+      - sqlserver-data:/var/opt/mssql
+
+  flyway:
+    build:
+      context: ./AssistantCore.Repository/Database/Flyway
+      dockerfile: Dockerfile
+    container_name: assistantcore-flyway
+    depends_on:
+      - sqlserver
+    command:
+      - -url=jdbc:sqlserver://sqlserver:1433;databaseName=master;encrypt=false;trustServerCertificate=true
+      - -user=sa
+      - -password=${SQL_SERVER_PASSWORD}
+      - -connectRetries=60
+      - -baselineOnMigrate=true
+      - migrate
+    restart: "no"
+
+  sqlpad:
+    image: sqlpad/sqlpad:6.11.0
+    container_name: assistantcore-sqlpad
+    depends_on:
+      - sqlserver
+    environment:
+      SQLPAD_ADMIN: "${SQLPAD_ADMIN_EMAIL}"
+      SQLPAD_ADMIN_PASSWORD: "${SQLPAD_ADMIN_PASSWORD}"
+      SQLPAD_APP_LOG_LEVEL: "info"
+      SQLPAD_DB_PATH: "/var/lib/sqlpad/db"
+      SQLPAD_CONNECTIONS__assistantcore__name: "AssistantCoreDb"
+      SQLPAD_CONNECTIONS__assistantcore__driver: "sqlserver"
+      SQLPAD_CONNECTIONS__assistantcore__host: "sqlserver"
+      SQLPAD_CONNECTIONS__assistantcore__port: "1433"
+      SQLPAD_CONNECTIONS__assistantcore__database: "AssistantCoreDb"
+      SQLPAD_CONNECTIONS__assistantcore__username: "sa"
+      SQLPAD_CONNECTIONS__assistantcore__password: "${SQL_SERVER_PASSWORD}"
+    ports:
+      - "3000:3000"
+    volumes:
+      - sqlpad-data:/var/lib/sqlpad
+
+volumes:
+  sqlserver-data:
+  sqlpad-data:

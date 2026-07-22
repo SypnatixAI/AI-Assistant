@@ -1,0 +1,85 @@
+{
+  "info": {
+    "_postman_id": "8d1d2060-a7ff-499b-b0f1-9f4f4f868e2f",
+    "name": "AssistantCore Bootstrap",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "oauth2",
+    "oauth2": [
+      {
+        "key": "addTokenTo",
+        "value": "header",
+        "type": "string"
+      },
+      {
+        "key": "grant_type",
+        "value": "authorization_code_with_pkce",
+        "type": "string"
+      },
+      {
+        "key": "callback_url",
+        "value": "https://oauth.pstmn.io/v1/callback",
+        "type": "string"
+      },
+      {
+        "key": "authUrl",
+        "value": "https://login.microsoftonline.com/{{tenant_id}}/oauth2/v2.0/authorize",
+        "type": "string"
+      },
+      {
+        "key": "accessTokenUrl",
+        "value": "https://login.microsoftonline.com/{{tenant_id}}/oauth2/v2.0/token",
+        "type": "string"
+      },
+      {
+        "key": "clientId",
+        "value": "{{postman_client_id}}",
+        "type": "string"
+      },
+      {
+        "key": "scope",
+        "value": "{{scope}}",
+        "type": "string"
+      },
+      {
+        "key": "state",
+        "value": "assistantcore-bootstrap",
+        "type": "string"
+      },
+      {
+        "key": "pkce",
+        "value": "S256",
+        "type": "string"
+      }
+    ]
+  },
+  "item": [
+    {
+      "name": "Bootstrap AuthenticateUser",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/api/core/authenticateUser",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "api",
+            "core",
+            "authenticateUser"
+          ]
+        },
+        "description": "Bootstrap route protected by Microsoft Entra ID bearer token."
+      },
+      "response": []
+    }
+  ],
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "{{base_url}}"
+    }
+  ]
+}
