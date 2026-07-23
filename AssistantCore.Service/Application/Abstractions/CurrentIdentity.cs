@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using AssistantCore.Repository.Domain.Enums;
 
 namespace AssistantCore.Service.Application.Abstractions;
 
@@ -16,11 +17,13 @@ public sealed class CurrentIdentity : ICurrentIdentity
         ?? throw new UnauthorizedAccessException(
             "Aucun utilisateur authentifié.");
 
-    public Guid TenantId =>
-        ReadRequiredGuidClaim("tid", "http://schemas.microsoft.com/identity/claims/tenantid");
+    public IdentityProvider IdentityProvider => IdentityProvider.MicrosoftEntraId;
 
-    public Guid ObjectId =>
-        ReadRequiredGuidClaim("oid", "http://schemas.microsoft.com/identity/claims/objectidentifier");
+    public string ExternalTenantId =>
+        ReadRequiredClaim("tid", "http://schemas.microsoft.com/identity/claims/tenantid");
+
+    public string ExternalUserId =>
+        ReadRequiredClaim("oid", "http://schemas.microsoft.com/identity/claims/objectidentifier");
 
     public string? DisplayName =>
         User.FindFirstValue("name");
@@ -29,18 +32,18 @@ public sealed class CurrentIdentity : ICurrentIdentity
         User.FindFirstValue("preferred_username")
         ?? User.FindFirstValue(ClaimTypes.Email);
 
-    private Guid ReadRequiredGuidClaim(params string[] claimTypes)
+    private string ReadRequiredClaim(params string[] claimTypes)
     {
         var value = claimTypes
             .Select(User.FindFirstValue)
             .FirstOrDefault(candidate => !string.IsNullOrWhiteSpace(candidate));
 
-        if (!Guid.TryParse(value, out var result))
+        if (string.IsNullOrWhiteSpace(value))
         {
             throw new UnauthorizedAccessException(
-                $"Un claim GUID obligatoire est absent ou invalide. Claims testes: {string.Join(", ", claimTypes)}.");
+                $"Un claim obligatoire est absent ou invalide. Claims testes: {string.Join(", ", claimTypes)}.");
         }
 
-        return result;
+        return value;
     }
 }

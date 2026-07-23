@@ -1,10 +1,14 @@
+using AssistantCore.Repository.Domain.Enums;
+
 namespace AssistantCore.Service.Application.Abstractions;
 
 public interface ICurrentIdentity
 {
-    Guid TenantId { get; }
+    IdentityProvider IdentityProvider { get; }
 
-    Guid ObjectId { get; }
+    string ExternalTenantId { get; }
+
+    string ExternalUserId { get; }
 
     string? DisplayName { get; }
 

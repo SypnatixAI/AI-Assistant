@@ -12,11 +12,14 @@ public sealed class AuthenticateUserService(
     public async Task<(Organization Organization, OrganizationMember Member)> GetOrganizationAsync(CancellationToken cancellationToken)
     {
         var organization = await organizationQueries.GetOrganization(
-            currentIdentity.TenantId.ToString(), 
+            currentIdentity.IdentityProvider,
+            currentIdentity.ExternalTenantId,
             cancellationToken);
 
         var member = await organizationMemberQueries.GetMember(
-            currentIdentity.ObjectId.ToString(),
+            organization.Id,
+            currentIdentity.IdentityProvider,
+            currentIdentity.ExternalUserId,
             cancellationToken);
 
         return (organization, member);
