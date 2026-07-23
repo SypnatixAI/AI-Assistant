@@ -9,14 +9,16 @@ namespace AssistantCore.Repository.Queries;
 public sealed class OrganizationQueries(AssistantCoreDbContext dbContext) : IOrganizationQueries
 {
     public async Task<Organization> GetOrganization(
-        string microsoftTenantId,
+        IdentityProvider identityProvider,
+        string externalTenantId,
         CancellationToken cancellationToken = default)
     {
         var organization = await dbContext.Organizations
             .AsNoTracking()
             .SingleOrDefaultAsync(
                 organization =>
-                    organization.MicrosoftTenantId == microsoftTenantId
+                    organization.IdentityProvider == identityProvider
+                    && organization.ExternalTenantId == externalTenantId
                     && organization.Status == RecordStatus.Active,
                 cancellationToken);
 

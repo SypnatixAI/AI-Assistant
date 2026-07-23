@@ -8,15 +8,21 @@ BEGIN
         [OrganizationId] UNIQUEIDENTIFIER NOT NULL,
         [Name] NVARCHAR(200) NOT NULL,
         [Email] NVARCHAR(320) NOT NULL,
-        [MicrosoftIdentifier] NVARCHAR(100) NOT NULL,
+        [IdentityProvider] NVARCHAR(50) NOT NULL,
+        [ExternalUserId] NVARCHAR(100) NOT NULL,
         [Role] NVARCHAR(100) NOT NULL,
         [Status] NVARCHAR(20) NOT NULL,
         CONSTRAINT [PK_OrganizationMember] PRIMARY KEY ([Id]),
         CONSTRAINT [FK_OrganizationMember_Organization_OrganizationId]
             FOREIGN KEY ([OrganizationId]) REFERENCES [dbo].[Organization]([Id]) ON DELETE CASCADE,
-        CONSTRAINT [CK_OrganizationMember_Status] CHECK ([Status] IN (N'Actif', N'Inactif'))
+        CONSTRAINT [CK_OrganizationMember_Status] CHECK ([Status] IN (N'Actif', N'Inactif')),
+        CONSTRAINT [CK_OrganizationMember_IdentityProvider] CHECK ([IdentityProvider] IN (N'MicrosoftEntraId')),
+        CONSTRAINT [CK_OrganizationMember_Role] CHECK ([Role] IN (N'TenantAdmin', N'Manager', N'User'))
     );
 
     CREATE UNIQUE INDEX [IX_OrganizationMember_OrganizationId_Email]
         ON [dbo].[OrganizationMember]([OrganizationId], [Email]);
+
+    CREATE UNIQUE INDEX [IX_OrganizationMember_OrganizationId_IdentityProvider_ExternalUserId]
+        ON [dbo].[OrganizationMember]([OrganizationId], [IdentityProvider], [ExternalUserId]);
 END;

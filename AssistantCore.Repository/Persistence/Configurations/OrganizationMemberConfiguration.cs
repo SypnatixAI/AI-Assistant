@@ -27,11 +27,17 @@ public sealed class OrganizationMemberConfiguration : IEntityTypeConfiguration<O
             .HasMaxLength(320)
             .IsRequired();
 
-        builder.Property(member => member.MicrosoftIdentifier)
+        builder.Property(member => member.IdentityProvider)
+            .HasConversion<string>()
+            .HasMaxLength(50)
+            .IsRequired();
+
+        builder.Property(member => member.ExternalUserId)
             .HasMaxLength(100)
             .IsRequired();
 
         builder.Property(member => member.Role)
+            .HasConversion<string>()
             .HasMaxLength(100)
             .IsRequired();
 
@@ -43,6 +49,9 @@ public sealed class OrganizationMemberConfiguration : IEntityTypeConfiguration<O
             .IsRequired();
 
         builder.HasIndex(member => new { member.OrganizationId, member.Email })
+            .IsUnique();
+
+        builder.HasIndex(member => new { member.OrganizationId, member.IdentityProvider, member.ExternalUserId })
             .IsUnique();
     }
 }

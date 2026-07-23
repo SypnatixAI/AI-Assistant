@@ -12,9 +12,11 @@ public sealed class OrganizationMember
 
     public string Email { get; set; } = string.Empty;
 
-    public string MicrosoftIdentifier { get; set; } = string.Empty;
+    public IdentityProvider IdentityProvider { get; set; }
 
-    public string Role { get; set; } = string.Empty;
+    public string ExternalUserId { get; set; } = string.Empty;
+
+    public OrganizationRole Role { get; set; }
 
     public RecordStatus Status { get; set; }
 

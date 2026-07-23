@@ -8,7 +8,9 @@ public sealed class Organization
 
     public string Name { get; set; } = string.Empty;
 
-    public string MicrosoftTenantId { get; set; } = string.Empty;
+    public IdentityProvider IdentityProvider { get; set; }
+
+    public string ExternalTenantId { get; set; } = string.Empty;
 
     public RecordStatus Status { get; set; }
 

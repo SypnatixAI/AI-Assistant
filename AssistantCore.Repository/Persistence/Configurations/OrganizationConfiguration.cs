@@ -20,7 +20,12 @@ public sealed class OrganizationConfiguration : IEntityTypeConfiguration<Organiz
             .HasMaxLength(200)
             .IsRequired();
 
-        builder.Property(organization => organization.MicrosoftTenantId)
+        builder.Property(organization => organization.IdentityProvider)
+            .HasConversion<string>()
+            .HasMaxLength(50)
+            .IsRequired();
+
+        builder.Property(organization => organization.ExternalTenantId)
             .HasMaxLength(100)
             .IsRequired();
 
@@ -35,5 +40,8 @@ public sealed class OrganizationConfiguration : IEntityTypeConfiguration<Organiz
             .WithOne(member => member.Organization)
             .HasForeignKey(member => member.OrganizationId)
             .OnDelete(DeleteBehavior.Cascade);
+
+        builder.HasIndex(organization => new { organization.IdentityProvider, organization.ExternalTenantId })
+            .IsUnique();
     }
 }
