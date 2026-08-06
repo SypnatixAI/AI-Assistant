@@ -8,12 +8,12 @@ namespace AssistantCore.Repository.Queries;
 
 public sealed class OrganizationQueries(AssistantCoreDbContext dbContext) : IOrganizationQueries
 {
-    public async Task<Organization> GetOrganization(
+    public async Task<Organization?> FindOrganization(
         IdentityProvider identityProvider,
         string externalTenantId,
         CancellationToken cancellationToken = default)
     {
-        var organization = await dbContext.Organizations
+        return await dbContext.Organizations
             .AsNoTracking()
             .SingleOrDefaultAsync(
                 organization =>
@@ -21,8 +21,5 @@ public sealed class OrganizationQueries(AssistantCoreDbContext dbContext) : IOrg
                     && organization.ExternalTenantId == externalTenantId
                     && organization.Status == RecordStatus.Active,
                 cancellationToken);
-
-        return organization
-            ?? throw new ForbiddenException("Organization access denied.");
     }
 }

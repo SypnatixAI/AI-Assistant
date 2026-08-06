@@ -14,6 +14,19 @@ public sealed class ExceptionMiddleware(
         {
             await next(context);
         }
+        catch (UnauthorizedAccessException exception)
+        {
+            logger.LogWarning(exception, "Authentication failed while processing the request.");
+
+            context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+            context.Response.ContentType = "application/json";
+
+            var response = new ExceptionResponse(
+                exception.Message,
+                environment.IsDevelopment() ? exception.Message : null);
+
+            await context.Response.WriteAsync(JsonSerializer.Serialize(response));
+        }
         catch (ForbiddenException exception)
         {
             logger.LogWarning(exception, "Access denied while processing the request.");

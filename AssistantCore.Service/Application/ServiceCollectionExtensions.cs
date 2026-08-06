@@ -1,5 +1,4 @@
 using AssistantCore.Service.Application.Abstractions;
-using AssistantCore.Service.Application.Authorization;
 using AssistantCore.Service.Application.Services.AuthenticateUser;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -12,7 +11,6 @@ public static class ServiceCollectionExtensions
         services.AddHttpContextAccessor();
         services.AddScoped<ICurrentIdentity, CurrentIdentity>();
         services.AddScoped<IAuthenticateUserService, AuthenticateUserService>();
-        services.AddScoped<IRolePermissionService, RolePermissionService>();
 
         return services;
     }

@@ -5,7 +5,7 @@ namespace AssistantCore.Repository.Queries;
 
 public interface IOrganizationQueries
 {
-    Task<Organization> GetOrganization(
+    Task<Organization?> FindOrganization(
         IdentityProvider identityProvider,
         string externalTenantId,
         CancellationToken cancellationToken = default);

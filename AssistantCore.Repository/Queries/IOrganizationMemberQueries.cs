@@ -5,9 +5,13 @@ namespace AssistantCore.Repository.Queries;
 
 public interface IOrganizationMemberQueries
 {
-    Task<OrganizationMember> GetMember(
+    Task<OrganizationMember?> FindMember(
         Guid organizationId,
         IdentityProvider identityProvider,
         string externalUserId,
+        CancellationToken cancellationToken = default);
+
+    Task<OrganizationMember> CreateMember(
+        OrganizationMember member,
         CancellationToken cancellationToken = default);
 }

@@ -1,4 +1,3 @@
-using AssistantCore.Repository.Abstractions;
 using AssistantCore.Repository.Domain.Entities;
 using AssistantCore.Repository.Domain.Enums;
 using AssistantCore.Repository.Persistence;
@@ -8,23 +7,28 @@ namespace AssistantCore.Repository.Queries;
 
 public sealed class OrganizationMemberQueries(AssistantCoreDbContext dbContext) : IOrganizationMemberQueries
 {
-    public async Task<OrganizationMember> GetMember(
+    public async Task<OrganizationMember?> FindMember(
         Guid organizationId,
         IdentityProvider identityProvider,
         string externalUserId,
         CancellationToken cancellationToken = default)
     {
-        var member = await dbContext.OrganizationMembers
+        return await dbContext.OrganizationMembers
             .AsNoTracking()
             .SingleOrDefaultAsync(
                 member =>
                     member.OrganizationId == organizationId
                     && member.IdentityProvider == identityProvider
-                    && member.ExternalUserId == externalUserId
-                    && member.Status == RecordStatus.Active,
+                    && member.ExternalUserId == externalUserId,
                 cancellationToken);
+    }
 
-        return member
-            ?? throw new ForbiddenException("Organization member access denied.");
+    public async Task<OrganizationMember> CreateMember(
+        OrganizationMember member,
+        CancellationToken cancellationToken = default)
+    {
+        dbContext.OrganizationMembers.Add(member);
+        await dbContext.SaveChangesAsync(cancellationToken);
+        return member;
     }
 }
