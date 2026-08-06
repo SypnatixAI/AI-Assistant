@@ -1,5 +1,6 @@
 using System.Text.Json;
 using AssistantCore.Repository.Abstractions;
+using AssistantCore.Service.Application.Exceptions;
 
 namespace AssistantCore.Service.Middleware;
 
@@ -32,6 +33,32 @@ public sealed class ExceptionMiddleware(
             logger.LogWarning(exception, "Access denied while processing the request.");
 
             context.Response.StatusCode = StatusCodes.Status403Forbidden;
+            context.Response.ContentType = "application/json";
+
+            var response = new ExceptionResponse(
+                exception.Message,
+                environment.IsDevelopment() ? exception.Message : null);
+
+            await context.Response.WriteAsync(JsonSerializer.Serialize(response));
+        }
+        catch (BadRequestException exception)
+        {
+            logger.LogWarning(exception, "Invalid request while processing the request.");
+
+            context.Response.StatusCode = StatusCodes.Status400BadRequest;
+            context.Response.ContentType = "application/json";
+
+            var response = new ExceptionResponse(
+                exception.Message,
+                environment.IsDevelopment() ? exception.Message : null);
+
+            await context.Response.WriteAsync(JsonSerializer.Serialize(response));
+        }
+        catch (NotFoundException exception)
+        {
+            logger.LogWarning(exception, "Requested resource was not found.");
+
+            context.Response.StatusCode = StatusCodes.Status404NotFound;
             context.Response.ContentType = "application/json";
 
             var response = new ExceptionResponse(

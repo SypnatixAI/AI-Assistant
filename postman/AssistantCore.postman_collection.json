@@ -1,0 +1,229 @@
+{
+  "info": {
+    "_postman_id": "8d1d2060-a7ff-499b-b0f1-9f4f4f868e2f",
+    "name": "AssistantCore API",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "oauth2",
+    "oauth2": [
+      {
+        "key": "addTokenTo",
+        "value": "header",
+        "type": "string"
+      },
+      {
+        "key": "grant_type",
+        "value": "authorization_code_with_pkce",
+        "type": "string"
+      },
+      {
+        "key": "callback_url",
+        "value": "https://oauth.pstmn.io/v1/callback",
+        "type": "string"
+      },
+      {
+        "key": "authUrl",
+        "value": "https://login.microsoftonline.com/{{tenant_id}}/oauth2/v2.0/authorize",
+        "type": "string"
+      },
+      {
+        "key": "accessTokenUrl",
+        "value": "https://login.microsoftonline.com/{{tenant_id}}/oauth2/v2.0/token",
+        "type": "string"
+      },
+      {
+        "key": "clientId",
+        "value": "{{postman_client_id}}",
+        "type": "string"
+      },
+      {
+        "key": "scope",
+        "value": "{{scope}}",
+        "type": "string"
+      },
+      {
+        "key": "state",
+        "value": "assistantcore-bootstrap",
+        "type": "string"
+      },
+      {
+        "key": "pkce",
+        "value": "S256",
+        "type": "string"
+      }
+    ]
+  },
+  "item": [
+    {
+      "name": "Authentification",
+      "item": [
+        {
+          "name": "AuthenticateUser",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Response contains the authenticated user', function () {",
+                  "    const response = pm.response.json();",
+                  "    pm.expect(response.user).to.be.an('object');",
+                  "    pm.expect(response.user.id).to.be.a('string').and.not.empty;",
+                  "    pm.environment.set('current_user_id', response.user.id);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/core/authenticateUser",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "core",
+                "authenticateUser"
+              ]
+            },
+            "description": "Construit la session applicative et enregistre current_user_id pour les tests suivants."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Members",
+      "item": [
+        {
+          "name": "Get Members",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Response contains a members array', function () {",
+                  "    const response = pm.response.json();",
+                  "    pm.expect(response.members).to.be.an('array');",
+                  "});",
+                  "",
+                  "if (pm.response.code === 200) {",
+                  "    const response = pm.response.json();",
+                  "    const currentUserId = pm.environment.get('current_user_id');",
+                  "    const targetMember = response.members.find(function (member) {",
+                  "        return member.id !== currentUserId && member.status === 'Active';",
+                  "    });",
+                  "",
+                  "    if (targetMember) {",
+                  "        pm.environment.set('member_id', targetMember.id);",
+                  "    }",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/members",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "members"
+              ]
+            },
+            "description": "Retourne les membres de l'organisation et enregistre un membre actif different de l'utilisateur connecte dans member_id."
+          },
+          "response": []
+        },
+        {
+          "name": "Update Member Role",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (!pm.environment.get('member_id')) {",
+                  "    throw new Error('member_id is missing. Run Get Members or set member_id manually.');",
+                  "}"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Member role was updated', function () {",
+                  "    const response = pm.response.json();",
+                  "    pm.expect(response.id).to.eql(pm.environment.get('member_id'));",
+                  "    pm.expect(response.role).to.eql(pm.environment.get('member_role'));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"role\": \"{{member_role}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/members/{{member_id}}/role",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "members",
+                "{{member_id}}",
+                "role"
+              ]
+            },
+            "description": "Modifie le role du membre cible avec la valeur Admin ou User contenue dans member_role."
+          },
+          "response": []
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "{{base_url}}"
+    }
+  ]
+}
