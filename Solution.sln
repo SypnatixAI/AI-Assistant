@@ -7,6 +7,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AssistantCore.Service", "As
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AssistantCore.Repository", "AssistantCore.Repository\AssistantCore.Repository.csproj", "{A0F4FA2D-4F38-4BF6-8D8B-0AA98896B7B5}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AssistantCore.Service.Tests", "AssistantCore.Service.Tests\AssistantCore.Service.Tests.csproj", "{D7B1734B-7B34-4D55-8A44-2BA1E563BC1D}"
+EndProject
 Global
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -44,5 +46,17 @@ Global
 		{A0F4FA2D-4F38-4BF6-8D8B-0AA98896B7B5}.Release|x64.Build.0 = Release|Any CPU
 		{A0F4FA2D-4F38-4BF6-8D8B-0AA98896B7B5}.Release|x86.ActiveCfg = Release|Any CPU
 		{A0F4FA2D-4F38-4BF6-8D8B-0AA98896B7B5}.Release|x86.Build.0 = Release|Any CPU
+		{D7B1734B-7B34-4D55-8A44-2BA1E563BC1D}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{D7B1734B-7B34-4D55-8A44-2BA1E563BC1D}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{D7B1734B-7B34-4D55-8A44-2BA1E563BC1D}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{D7B1734B-7B34-4D55-8A44-2BA1E563BC1D}.Debug|x64.Build.0 = Debug|Any CPU
+		{D7B1734B-7B34-4D55-8A44-2BA1E563BC1D}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{D7B1734B-7B34-4D55-8A44-2BA1E563BC1D}.Debug|x86.Build.0 = Debug|Any CPU
+		{D7B1734B-7B34-4D55-8A44-2BA1E563BC1D}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{D7B1734B-7B34-4D55-8A44-2BA1E563BC1D}.Release|Any CPU.Build.0 = Release|Any CPU
+		{D7B1734B-7B34-4D55-8A44-2BA1E563BC1D}.Release|x64.ActiveCfg = Release|Any CPU
+		{D7B1734B-7B34-4D55-8A44-2BA1E563BC1D}.Release|x64.Build.0 = Release|Any CPU
+		{D7B1734B-7B34-4D55-8A44-2BA1E563BC1D}.Release|x86.ActiveCfg = Release|Any CPU
+		{D7B1734B-7B34-4D55-8A44-2BA1E563BC1D}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal

@@ -32,6 +32,10 @@
 * Pas de code dupliqué inutile.
 * Noms de classes, méthodes et variables explicites.
 * Ajouter ou ajuster les tests quand c’est pertinent.
+* Toute nouvelle fonctionnalité ou modification de comportement doit inclure les tests pertinents.
+* Après chaque ajout ou modification de fonctionnalité, exécuter la suite complète avec `dotnet test Solution.sln`.
+* Vérifier qu’aucun test existant n’est cassé avant de considérer le travail comme terminé.
+* Si les tests ne peuvent pas être exécutés, expliquer clairement la raison et ne pas présenter la fonctionnalité comme entièrement validée.
 * Gérer les erreurs proprement sans masquer les exceptions importantes.
 * Utiliser async/await correctement pour les appels I/O.
 * Ne pas introduire de dépendances inutiles.

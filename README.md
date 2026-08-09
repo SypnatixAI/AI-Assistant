@@ -786,8 +786,12 @@ Tests manuels d'integration :
 - consultation et modification des membres avec un administrateur;
 - scripts de validation inclus dans la collection Postman.
 
-Le depot ne contient pas encore de projet de tests automatises. Lorsque des
-tests unitaires ou d'integration seront ajoutes, ils pourront etre executes avec :
+Le projet contient des tests unitaires pour le flux `AuthenticateUser`, le
+controleur `CoreController` et `ExceptionMiddleware`. Ils couvrent les regles
+de creation et d'acces des membres, la construction de la reponse, la
+delegation du controleur et la traduction des exceptions en reponses HTTP.
+
+Executer tous les tests automatises :
 
 ```bash
 dotnet test Solution.sln
