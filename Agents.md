@@ -36,6 +36,17 @@
 * Utiliser async/await correctement pour les appels I/O.
 * Ne pas introduire de dépendances inutiles.
 
+## Documentation et issues
+
+* Rédiger les documents et tickets dans un langage simple, clair et concret.
+* Éviter les formulations vagues qui obligent le lecteur à deviner le travail attendu.
+* Expliquer l’objectif, le périmètre, les étapes principales et les critères d’acceptation.
+* Donner assez de détails techniques pour guider le développeur, sans décrire toute l’implémentation ligne par ligne.
+* Préciser les contraintes importantes d’architecture, de sécurité et de comportement.
+* Ne pas imposer les noms de toutes les classes, méthodes ou colonnes lorsque ce choix peut raisonnablement être laissé au développeur.
+* Utiliser un exemple court lorsqu’il rend le résultat attendu plus facile à comprendre.
+* Un ticket doit pouvoir être commencé sans clarification majeure, tout en laissant au développeur les décisions techniques locales.
+
 
 ## Handlers
 - Toute action applicative doit passer par un handler.

@@ -8,13 +8,18 @@
     "type": "oauth2",
     "oauth2": [
       {
+        "key": "clientSecret",
+        "value": "{{postman_client_secret}}",
+        "type": "string"
+      },
+      {
         "key": "addTokenTo",
         "value": "header",
         "type": "string"
       },
       {
         "key": "grant_type",
-        "value": "authorization_code_with_pkce",
+        "value": "authorization_code",
         "type": "string"
       },
       {
@@ -24,12 +29,17 @@
       },
       {
         "key": "authUrl",
-        "value": "https://login.microsoftonline.com/{{tenant_id}}/oauth2/v2.0/authorize",
+        "value": "https://login.microsoftonline.com/organizations/oauth2/v2.0/authorize",
         "type": "string"
       },
       {
         "key": "accessTokenUrl",
-        "value": "https://login.microsoftonline.com/{{tenant_id}}/oauth2/v2.0/token",
+        "value": "https://login.microsoftonline.com/organizations/oauth2/v2.0/token",
+        "type": "string"
+      },
+      {
+        "key": "client_authentication",
+        "value": "body",
         "type": "string"
       },
       {
@@ -45,11 +55,6 @@
       {
         "key": "state",
         "value": "assistantcore-bootstrap",
-        "type": "string"
-      },
-      {
-        "key": "pkce",
-        "value": "S256",
         "type": "string"
       }
     ]
