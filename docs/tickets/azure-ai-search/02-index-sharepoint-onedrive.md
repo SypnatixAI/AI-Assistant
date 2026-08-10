@@ -1,5 +1,21 @@
 # Ticket 2 - Indexer SharePoint et OneDrive
 
+<a id="search-02-objective"></a>
+## Table des matieres
+
+- [Objectif](#objectif)
+- [Dependances](#dependances)
+- [Creer l'identite d'ingestion](#etape-1---creer-lidentite-dingestion)
+- [Creer le processus d'ingestion](#etape-2---creer-le-processus-dingestion)
+- [Synchronisation initiale](#etape-3---realiser-la-synchronisation-initiale)
+- [Mapping vers l'index](#etape-4---mapper-un-document-vers-lindex)
+- [Synchronisation incrementale](#etape-5---ajouter-la-synchronisation-incrementale)
+- [Gestion des erreurs](#etape-6---gerer-les-erreurs)
+- [Formats supportes](#formats-de-premiere-version)
+- [Tests](#tests-attendus)
+- [Criteres d'acceptation](#criteres-dacceptation)
+- [References](#references)
+
 ## Objectif
 
 Creer un processus backend qui copie les documents autorises depuis un site SharePoint de test vers Azure AI Search. Le meme mecanisme couvrira ensuite OneDrive.
@@ -135,4 +151,3 @@ Commencer par un petit ensemble clairement supporte, par exemple PDF texte, DOCX
 - [Suivre les changements avec Microsoft Graph](https://learn.microsoft.com/en-us/graph/delta-query-overview)
 - [Delta pour les fichiers SharePoint et OneDrive](https://learn.microsoft.com/en-us/graph/api/driveitem-delta?view=graph-rest-1.0)
 - [Type driveItem](https://learn.microsoft.com/en-us/graph/api/resources/driveitem?view=graph-rest-1.0)
-

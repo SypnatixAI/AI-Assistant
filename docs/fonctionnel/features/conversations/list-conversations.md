@@ -1,5 +1,21 @@
 # Lister les conversations
 
+## Table des matieres
+
+- [But](#but)
+- [Route](#conversations-route)
+- [Acces](#qui-peut-utiliser-cet-endpoint)
+- [Donnees du frontend](#donnees-envoyees-par-le-frontend)
+- [Pagination](#conversations-pagination)
+- [Exemple de reponse](#exemple-de-reponse)
+- [Champs retournes](#conversations-summary-fields)
+- [Etapes de traitement](#etapes-de-traitement)
+- [Chargement des conversations](#conversations-query)
+- [Securite](#securite)
+- [Architecture](#architecture-attendue)
+- [Erreurs](#erreurs-a-prevoir)
+- [Criteres d'acceptation](#conversations-acceptance)
+
 ## But
 
 `GET /api/conversations` permet a un utilisateur authentifie de retrouver
@@ -11,6 +27,7 @@ La creation d'une conversation reste geree par `POST /api/messages` lorsque
 Cet endpoint est uniquement un endpoint de lecture. Il ne cree, ne renomme
 et ne modifie aucune conversation.
 
+<a id="conversations-route"></a>
 ## Route
 
 ```http
@@ -47,6 +64,7 @@ Le frontend ne doit jamais envoyer :
 
 Ces valeurs viennent du contexte d'authentification du backend.
 
+<a id="conversations-pagination"></a>
 ## Parametres de pagination
 
 ### `limit`
@@ -111,6 +129,7 @@ Pour la derniere page :
 
 Une absence de conversation retourne `200 OK` avec un tableau vide.
 
+<a id="conversations-summary-fields"></a>
 ## Regles des champs retournes
 
 ### `title`
@@ -169,6 +188,7 @@ Une organisation ou un membre interdit retourne `403`.
 
 Une pagination invalide retourne `400` sans interroger les conversations.
 
+<a id="conversations-query"></a>
 ### 4. Charger les conversations autorisees
 
 La requete doit toujours filtrer avec :
@@ -254,6 +274,7 @@ Cette premiere version ne couvre pas :
 
 Ces comportements auront leurs propres endpoints et documents.
 
+<a id="conversations-acceptance"></a>
 ## Criteres d'acceptation
 
 - Un utilisateur voit uniquement ses conversations.

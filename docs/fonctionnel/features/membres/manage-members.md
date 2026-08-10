@@ -1,5 +1,16 @@
 # Gerer les membres de l'organisation
 
+## Table des matieres
+
+- [But](#but)
+- [Regles communes](#regles-communes)
+- [Afficher les membres](#endpoint-1---afficher-les-membres)
+- [Etapes de GetMembers](#members-list-flow)
+- [Modifier un role](#endpoint-2---modifier-le-role)
+- [Etapes de UpdateMemberRole](#members-role-flow)
+- [Erreurs](#erreurs-a-prevoir)
+- [Resume](#resume)
+
 ## But
 
 Cette fonctionnalite permet a un `Admin` :
@@ -61,6 +72,7 @@ Le frontend n'envoie aucun body et aucun `organizationId`.
 }
 ```
 
+<a id="members-list-flow"></a>
 ### Etapes de construction
 
 #### 1. Verifier l'authentification
@@ -173,6 +185,7 @@ PATCH /api/members/{memberId}/role
 }
 ```
 
+<a id="members-role-flow"></a>
 ### Etapes de construction
 
 #### 1. Verifier l'Admin connecte

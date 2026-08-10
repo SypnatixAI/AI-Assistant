@@ -1,5 +1,20 @@
 # Ticket 1 - Creer l'infrastructure Azure AI Search
 
+<a id="search-01-objective"></a>
+## Table des matieres
+
+- [Objectif](#objectif)
+- [Prerequis humains](#prerequis-humains)
+- [Creer le groupe de ressources](#etape-1---creer-le-groupe-de-ressources)
+- [Creer Azure AI Search](#etape-2---creer-azure-ai-search)
+- [Configurer l'authentification](#etape-3---configurer-lauthentification)
+- [Choisir les embeddings](#etape-4---choisir-les-embeddings)
+- [Creer l'index](#etape-5---creer-lindex-de-developpement)
+- [Tester manuellement](#etape-6---tester-manuellement)
+- [Configuration applicative](#configuration-attendue-dans-lapplication)
+- [Criteres d'acceptation](#criteres-dacceptation)
+- [References](#references)
+
 ## Objectif
 
 Creer un environnement Azure de developpement capable de recevoir et rechercher des passages de documents. A la fin du ticket, un developpeur doit pouvoir ajouter un document de test a l'index et le retrouver avec Search Explorer.
@@ -134,4 +149,3 @@ Les secrets locaux doivent utiliser `dotnet user-secrets`. En Azure, utiliser l'
 - [Creer Azure AI Search dans le portail](https://learn.microsoft.com/en-us/azure/search/search-create-service-portal)
 - [Utiliser les roles Azure avec Azure AI Search](https://learn.microsoft.com/en-us/azure/search/search-security-rbac)
 - [Creer un index vectoriel](https://learn.microsoft.com/en-us/azure/search/vector-search-how-to-create-index)
-

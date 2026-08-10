@@ -1,5 +1,15 @@
 # Feuille de route Azure AI Search
 
+## Table des matieres
+
+- [Objectif](#objectif)
+- [Architecture cible](#architecture-cible)
+- [Ordre des tickets](#ordre-des-tickets)
+- [Strategie de livraison](#strategie-de-livraison)
+- [Decisions initiales](#decisions-a-prendre-avant-le-premier-ticket)
+- [Definition de termine](#definition-globale-de-termine)
+- [References Microsoft](#references-microsoft)
+
 ## Objectif
 
 Cette feuille de route explique comment rendre les contenus Microsoft 365 recherchables par l'assistant avec Azure AI Search.
@@ -36,6 +46,8 @@ POST /api/messages
 3. [Appliquer les permissions aux recherches](03-enforce-document-permissions.md)
 4. [Creer l'adaptateur de recherche backend](04-create-search-adapter.md)
 5. [Integrer la recherche au flow messages](05-integrate-messages-tool.md)
+6. [Indexer Outlook](06-index-outlook.md), apres validation du MVP
+7. [Indexer les messages Teams](07-index-teams.md), apres validation du MVP
 
 ## Strategie de livraison
 
@@ -71,4 +83,3 @@ La fonctionnalite est terminee seulement si :
 - [Recherche hybride](https://learn.microsoft.com/en-us/azure/search/hybrid-search-how-to-query)
 - [Filtres de securite](https://learn.microsoft.com/en-us/azure/search/search-security-trimming-for-azure-search)
 - [Requetes delta Microsoft Graph](https://learn.microsoft.com/en-us/graph/delta-query-overview)
-

@@ -1,5 +1,20 @@
 # Ticket 4 - Creer l'adaptateur de recherche backend
 
+<a id="search-04-objective"></a>
+## Table des matieres
+
+- [Objectif](#objectif)
+- [Dependances](#dependances)
+- [Separation des couches](#separation-des-couches)
+- [Ajouter le client Azure](#etape-1---ajouter-le-client-azure)
+- [Construire la recherche](#etape-2---construire-la-recherche)
+- [Normaliser les resultats](#etape-3---normaliser-les-resultats)
+- [Gerer les erreurs](#etape-4---gerer-les-erreurs)
+- [Ajouter la telemetrie](#etape-5---ajouter-la-telemetrie)
+- [Tests](#tests-attendus)
+- [Criteres d'acceptation](#criteres-dacceptation)
+- [References](#references)
+
 ## Objectif
 
 Permettre au code applicatif de rechercher du contenu Microsoft sans dependre directement du SDK Azure AI Search.
@@ -142,4 +157,3 @@ Mesurer sans enregistrer le texte complet de la question ou des documents :
 - [Recherche hybride Azure AI Search](https://learn.microsoft.com/en-us/azure/search/hybrid-search-how-to-query)
 - [Requete vectorielle](https://learn.microsoft.com/en-us/azure/search/vector-search-how-to-query)
 - [Configuration du semantic ranker](https://learn.microsoft.com/en-us/azure/search/semantic-how-to-configure)
-

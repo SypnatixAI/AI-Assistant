@@ -43,19 +43,33 @@ internal sealed class StubOrganizationQueries : IOrganizationQueries
 
 internal sealed class StubOrganizationMemberQueries : IOrganizationMemberQueries
 {
+    public IReadOnlyCollection<OrganizationMember> Members { get; init; } = [];
+
     public OrganizationMember? FoundMember { get; set; }
 
     public OrganizationMember? CreatedMember { get; private set; }
 
+    public OrganizationMember? UpdatedMember { get; private set; }
+
     public Guid? ReceivedOrganizationId { get; private set; }
+
+    public Guid? ReceivedMemberId { get; private set; }
 
     public IdentityProvider? ReceivedIdentityProvider { get; private set; }
 
     public string? ReceivedExternalUserId { get; private set; }
 
+    public OrganizationRole? ReceivedRole { get; private set; }
+
     public CancellationToken ReceivedCancellationToken { get; private set; }
 
     public int FindMemberCallCount { get; private set; }
+
+    public int GetMembersCallCount { get; private set; }
+
+    public int FindMemberByIdCallCount { get; private set; }
+
+    public int UpdateRoleCallCount { get; private set; }
 
     public Task<OrganizationMember?> FindMember(
         Guid organizationId,
@@ -82,20 +96,38 @@ internal sealed class StubOrganizationMemberQueries : IOrganizationMemberQueries
 
     public Task<IReadOnlyCollection<OrganizationMember>> GetMembers(
         Guid organizationId,
-        CancellationToken cancellationToken = default) =>
-        throw new NotSupportedException();
+        CancellationToken cancellationToken = default)
+    {
+        GetMembersCallCount++;
+        ReceivedOrganizationId = organizationId;
+        ReceivedCancellationToken = cancellationToken;
+        return Task.FromResult(Members);
+    }
 
     public Task<OrganizationMember?> FindMember(
         Guid organizationId,
         Guid memberId,
-        CancellationToken cancellationToken = default) =>
-        throw new NotSupportedException();
+        CancellationToken cancellationToken = default)
+    {
+        FindMemberByIdCallCount++;
+        ReceivedOrganizationId = organizationId;
+        ReceivedMemberId = memberId;
+        ReceivedCancellationToken = cancellationToken;
+        return Task.FromResult(FoundMember);
+    }
 
     public Task<OrganizationMember> UpdateRole(
         OrganizationMember member,
         OrganizationRole role,
-        CancellationToken cancellationToken = default) =>
-        throw new NotSupportedException();
+        CancellationToken cancellationToken = default)
+    {
+        UpdateRoleCallCount++;
+        UpdatedMember = member;
+        ReceivedRole = role;
+        ReceivedCancellationToken = cancellationToken;
+        member.Role = role;
+        return Task.FromResult(member);
+    }
 }
 
 internal sealed class StubAuthenticateUserService : IAuthenticateUserService

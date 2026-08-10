@@ -1,5 +1,31 @@
 # Envoyer un message a l'assistant
 
+## Table des matieres
+
+- [But](#but)
+- [Route](#route)
+- [Acces](#qui-peut-utiliser-cet-endpoint)
+- [Contrat du frontend](#messages-contracts)
+- [Exemple de reponse](#exemple-de-reponse)
+- [Architecture de recherche](#messages-search-architecture)
+- [Azure AI Search](#role-exact-dazure-ai-search)
+- [Perimetre Microsoft 365](#perimetre-microsoft-365-progressif)
+- [Securite des resultats](#securite-des-resultats)
+- [Flow complet de construction](#messages-flow)
+- [Persistance des conversations et messages](#messages-persistence)
+- [Selection du modele](#messages-model-selection)
+- [Registre des outils](#messages-tool-registry)
+- [Execution Azure AI Search](#messages-azure-search)
+- [Connecteurs directs](#messages-direct-connectors)
+- [Normalisation des preuves](#messages-evidence)
+- [Orchestration modele-outils](#messages-orchestration)
+- [Construction et validation de la reponse](#17-construire-la-reponse-finale)
+- [Gestion des echecs](#messages-resilience)
+- [Erreurs HTTP](#erreurs-a-prevoir)
+- [Regles metier](#regles-metier-fixes)
+- [Resume](#resume-tres-simple)
+- [References](#references-techniques)
+
 ## But
 
 `POST /api/messages` permet a un utilisateur authentifie de poser une question en langage naturel.
@@ -45,6 +71,7 @@ Aucune permission applicative supplementaire n'est utilisee.
 
 ---
 
+<a id="messages-contracts"></a>
 ## Donnees envoyees par le frontend
 
 ```json
@@ -149,6 +176,7 @@ Le backend determine ces informations a partir de l'identite, de la question et 
 
 ---
 
+<a id="messages-search-architecture"></a>
 ## Architecture de recherche retenue
 
 La responsabilite est partagee entre quatre composants.
@@ -257,6 +285,7 @@ Les deux strategies peuvent coexister dans la meme organisation.
 
 ---
 
+<a id="messages-flow"></a>
 ## Etapes de construction fonctionnelle
 
 ### 1. Verifier l'authentification
@@ -304,6 +333,7 @@ Si une valeur est invalide :
 - retourner `400 Bad Request`
 - expliquer quel champ est incorrect
 
+<a id="messages-persistence"></a>
 ### 4. Creer ou retrouver la conversation
 
 Si `conversationId` est absent :
@@ -337,6 +367,7 @@ Concretement :
 
 Le message doit etre enregistre avant les appels externes. Cela permet de conserver la question meme si un connecteur ou un modele echoue ensuite.
 
+<a id="messages-model-selection"></a>
 ### 6. Choisir le modele d'intelligence artificielle
 
 Concretement :
@@ -354,6 +385,7 @@ La configuration backend determine ensuite la version precise du modele, son fou
 
 Le reste de l'orchestration utilise une interface commune. Ainsi, les details techniques de GPT et Claude restent dans des adaptateurs differents, mais le flux metier reste le meme.
 
+<a id="messages-tool-registry"></a>
 ### 7. Construire le registre des outils autorises
 
 Le backend charge les connecteurs actifs de l'organisation et construit la liste des outils que le modele peut demander.
@@ -516,6 +548,7 @@ Pour chaque `ToolCall`, il doit verifier :
 
 Si le modele invente un outil comme `delete_erp_invoice`, le backend le refuse sans l'executer.
 
+<a id="messages-azure-search"></a>
 ### 12. Executer Azure AI Search lorsque cet outil est choisi
 
 Si le modele demande `search_microsoft_365`, le backend :
@@ -576,6 +609,7 @@ Pour chaque resultat, le backend conserve au minimum :
 
 Les champs contenant les ACL ne doivent pas etre renvoyes au modele ou au frontend.
 
+<a id="messages-direct-connectors"></a>
 ### 13. Executer les connecteurs directs
 
 Si le modele demande `query_erp` ou `query_crm`, le backend appelle le connecteur direct correspondant.
@@ -591,6 +625,7 @@ Concretement :
 
 Les appels independants peuvent etre executes en parallele apres validation.
 
+<a id="messages-evidence"></a>
 ### 14. Normaliser les resultats en preuves
 
 Azure AI Search, un ERP et un CRM ne retournent pas le meme format.
@@ -653,6 +688,7 @@ Le backend rappelle ensuite le meme modele avec :
 - les resultats normalises
 - les references `evidenceId`
 
+<a id="messages-orchestration"></a>
 ### 16. Demander au modele s'il faut continuer ou arreter
 
 Apres chaque resultat d'outil, le modele doit evaluer si les preuves sont suffisantes.
@@ -838,6 +874,7 @@ La premiere version retourne une reponse JSON complete. Elle ne fait pas de stre
 
 ---
 
+<a id="messages-resilience"></a>
 ## Gestion des echecs de connecteurs
 
 ### Une source echoue, mais d'autres sources fonctionnent

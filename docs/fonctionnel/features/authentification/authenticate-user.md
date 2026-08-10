@@ -1,5 +1,17 @@
 # Authenticate User
 
+## Table des matieres
+
+- [But](#but)
+- [Quand appeler cet endpoint](#quand-appeler-cet-endpoint)
+- [Reponse du frontend](#ce-que-le-frontend-doit-recevoir)
+- [Donnees de depart](#donnees-de-depart)
+- [Etapes du flow complet](#auth-flow)
+- [Provisionnement automatique](#auth-member-provisioning)
+- [Derniere connexion](#auth-last-login)
+- [Erreurs](#erreurs-a-prevoir)
+- [Regles metier](#regles-metier-fixes-pour-cet-endpoint)
+
 ## But
 
 `authenticateUser` sert a construire la session applicative complete d'un utilisateur deja connecte.
@@ -64,6 +76,7 @@ Le backend doit pouvoir recuperer au minimum :
 
 ---
 
+<a id="auth-flow"></a>
 ## Etapes de construction fonctionnelle
 
 ### 1. Verifier que l'utilisateur est bien connecte
@@ -164,6 +177,7 @@ Si l'utilisateur n'existe pas :
 
 ---
 
+<a id="auth-member-provisioning"></a>
 ### 6. Creer automatiquement l'utilisateur si le compte n'existe pas
 
 Dans ce projet, la regle est simple :
@@ -240,6 +254,7 @@ Le backend ne doit jamais retourner :
 
 ---
 
+<a id="auth-last-login"></a>
 ### 10. Enregistrer la derniere connexion
 
 Une fois `authenticateUser` termine avec succes, le backend peut enregistrer des informations de suivi.

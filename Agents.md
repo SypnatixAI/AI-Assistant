@@ -33,6 +33,9 @@
 * Noms de classes, méthodes et variables explicites.
 * Ajouter ou ajuster les tests quand c’est pertinent.
 * Toute nouvelle fonctionnalité ou modification de comportement doit inclure les tests pertinents.
+* Nommer les tests avec la convention Gherkin `Given_<contexte>_When_<methode_testee>_Then_<resultat>`.
+* La partie `When` du nom d'un test doit toujours contenir le nom exact de la méthode testée.
+* Structurer le corps des tests avec les sections `// Given`, `// When` et `// Then`.
 * Après chaque ajout ou modification de fonctionnalité, exécuter la suite complète avec `dotnet test Solution.sln`.
 * Vérifier qu’aucun test existant n’est cassé avant de considérer le travail comme terminé.
 * Si les tests ne peuvent pas être exécutés, expliquer clairement la raison et ne pas présenter la fonctionnalité comme entièrement validée.
@@ -50,6 +53,10 @@
 * Ne pas imposer les noms de toutes les classes, méthodes ou colonnes lorsque ce choix peut raisonnablement être laissé au développeur.
 * Utiliser un exemple court lorsqu’il rend le résultat attendu plus facile à comprendre.
 * Un ticket doit pouvoir être commencé sans clarification majeure, tout en laissant au développeur les décisions techniques locales.
+* Chaque document de fonctionnalité doit contenir une table des matières cliquable.
+* Ajouter des ancres stables aux sections référencées par des tickets afin que les liens restent valides si un titre change.
+* Chaque ticket doit contenir une section `Documentation de référence` avec un lien vers la section exacte du document concerné.
+* Pour les issues GitHub, utiliser une URL vers le dépôt et la branche par défaut avec l’ancre de section, pas seulement un chemin de fichier.
 
 
 ## Handlers

@@ -1,5 +1,20 @@
 # Ticket 3 - Appliquer les permissions aux recherches
 
+<a id="search-03-objective"></a>
+## Table des matieres
+
+- [Objectif](#objectif)
+- [Regle principale](#regle-principale)
+- [Identifiants de securite](#etape-1---definir-les-identifiants-de-securite)
+- [Groupes du membre](#etape-2---obtenir-les-groupes-du-membre)
+- [Construction du filtre](#etape-3---construire-le-filtre)
+- [Comportement d'echec](#etape-4---decider-le-comportement-dechec)
+- [Tests d'isolation](#etape-5---tester-lisolation)
+- [Changements de permissions](#changements-de-permissions)
+- [Tests](#tests-attendus)
+- [Criteres d'acceptation](#criteres-dacceptation)
+- [References](#references)
+
 ## Objectif
 
 Garantir qu'un utilisateur ne peut retrouver que les passages autorises par son organisation et par les permissions Microsoft 365 du document source.
@@ -105,4 +120,3 @@ Avant une mise en production, l'equipe doit definir le delai maximal acceptable 
 - [Modele de filtre de securite Azure AI Search](https://learn.microsoft.com/en-us/azure/search/search-security-trimming-for-azure-search)
 - [Controle d'acces au niveau document](https://learn.microsoft.com/en-us/azure/search/search-document-level-access-overview)
 - [Indexer des ACL avec l'API push](https://learn.microsoft.com/en-us/azure/search/search-index-access-control-lists-and-rbac-push-api)
-

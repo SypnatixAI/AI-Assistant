@@ -1,0 +1,221 @@
+using AssistantCore.Repository.Abstractions;
+using AssistantCore.Repository.Domain.Entities;
+using AssistantCore.Repository.Domain.Enums;
+using AssistantCore.Service.Application.Exceptions;
+using AssistantCore.Service.Application.Services.Members;
+
+namespace AssistantCore.Service.Tests.Members;
+
+public sealed class MemberManagementServiceUpdateMemberRoleTests
+{
+    [Fact]
+    public async Task Given_AUser_When_UpdateMemberRoleAsync_Then_ThrowsForbiddenWithoutQueryingMember()
+    {
+        // Given
+        var context = CreateContext(OrganizationRole.User);
+
+        // When
+        var exception = await Assert.ThrowsAsync<ForbiddenException>(
+            () => context.Service.UpdateMemberRoleAsync(
+                Guid.NewGuid(),
+                "Admin",
+                CancellationToken.None));
+
+        // Then
+        Assert.Equal("Administrator access required.", exception.Message);
+        Assert.Equal(0, context.MemberQueries.FindMemberByIdCallCount);
+        Assert.Equal(0, context.MemberQueries.UpdateRoleCallCount);
+    }
+
+    [Fact]
+    public async Task Given_AnEmptyMemberIdentifier_When_UpdateMemberRoleAsync_Then_ThrowsBadRequestWithoutQueryingMember()
+    {
+        // Given
+        var context = CreateContext();
+
+        // When
+        var exception = await Assert.ThrowsAsync<BadRequestException>(
+            () => context.Service.UpdateMemberRoleAsync(
+                Guid.Empty,
+                "Admin",
+                CancellationToken.None));
+
+        // Then
+        Assert.Equal("Member identifier is required.", exception.Message);
+        Assert.Equal(0, context.MemberQueries.FindMemberByIdCallCount);
+        Assert.Equal(0, context.MemberQueries.UpdateRoleCallCount);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("Manager")]
+    [InlineData("admin")]
+    [InlineData(null)]
+    public async Task Given_AnInvalidRole_When_UpdateMemberRoleAsync_Then_ThrowsBadRequestWithoutQueryingMember(
+        string? role)
+    {
+        // Given
+        var context = CreateContext();
+
+        // When
+        var exception = await Assert.ThrowsAsync<BadRequestException>(
+            () => context.Service.UpdateMemberRoleAsync(
+                Guid.NewGuid(),
+                role!,
+                CancellationToken.None));
+
+        // Then
+        Assert.Equal("Role must be 'Admin' or 'User'.", exception.Message);
+        Assert.Equal(0, context.MemberQueries.FindMemberByIdCallCount);
+        Assert.Equal(0, context.MemberQueries.UpdateRoleCallCount);
+    }
+
+    [Fact]
+    public async Task Given_TheCurrentAdminAsTarget_When_UpdateMemberRoleAsync_Then_ThrowsBadRequestWithoutQueryingMember()
+    {
+        // Given
+        var context = CreateContext();
+
+        // When
+        var exception = await Assert.ThrowsAsync<BadRequestException>(
+            () => context.Service.UpdateMemberRoleAsync(
+                context.CurrentAdmin.Id,
+                "User",
+                CancellationToken.None));
+
+        // Then
+        Assert.Equal("An administrator cannot change their own role.", exception.Message);
+        Assert.Equal(0, context.MemberQueries.FindMemberByIdCallCount);
+        Assert.Equal(0, context.MemberQueries.UpdateRoleCallCount);
+    }
+
+    [Fact]
+    public async Task Given_AnUnknownMember_When_UpdateMemberRoleAsync_Then_ThrowsNotFoundWithOrganizationScope()
+    {
+        // Given
+        var cancellationToken = new CancellationTokenSource().Token;
+        var memberId = Guid.NewGuid();
+        var context = CreateContext();
+
+        // When
+        var exception = await Assert.ThrowsAsync<NotFoundException>(
+            () => context.Service.UpdateMemberRoleAsync(
+                memberId,
+                "Admin",
+                cancellationToken));
+
+        // Then
+        Assert.Equal("Organization member not found.", exception.Message);
+        Assert.Equal(context.Organization.Id, context.MemberQueries.ReceivedOrganizationId);
+        Assert.Equal(memberId, context.MemberQueries.ReceivedMemberId);
+        Assert.Equal(cancellationToken, context.MemberQueries.ReceivedCancellationToken);
+        Assert.Equal(1, context.MemberQueries.FindMemberByIdCallCount);
+        Assert.Equal(0, context.MemberQueries.UpdateRoleCallCount);
+    }
+
+    [Fact]
+    public async Task Given_AnInactiveMember_When_UpdateMemberRoleAsync_Then_ThrowsBadRequestWithoutUpdatingRole()
+    {
+        // Given
+        var context = CreateContext();
+        var target = CreateMember(
+            context.Organization.Id,
+            OrganizationRole.User,
+            RecordStatus.Inactive);
+        context.MemberQueries.FoundMember = target;
+
+        // When
+        var exception = await Assert.ThrowsAsync<BadRequestException>(
+            () => context.Service.UpdateMemberRoleAsync(
+                target.Id,
+                "Admin",
+                CancellationToken.None));
+
+        // Then
+        Assert.Equal("An inactive organization member role cannot be changed.", exception.Message);
+        Assert.Equal(1, context.MemberQueries.FindMemberByIdCallCount);
+        Assert.Equal(0, context.MemberQueries.UpdateRoleCallCount);
+    }
+
+    [Theory]
+    [InlineData("Admin", OrganizationRole.Admin)]
+    [InlineData("User", OrganizationRole.User)]
+    public async Task Given_AValidRole_When_UpdateMemberRoleAsync_Then_UpdatesAndReturnsMember(
+        string role,
+        OrganizationRole expectedRole)
+    {
+        // Given
+        var cancellationToken = new CancellationTokenSource().Token;
+        var initialRole = expectedRole == OrganizationRole.Admin
+            ? OrganizationRole.User
+            : OrganizationRole.Admin;
+        var context = CreateContext();
+        var target = CreateMember(
+            context.Organization.Id,
+            initialRole,
+            RecordStatus.Active);
+        context.MemberQueries.FoundMember = target;
+
+        // When
+        var result = await context.Service.UpdateMemberRoleAsync(
+            target.Id,
+            role,
+            cancellationToken);
+
+        // Then
+        Assert.Same(target, result);
+        Assert.Same(target, context.MemberQueries.UpdatedMember);
+        Assert.Equal(expectedRole, result.Role);
+        Assert.Equal(expectedRole, context.MemberQueries.ReceivedRole);
+        Assert.Equal(context.Organization.Id, context.MemberQueries.ReceivedOrganizationId);
+        Assert.Equal(target.Id, context.MemberQueries.ReceivedMemberId);
+        Assert.Equal(cancellationToken, context.MemberQueries.ReceivedCancellationToken);
+        Assert.Equal(1, context.MemberQueries.FindMemberByIdCallCount);
+        Assert.Equal(1, context.MemberQueries.UpdateRoleCallCount);
+    }
+
+    private static TestContext CreateContext(
+        OrganizationRole currentRole = OrganizationRole.Admin,
+        OrganizationMember? target = null)
+    {
+        var organization = new Organization
+        {
+            Id = Guid.NewGuid(),
+            Name = "Contoso",
+            IdentityProvider = IdentityProvider.MicrosoftEntraId,
+            ExternalTenantId = "tenant-id",
+            Status = RecordStatus.Active
+        };
+        var currentMember = CreateMember(
+            organization.Id,
+            currentRole,
+            RecordStatus.Active);
+        var memberQueries = new StubOrganizationMemberQueries { FoundMember = target };
+        var service = new MemberManagementService(
+            new StubAuthenticateUserService { Result = (organization, currentMember) },
+            memberQueries);
+
+        return new TestContext(service, memberQueries, organization, currentMember);
+    }
+
+    private static OrganizationMember CreateMember(
+        Guid organizationId,
+        OrganizationRole role,
+        RecordStatus status) => new()
+    {
+        Id = Guid.NewGuid(),
+        OrganizationId = organizationId,
+        Name = $"{role} Member",
+        Email = $"{role.ToString().ToLowerInvariant()}.{Guid.NewGuid():N}@example.com",
+        IdentityProvider = IdentityProvider.MicrosoftEntraId,
+        ExternalUserId = Guid.NewGuid().ToString(),
+        Role = role,
+        Status = status
+    };
+
+    private sealed record TestContext(
+        MemberManagementService Service,
+        StubOrganizationMemberQueries MemberQueries,
+        Organization Organization,
+        OrganizationMember CurrentAdmin);
+}

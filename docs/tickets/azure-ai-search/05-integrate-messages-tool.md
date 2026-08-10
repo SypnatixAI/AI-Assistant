@@ -1,5 +1,21 @@
 # Ticket 5 - Integrer Azure AI Search au flow messages
 
+<a id="search-05-objective"></a>
+## Table des matieres
+
+- [Objectif](#objectif)
+- [Dependances](#dependances)
+- [Declarer l'outil logique](#etape-1---declarer-loutil-logique)
+- [Valider l'appel](#etape-2---valider-lappel-doutil)
+- [Completer le contexte securise](#etape-3---completer-avec-le-contexte-securise)
+- [Executer et normaliser](#etape-4---executer-et-normaliser)
+- [Produire les sources](#etape-5---produire-les-sources-finales)
+- [Gerer les echecs](#etape-6---gerer-les-echecs)
+- [Tests](#tests-attendus)
+- [Scenario manuel](#scenario-manuel-dacceptation)
+- [Criteres d'acceptation](#criteres-dacceptation)
+- [Hors perimetre](#hors-perimetre)
+
 ## Objectif
 
 Brancher l'adaptateur Azure AI Search sur l'outil logique `search_microsoft_365` utilise par l'orchestration de `POST /api/messages`.
@@ -150,4 +166,3 @@ Le backend doit retirer une citation inventee par le modele ou qui ne correspond
 - streaming de la reponse
 - interface d'administration des sources
 - ajustement avance du classement
-
