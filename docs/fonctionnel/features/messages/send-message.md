@@ -151,7 +151,7 @@ Le backend determine ces informations a partir de l'identite, de la question et 
 
 ## Architecture de recherche retenue
 
-La responsabilite est partagee entre trois composants.
+La responsabilite est partagee entre quatre composants.
 
 ```text
 Modele IA
@@ -159,11 +159,11 @@ Modele IA
         |
         v
 Backend
-  valide la demande et execute le vrai connecteur
+  valide la demande et execute l'outil logique
         |
         v
-Microsoft Search / ERP / CRM / base interne
-  retourne les donnees trouvees
+Azure AI Search / ERP / CRM / base interne
+  recherche dans les donnees deja indexees ou appelle le systeme cible
         |
         v
 Backend
@@ -187,38 +187,49 @@ Le backend reste toujours responsable de :
 - retirer les donnees interdites ou invalides
 - verifier les sources de la reponse finale
 
-### Role exact de Microsoft Search
+### Role exact d'Azure AI Search
 
-Microsoft Search est utilise par le backend au moyen de la Microsoft Search API dans Microsoft Graph.
+Azure AI Search est le moteur de recherche commun pour les contenus Microsoft 365 que l'organisation a choisi d'indexer.
 
-L'appel principal est :
+Le backend expose au modele un outil logique nomme `search_microsoft_365`. Le nom de l'outil reste independant du fournisseur technique. Quand cet outil est demande, le backend interroge l'index Azure AI Search configure pour l'environnement.
 
-```http
-POST https://graph.microsoft.com/v1.0/search/query
-```
+Azure AI Search ne recupere pas automatiquement les donnees Microsoft 365. Un pipeline d'ingestion separe doit auparavant :
 
-Microsoft Search peut rechercher notamment :
+- lire les contenus autorises avec Microsoft Graph
+- extraire le texte utile
+- decouper les contenus volumineux en passages
+- produire les vecteurs si la recherche vectorielle est activee
+- conserver le tenant, le type de source, l'URL et l'identifiant d'origine
+- copier les utilisateurs et groupes autorises dans les metadonnees de securite
+- ajouter, mettre a jour ou supprimer les passages dans l'index
 
-- des fichiers, dossiers, listes et sites SharePoint ou OneDrive
-- des messages et evenements Outlook accessibles a l'utilisateur
-- des contenus externes deja indexes avec un Microsoft 365 Copilot connector
+Ce pipeline s'execute en dehors de `POST /api/messages`. Une question utilisateur ne doit jamais declencher l'indexation complete d'une source.
 
-Microsoft Search ne choisit pas quel outil appeler. Il execute une recherche seulement apres que le modele a demande l'outil correspondant et que le backend a valide cette demande.
+### Perimetre Microsoft 365 progressif
 
-### Cas de SharePoint et Outlook
+L'objectif a terme peut inclure SharePoint, OneDrive, Outlook et Teams. Ces sources ne doivent pas etre livrees toutes en meme temps.
 
-Le backend expose au modele un outil logique nomme par exemple `search_microsoft_365`.
+La premiere version doit couvrir SharePoint et OneDrive. Outlook et Teams sont ajoutes ensuite, car ils demandent une ingestion personnalisee, des permissions Microsoft Graph plus sensibles et des regles de retention plus complexes.
 
-Cet outil appelle Microsoft Search avec les bons `entityTypes` :
+| Phase | Sources | Resultat attendu |
+| --- | --- | --- |
+| 1 | SharePoint et OneDrive | Rechercher dans les documents et respecter leurs permissions |
+| 2 | Outlook | Rechercher dans les courriels et evenements explicitement autorises |
+| 3 | Teams | Rechercher dans les messages de canaux ou conversations explicitement autorises |
 
-- `driveItem`, `listItem` ou `site` pour SharePoint et OneDrive
-- `message` ou `event` pour Outlook
+Le frontend n'envoie jamais un jeton Microsoft Graph, une cle Azure AI Search ou un filtre de securite.
 
-Pour conserver les droits de l'utilisateur, le backend obtient un jeton Microsoft Graph au nom de l'utilisateur connecte avec le flux On-Behalf-Of.
+### Securite des resultats
 
-Le frontend n'envoie jamais directement un jeton Microsoft Graph au modele.
+Chaque passage indexe doit contenir `organizationId` ainsi que les identifiants Microsoft Entra des utilisateurs ou groupes autorises.
 
-La recherche Outlook doit rester limitee aux contenus supportes et accessibles au membre connecte. Elle ne doit pas etre presentee comme une recherche automatique dans toutes les boites du tenant.
+Avant chaque recherche, le backend construit un filtre qui impose :
+
+- l'organisation courante
+- l'utilisateur courant ou un de ses groupes autorises
+- les types de sources autorises pour l'organisation
+
+Le filtrage doit etre applique dans la requete Azure AI Search, avant de retourner les resultats au modele. Un filtrage uniquement apres la recherche est insuffisant, car des donnees interdites auraient deja quitte le moteur de recherche.
 
 ### Cas des ERP et CRM
 
@@ -226,21 +237,21 @@ Il existe deux strategies possibles.
 
 | Situation | Outil execute par le backend |
 | --- | --- |
-| Les donnees ERP ou CRM sont indexees avec un Copilot connector | Microsoft Search avec `externalItem` |
+| Les donnees ERP ou CRM sont indexees dans Azure AI Search | Recherche dans l'index autorise |
 | Les donnees ERP ou CRM ne sont pas indexees | Appel direct a l'API ERP ou CRM |
 
 Si les donnees sont indexees :
 
-- le connecteur envoie les donnees vers Microsoft Graph avant les questions utilisateur
-- chaque donnee devient un `externalItem`
-- les ACL doivent etre enregistrees avec les donnees
-- le backend recherche ces elements avec Microsoft Search
+- le pipeline envoie les donnees vers Azure AI Search avant les questions utilisateur
+- chaque donnee est decoupee en un ou plusieurs passages
+- les ACL et l'organisation doivent etre enregistrees avec chaque passage
+- le backend recherche ces passages avec les memes controles que les contenus Microsoft 365
 
 Si les donnees ne sont pas indexees :
 
 - le backend utilise un outil distinct comme `query_erp` ou `query_crm`
 - cet outil appelle directement le systeme cible
-- Microsoft Search n'intervient pas dans ce chemin
+- Azure AI Search n'intervient pas dans ce chemin
 
 Les deux strategies peuvent coexister dans la meme organisation.
 
@@ -392,7 +403,7 @@ Chaque outil fourni au modele doit avoir :
 - un schema JSON des arguments acceptes
 - une liste de valeurs autorisees
 
-Exemple simplifie pour Microsoft Search :
+Exemple simplifie pour Azure AI Search :
 
 ```json
 {
@@ -410,14 +421,14 @@ Exemple simplifie pour Microsoft Search :
 }
 ```
 
-Le modele choisit des valeurs fonctionnelles comme `sharepoint`. Le backend traduit ensuite ces valeurs vers les details Microsoft Graph comme `driveItem`, `listItem` ou `externalItem`.
+Le modele choisit des valeurs fonctionnelles comme `sharepoint`. Le backend les traduit vers les valeurs `sourceType` autorisees dans l'index Azure AI Search.
 
 Le modele ne peut pas fournir librement :
 
 - une URL externe
 - un nom de table SQL
 - un identifiant de tenant
-- un identifiant de connexion Microsoft Graph
+- un nom d'index ou un endpoint Azure AI Search
 - une cle API
 
 ### 9. Faire le premier appel au modele pour choisir les outils
@@ -463,7 +474,7 @@ Exemple de decision produite par le modele :
 }
 ```
 
-Le modele a seulement demande ces outils. Aucun appel ERP ou Microsoft Graph n'a encore ete execute.
+Le modele a seulement demande ces outils. Aucun appel ERP ou Azure AI Search n'a encore ete execute.
 
 ### 10. Convertir la reponse du fournisseur vers un format interne
 
@@ -505,79 +516,65 @@ Pour chaque `ToolCall`, il doit verifier :
 
 Si le modele invente un outil comme `delete_erp_invoice`, le backend le refuse sans l'executer.
 
-### 12. Executer Microsoft Search lorsque cet outil est choisi
+### 12. Executer Azure AI Search lorsque cet outil est choisi
 
 Si le modele demande `search_microsoft_365`, le backend :
 
-1. obtient un jeton Microsoft Graph au nom de l'utilisateur
-2. traduit les types fonctionnels en `entityTypes`
-3. ajoute uniquement les connexions externes autorisees pour l'organisation
-4. construit la requete Microsoft Search
-5. appelle `POST /v1.0/search/query`
-6. limite le nombre de resultats
-7. traite les erreurs et la limitation `429`
+1. lit l'organisation et l'identifiant Entra du membre courant depuis le contexte authentifie
+2. obtient les groupes Entra utiles depuis une source backend approuvee
+3. valide les types de sources demandes par le modele
+4. construit une requete hybride, textuelle et vectorielle si les vecteurs sont actives
+5. ajoute obligatoirement le filtre d'organisation et le filtre d'ACL
+6. appelle Azure AI Search avec l'identite managee du backend
+7. limite le nombre et la taille des resultats
+8. traite les erreurs transitoires, les delais et la limitation `429`
 
-Si plusieurs familles de sources sont demandees, le backend peut construire plusieurs recherches Microsoft Graph. Il ne doit pas supposer que toutes les combinaisons de `entityTypes` sont supportees dans une seule requete.
+Exemple conceptuel de filtre :
 
-Exemple simplifie pour SharePoint :
+```text
+organizationId eq '<organisation-courante>'
+and sourceType in ('sharepoint', 'onedrive')
+and (
+  allowedUserIds contient '<utilisateur-courant>'
+  or allowedGroupIds contient un groupe de l'utilisateur
+)
+```
+
+Exemple simplifie de recherche Azure AI Search :
 
 ```json
 {
-  "requests": [
+  "search": "rapport ventes trimestre 2026 Q2",
+  "filter": "organizationId eq 'org-001' and sourceType eq 'sharepoint'",
+  "select": "chunkId,sourceId,sourceType,title,content,url,modifiedAt",
+  "top": 10,
+  "vectorQueries": [
     {
-      "entityTypes": [
-        "driveItem"
-      ],
-      "query": {
-        "queryString": "rapport ventes trimestre 2026 Q2"
-      },
-      "from": 0,
-      "size": 20
+      "kind": "text",
+      "text": "rapport ventes trimestre 2026 Q2",
+      "fields": "contentVector",
+      "k": 50
     }
   ]
 }
 ```
 
-Exemple simplifie pour des donnees ERP indexees :
+Le filtre d'ACL complet est construit par le backend. Le modele ne peut jamais fournir ou retirer `organizationId`, `allowedUserIds` ou `allowedGroupIds`.
 
-```json
-{
-  "requests": [
-    {
-      "entityTypes": [
-        "externalItem"
-      ],
-      "contentSources": [
-        "/external/connections/erp-metalpro"
-      ],
-      "query": {
-        "queryString": "ventes trimestre 2026 Q2"
-      },
-      "from": 0,
-      "size": 20
-    }
-  ]
-}
-```
+### Contenu retourne par Azure AI Search
 
-La valeur `erp-metalpro` vient de la configuration backend de l'organisation. Le modele et le frontend ne la choisissent pas.
+Le contenu utile est extrait et decoupe pendant l'ingestion, pas pendant la question utilisateur. Azure AI Search retourne donc directement les passages les mieux classes avec leur provenance.
 
-### Recuperer le contenu utile des resultats Microsoft Search
+Pour chaque resultat, le backend conserve au minimum :
 
-Microsoft Search retourne une liste de resultats avec leur rang, un resume et les informations de la ressource. Selon le type de resultat, ce contenu peut etre insuffisant pour repondre.
+- l'identifiant du passage et du document source
+- le type de source
+- le titre et le passage textuel
+- l'URL Microsoft 365 d'origine
+- la date de derniere modification
+- le score de recherche utilise seulement pour le classement interne
 
-Pour les meilleurs resultats seulement, le backend peut ensuite :
-
-- recuperer le document SharePoint avec son identifiant Graph
-- recuperer le corps d'un message Outlook avec son identifiant Graph
-- recuperer les champs utiles d'un `listItem` ou d'un `externalItem`
-- extraire le texte lisible du document
-- decouper le texte en passages courts
-- conserver l'URL, l'identifiant et le titre d'origine
-
-Chaque lecture supplementaire doit utiliser le meme contexte d'identite et respecter les memes droits que la recherche initiale.
-
-Le backend ne doit pas telecharger tous les resultats. Il enrichit seulement les resultats les mieux classes, avec une limite de taille et de nombre configuree.
+Les champs contenant les ACL ne doivent pas etre renvoyes au modele ou au frontend.
 
 ### 13. Executer les connecteurs directs
 
@@ -596,7 +593,7 @@ Les appels independants peuvent etre executes en parallele apres validation.
 
 ### 14. Normaliser les resultats en preuves
 
-Microsoft Search, un ERP et un CRM ne retournent pas le meme format.
+Azure AI Search, un ERP et un CRM ne retournent pas le meme format.
 
 Le backend transforme chaque resultat dans un format commun :
 
@@ -919,9 +916,10 @@ Il doit retourner une erreur technique adaptee, par exemple `502 Bad Gateway` ou
 - le modele peut demander un outil, mais seul le backend peut l'executer
 - chaque demande d'outil doit respecter un schema strict
 - un outil invente ou non autorise ne doit jamais etre execute
-- Microsoft Search est utilise pour Microsoft 365 et les contenus externes deja indexes
+- Azure AI Search est utilise pour les contenus Microsoft 365 deja indexes
 - un ERP ou CRM non indexe est consulte avec un connecteur direct
-- les appels Microsoft Graph delegues conservent les droits de l'utilisateur
+- le pipeline d'ingestion synchronise les droits Microsoft 365 dans l'index
+- chaque recherche impose le tenant et les ACL avant de retourner les resultats
 - le modele decide de continuer, de repondre ou de reconnaitre qu'il ne peut pas repondre
 - aucun nombre fonctionnel fixe de tours n'est impose
 - le backend impose des budgets techniques configurables de temps, d'appels, de tokens et de cout
@@ -949,7 +947,7 @@ Il doit retourner une erreur technique adaptee, par exemple `502 Bad Gateway` ou
 6. envoie la question et les outils a GPT, Claude ou un autre modele configure
 7. recoit les outils demandes par le modele
 8. valide chaque outil et ses arguments dans le backend
-9. appelle Microsoft Search, l'ERP, le CRM ou la base interne
+9. appelle Azure AI Search, l'ERP, le CRM ou la base interne
 10. normalise les resultats en preuves avec des references
 11. renvoie les resultats d'outils au modele
 12. lit la decision `continue`, `answer` ou `cannotAnswer` du modele
@@ -962,11 +960,11 @@ Il doit retourner une erreur technique adaptee, par exemple `502 Bad Gateway` ou
 
 ## References techniques
 
-- [Vue d'ensemble de Microsoft Search dans Microsoft Graph](https://learn.microsoft.com/en-us/graph/search-concept-overview)
-- [Appeler la Microsoft Search API avec POST /search/query](https://learn.microsoft.com/en-us/graph/api/search-query?view=graph-rest-1.0)
-- [Rechercher dans SharePoint et OneDrive](https://learn.microsoft.com/en-us/graph/search-concept-files)
-- [Rechercher dans les messages Outlook](https://learn.microsoft.com/en-us/graph/search-concept-messages)
-- [Indexer des donnees externes avec les Copilot connectors](https://learn.microsoft.com/en-us/graph/connecting-external-content-connectors-api-overview)
-- [Conserver l'identite utilisateur avec le flux On-Behalf-Of](https://learn.microsoft.com/en-us/entra/identity-platform/v2-oauth2-on-behalf-of-flow)
+- [Creer un service Azure AI Search](https://learn.microsoft.com/en-us/azure/search/search-create-service-portal)
+- [Creer un index vectoriel](https://learn.microsoft.com/en-us/azure/search/vector-search-how-to-create-index)
+- [Executer une recherche hybride](https://learn.microsoft.com/en-us/azure/search/hybrid-search-how-to-query)
+- [Filtrer les resultats avec des identifiants de securite](https://learn.microsoft.com/en-us/azure/search/search-security-trimming-for-azure-search)
+- [Suivre les changements avec les requetes delta Microsoft Graph](https://learn.microsoft.com/en-us/graph/delta-query-overview)
+- [Suivre les changements SharePoint et OneDrive](https://learn.microsoft.com/en-us/graph/api/driveitem-delta?view=graph-rest-1.0)
 - [Appels d'outils avec OpenAI](https://platform.openai.com/docs/guides/function-calling)
 - [Appels d'outils avec Claude](https://docs.anthropic.com/en/docs/agents-and-tools/tool-use/overview)
