@@ -1,6 +1,7 @@
 using AssistantCore.Service.Application.Abstractions;
 using AssistantCore.Service.Application.Services.AuthenticateUser;
 using AssistantCore.Service.Application.Services.Members;
+using AssistantCore.Service.Application.Services.Messages;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace AssistantCore.Service.Application;
@@ -13,6 +14,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ICurrentIdentity, CurrentIdentity>();
         services.AddScoped<IAuthenticateUserService, AuthenticateUserService>();
         services.AddScoped<IMemberManagementService, MemberManagementService>();
+        services.AddScoped<ISendMessageService, SendMessageService>();
 
         return services;
     }
