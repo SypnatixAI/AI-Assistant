@@ -2,6 +2,7 @@ using AssistantCore.Repository.Abstractions;
 using AssistantCore.Repository.Domain.Entities;
 using AssistantCore.Repository.Domain.Enums;
 using AssistantCore.Service.Application.Services.AuthenticateUser;
+using AssistantCore.Service.Application.Models.Authentication;
 
 namespace AssistantCore.Service.Tests.Authentication;
 
@@ -25,10 +26,10 @@ public sealed class AuthenticateUserServiceTests
         // Then
         Assert.Same(organization, result.Organization);
         Assert.Same(member, result.Member);
-        Assert.Equal(identity.IdentityProvider, organizationQueries.ReceivedIdentityProvider);
-        Assert.Equal(identity.ExternalTenantId, organizationQueries.ReceivedExternalTenantId);
+        Assert.Equal(identity.Identity.Provider, organizationQueries.ReceivedIdentityProvider);
+        Assert.Equal(identity.Identity.ExternalOrganizationId, organizationQueries.ReceivedExternalTenantId);
         Assert.Equal(organization.Id, memberQueries.ReceivedOrganizationId);
-        Assert.Equal(identity.ExternalUserId, memberQueries.ReceivedExternalUserId);
+        Assert.Equal(identity.Identity.ExternalUserId, memberQueries.ReceivedExternalUserId);
         Assert.Equal(cancellationToken, organizationQueries.ReceivedCancellationToken);
         Assert.Equal(cancellationToken, memberQueries.ReceivedCancellationToken);
         Assert.Null(memberQueries.CreatedMember);
@@ -61,10 +62,11 @@ public sealed class AuthenticateUserServiceTests
         var organization = CreateOrganization();
         var identity = new StubCurrentIdentity
         {
-            ExternalTenantId = "customer-tenant",
-            ExternalUserId = "external-user",
-            DisplayName = "Marie Tremblay",
-            Email = "marie@example.com"
+            Identity = CreateIdentity(
+                externalOrganizationId: "customer-tenant",
+                externalUserId: "external-user",
+                displayName: "Marie Tremblay",
+                email: "marie@example.com")
         };
         var organizationQueries = new StubOrganizationQueries { Result = organization };
         var memberQueries = new StubOrganizationMemberQueries();
@@ -94,8 +96,9 @@ public sealed class AuthenticateUserServiceTests
         var organization = CreateOrganization();
         var identity = new StubCurrentIdentity
         {
-            DisplayName = null,
-            Email = "fallback@example.com"
+            Identity = CreateIdentity(
+                displayName: null,
+                email: "fallback@example.com")
         };
         var memberQueries = new StubOrganizationMemberQueries();
         var service = new AuthenticateUserService(
@@ -117,7 +120,10 @@ public sealed class AuthenticateUserServiceTests
         var organization = CreateOrganization();
         var memberQueries = new StubOrganizationMemberQueries();
         var service = new AuthenticateUserService(
-            new StubCurrentIdentity { Email = null },
+            new StubCurrentIdentity
+            {
+                Identity = CreateIdentity(email: null)
+            },
             memberQueries,
             new StubOrganizationQueries { Result = organization });
 
@@ -170,4 +176,15 @@ public sealed class AuthenticateUserServiceTests
         Role = OrganizationRole.User,
         Status = RecordStatus.Active
     };
+
+    private static AuthenticatedIdentity CreateIdentity(
+        string externalOrganizationId = "tenant-id",
+        string externalUserId = "user-id",
+        string? displayName = "Test User",
+        string? email = "test.user@example.com") => new(
+            IdentityProvider.MicrosoftEntraId,
+            externalOrganizationId,
+            externalUserId,
+            displayName,
+            email);
 }

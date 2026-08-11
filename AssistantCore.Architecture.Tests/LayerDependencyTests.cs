@@ -33,6 +33,19 @@ public sealed class LayerDependencyTests
         Assert.Empty(violations);
     }
 
+    [Fact]
+    public void Given_Application_When_ValidateApplicationAuthenticationDependencies_Then_InfrastructureAndMicrosoftIdentityAreForbidden()
+    {
+        // Given
+        var serviceAssembly = typeof(CoreController).Assembly;
+
+        // When
+        var violations = ValidateApplicationAuthenticationDependencies(serviceAssembly);
+
+        // Then
+        Assert.Empty(violations);
+    }
+
     private static IReadOnlyCollection<string> ValidateApplicationServiceDependencies(
         System.Reflection.Assembly serviceAssembly)
     {
@@ -58,6 +71,21 @@ public sealed class LayerDependencyTests
                 "AssistantCore.Repository.Persistence",
                 "Microsoft.AspNetCore",
                 "Microsoft.EntityFrameworkCore")
+            .GetResult();
+
+        return result.FailingTypeNames ?? [];
+    }
+
+    private static IReadOnlyCollection<string> ValidateApplicationAuthenticationDependencies(
+        System.Reflection.Assembly serviceAssembly)
+    {
+        var result = Types.InAssembly(serviceAssembly)
+            .That()
+            .ResideInNamespaceStartingWith("AssistantCore.Service.Application")
+            .ShouldNot()
+            .HaveDependencyOnAny(
+                "AssistantCore.Service.Infrastructure.Authentication",
+                "Microsoft.Identity.Web")
             .GetResult();
 
         return result.FailingTypeNames ?? [];

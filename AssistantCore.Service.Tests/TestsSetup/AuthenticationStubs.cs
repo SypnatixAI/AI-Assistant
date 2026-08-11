@@ -2,21 +2,21 @@ using AssistantCore.Repository.Domain.Entities;
 using AssistantCore.Repository.Domain.Enums;
 using AssistantCore.Repository.Queries;
 using AssistantCore.Service.Application.Abstractions;
+using AssistantCore.Service.Application.Models.Authentication;
 using AssistantCore.Service.Application.Services.AuthenticateUser;
 
 namespace AssistantCore.Service.Tests;
 
 internal sealed class StubCurrentIdentity : ICurrentIdentity
 {
-    public IdentityProvider IdentityProvider { get; init; } = IdentityProvider.MicrosoftEntraId;
+    public AuthenticatedIdentity Identity { get; init; } = new(
+        IdentityProvider.MicrosoftEntraId,
+        "tenant-id",
+        "user-id",
+        "Test User",
+        "test.user@example.com");
 
-    public string ExternalTenantId { get; init; } = "tenant-id";
-
-    public string ExternalUserId { get; init; } = "user-id";
-
-    public string? DisplayName { get; init; } = "Test User";
-
-    public string? Email { get; init; } = "test.user@example.com";
+    public AuthenticatedIdentity GetIdentity() => Identity;
 }
 
 internal sealed class StubOrganizationQueries : IOrganizationQueries
