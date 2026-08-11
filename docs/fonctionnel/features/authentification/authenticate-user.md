@@ -8,9 +8,14 @@
 - [Donnees de depart](#donnees-de-depart)
 - [Etapes du flow complet](#auth-flow)
 - [Provisionnement automatique](#auth-member-provisioning)
+- [Autorisation OAuth](#auth-oauth-authorization)
+- [Politique d'admission](#auth-admission-policy)
+- [Configuration Microsoft Entra](#auth-entra-configuration)
+- [Identite stable du membre](#auth-member-identity)
 - [Derniere connexion](#auth-last-login)
 - [Erreurs](#erreurs-a-prevoir)
 - [Regles metier](#regles-metier-fixes-pour-cet-endpoint)
+- [References](#references-techniques)
 
 ## But
 
@@ -201,6 +206,186 @@ un utilisateur authentifie peut entrer dans la plateforme meme s'il n'existait p
 
 ---
 
+<a id="auth-oauth-authorization"></a>
+## Autorisation OAuth de l'API
+
+Un token valide prouve l'identite de l'appelant, mais il ne suffit pas a autoriser l'utilisation d'AssistantCore.
+
+Tous les endpoints appeles au nom d'un utilisateur doivent verifier les deux permissions suivantes :
+
+- le scope delegue `access_as_user`
+- le role d'admission Entra `AssistantCore.Access`
+
+Ces permissions ont des responsabilites differentes :
+
+| Controle | Signification |
+| --- | --- |
+| `access_as_user` | L'application cliente peut appeler l'API au nom de l'utilisateur connecte |
+| `AssistantCore.Access` | L'utilisateur a ete admis sur la plateforme par son organisation |
+| Role interne `Admin` ou `User` | Le membre peut effectuer les actions metier autorisees dans AssistantCore |
+
+Le role Entra `AssistantCore.Access` ne doit jamais etre transforme automatiquement en role interne `Admin`.
+
+Le backend doit verifier, dans cet ordre :
+
+1. la signature, l'emetteur, l'audience et l'expiration du token
+2. la presence du scope `access_as_user` dans le claim `scp`
+3. la presence de `AssistantCore.Access` dans le claim `roles`
+4. la presence des claims `tid` et `oid`
+5. l'existence et le statut actif de l'organisation interne
+6. l'existence ou le provisionnement du membre interne
+7. le statut actif et le role interne du membre
+
+Un token absent ou invalide retourne `401 Unauthorized`.
+
+Un token valide sans le scope ou le role d'admission attendu retourne `403 Forbidden`.
+
+Un token applicatif sans utilisateur ne peut pas appeler les endpoints utilisateur. Les appels de workers ou de jobs utiliseront plus tard des permissions applicatives et des endpoints separes.
+
+---
+
+<a id="auth-admission-policy"></a>
+## Politique d'admission et de provisionnement
+
+Pour le MVP, une organisation doit etre creee et activee dans AssistantCore avant que ses utilisateurs puissent acceder a la plateforme.
+
+L'administrateur Microsoft Entra du client decide qui peut entrer dans AssistantCore. Il affecte les utilisateurs ou groupes autorises au role Entra `AssistantCore.Access` de l'Enterprise Application.
+
+L'administrateur AssistantCore gere ensuite les roles metier `Admin` et `User`. Il ne gere pas l'emission des tokens Microsoft.
+
+Un utilisateur peut etre provisionne automatiquement seulement si :
+
+- son token est valide et destine a AssistantCore
+- son token contient `access_as_user`
+- son token contient `AssistantCore.Access`
+- son `tid` correspond a une organisation interne active
+- son `oid` identifie un utilisateur supporte
+- le membre interne n'existe pas encore pour cette organisation et cet `oid`
+
+Le membre cree automatiquement recoit toujours :
+
+- le role interne `User`
+- le statut interne `Active`
+- l'organisation determinee depuis `tid`
+- l'identite externe determinee depuis `oid`
+
+Les utilisateurs invites ne sont pas autorises dans le MVP. Ils ne doivent pas etre affectes a `AssistantCore.Access`. Une prise en charge future devra definir leur tenant de rattachement, leurs droits et leur cycle de revocation avant de les accepter.
+
+### Retirer l'acces
+
+Pour retirer l'acces a un utilisateur :
+
+1. un administrateur AssistantCore desactive le membre interne pour bloquer les appels dans la plateforme
+2. un administrateur Entra retire l'affectation `AssistantCore.Access`
+3. l'utilisateur ne peut plus obtenir de nouveau token autorise
+4. le membre reste en base pour conserver son historique
+
+Pour un retrait urgent, la desactivation interne doit etre faite en premier, car un token deja emis peut rester valide jusqu'a son expiration.
+
+---
+
+<a id="auth-entra-configuration"></a>
+## Configuration Microsoft Entra etape par etape
+
+Cette configuration comporte une partie geree par Sypnatix dans l'App Registration principale et une partie realisee dans chaque tenant client.
+
+### A. Creer le role d'admission dans l'App Registration
+
+Dans le tenant qui possede l'App Registration AssistantCore :
+
+1. ouvrir `Microsoft Entra admin center`
+2. ouvrir `Entra ID`
+3. ouvrir `App registrations`
+4. selectionner l'App Registration de l'API AssistantCore
+5. ouvrir `App roles`
+6. cliquer sur `Create app role`
+7. utiliser `AssistantCore Access` comme nom affiche
+8. selectionner `Users/Groups` dans les types de membres autorises
+9. utiliser exactement `AssistantCore.Access` comme valeur
+10. ajouter une description indiquant que ce role autorise l'acces a la plateforme sans donner un role metier interne
+11. activer le role puis enregistrer
+
+Le role est defini sur l'API afin d'apparaitre dans le token d'acces destine a AssistantCore.
+
+### B. Verifier le scope delegue
+
+Dans la meme App Registration :
+
+1. ouvrir `Expose an API`
+2. verifier que l'Application ID URI est configure
+3. verifier que le scope `access_as_user` existe et est actif
+4. verifier que l'application cliente demande `api://<API_CLIENT_ID>/access_as_user`
+5. accorder le consentement administrateur lorsque la politique du tenant l'exige
+
+### C. Activer l'affectation obligatoire dans le tenant client
+
+Un administrateur du tenant client effectue les operations suivantes :
+
+1. ouvrir `Microsoft Entra admin center`
+2. ouvrir `Entra ID`
+3. ouvrir `Enterprise applications`
+4. rechercher et selectionner `AssistantCore`
+5. ouvrir `Properties`
+6. configurer `Assignment required?` a `Yes`
+7. enregistrer
+
+Cette operation evite qu'un utilisateur non affecte utilise l'Enterprise Application uniquement parce qu'il appartient au tenant.
+
+### D. Affecter les utilisateurs ou groupes autorises
+
+Dans l'Enterprise Application AssistantCore du tenant client :
+
+1. ouvrir `Users and groups`
+2. cliquer sur `Add user/group`
+3. selectionner les utilisateurs ou groupes autorises
+4. selectionner le role `AssistantCore.Access`
+5. cliquer sur `Assign`
+6. verifier que chaque affectation apparait avec le bon role
+
+Pour le MVP, ne pas affecter de compte invite, de service principal ou de groupe dont le perimetre n'est pas maitrise.
+
+### E. Verifier le token et le premier acces
+
+Avec un utilisateur de test affecte :
+
+1. demander un token pour le scope `access_as_user`
+2. verifier que le token vise l'audience de l'API AssistantCore
+3. verifier que `scp` contient `access_as_user`
+4. verifier que `roles` contient `AssistantCore.Access`
+5. appeler `authenticateUser`
+6. verifier que le membre est cree avec le role interne `User`
+7. rappeler l'endpoint et verifier qu'aucun doublon n'est cree
+
+Avec un utilisateur non affecte, verifier que l'acces est refuse et qu'aucun membre interne n'est cree.
+
+---
+
+<a id="auth-member-identity"></a>
+## Identite stable et profil du membre
+
+La cle d'identite stable d'un membre est composee de :
+
+- l'identifiant interne de l'organisation
+- le fournisseur d'identite
+- le claim Entra `oid`
+
+Le claim `tid` determine l'organisation candidate. Le claim `oid` identifie l'utilisateur dans ce tenant.
+
+L'email et le nom affiche sont des donnees de profil. Ils ne doivent jamais servir a prendre une decision d'autorisation ou a retrouver seuls un membre.
+
+Lors d'une authentification reussie, le backend peut actualiser le nom et l'email d'un membre existant lorsque les nouvelles valeurs sont valides. Cette synchronisation ne doit jamais modifier :
+
+- le role interne
+- le statut interne
+- l'organisation
+- l'identifiant externe
+
+Un changement d'email ne doit pas creer un second membre. Deux identites externes differentes ne doivent pas etre fusionnees uniquement parce qu'elles presentent le meme email.
+
+La contrainte d'unicite principale doit porter sur l'organisation, le fournisseur d'identite et l'identifiant utilisateur externe.
+
+---
+
 ### 7. Verifier que le compte utilisateur est actif
 
 Meme si le compte existe ou vient d'etre cree, le backend doit verifier son statut interne.
@@ -333,3 +518,11 @@ A retourner si une erreur technique empeche la construction de la session.
 - toutes les donnees retournees doivent appartenir a l'organisation courante
 
 ---
+
+## References techniques
+
+- [Autorisation des API avec Microsoft.Identity.Web](https://learn.microsoft.com/en-us/entra/msidweb/authentication/authorization)
+- [Verifier les scopes et roles d'une API protegee](https://learn.microsoft.com/en-us/entra/identity-platform/scenario-protected-web-api-verification-scope-app-roles)
+- [Restreindre une application Entra a des utilisateurs affectes](https://learn.microsoft.com/en-us/entra/identity-platform/howto-restrict-your-app-to-a-set-of-users)
+- [Ajouter des app roles dans Microsoft Entra](https://learn.microsoft.com/en-us/entra/identity-platform/howto-add-app-roles-in-apps)
+- [Claims des access tokens Microsoft Entra](https://learn.microsoft.com/en-us/entra/identity-platform/access-token-claims-reference)

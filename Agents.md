@@ -24,6 +24,13 @@
 * Éviter la logique métier dans les controllers.
 * Éviter que la couche Domain dépende d’Infrastructure ou d’EF Core.
 * Favoriser des services petits, testables et lisibles.
+* Respecter le flow applicatif obligatoire : `Controller -> IDispatcher -> CommandHandler -> Application Service -> Repository ou service externe`.
+* Un controller doit injecter uniquement `IDispatcher` et ne doit jamais appeler directement un service applicatif, un repository ou un `DbContext`.
+* Une commande doit posséder exactement un handler.
+* Un handler doit injecter uniquement des interfaces de services applicatifs et ne doit jamais dépendre directement de la persistence ou d’EF Core.
+* Toute exception à ces règles doit être discutée et approuvée avant de modifier les tests d’architecture.
+* Ne jamais supprimer, désactiver ou assouplir un test d’architecture uniquement pour faire passer le CI.
+* Les règles exécutables se trouvent dans `AssistantCore.Architecture.Tests` et doivent réussir avant tout merge vers `master`.
 
 ## Qualité du code
 
@@ -57,6 +64,9 @@
 * Ajouter des ancres stables aux sections référencées par des tickets afin que les liens restent valides si un titre change.
 * Chaque ticket doit contenir une section `Documentation de référence` avec un lien vers la section exacte du document concerné.
 * Pour les issues GitHub, utiliser une URL vers le dépôt et la branche par défaut avec l’ancre de section, pas seulement un chemin de fichier.
+* Avant de creer ou mettre a jour un ticket GitHub, ajouter ou mettre a jour la documentation de reference correspondante.
+* Presenter la documentation ou son diff a l'utilisateur et attendre son approbation avant de creer ou modifier le ticket GitHub.
+* Ne pas creer un ticket dont les decisions fonctionnelles importantes ne sont pas encore documentees.
 
 
 ## Handlers
