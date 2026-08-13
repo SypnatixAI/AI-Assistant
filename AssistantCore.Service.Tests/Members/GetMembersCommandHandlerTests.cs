@@ -6,13 +6,17 @@ namespace AssistantCore.Service.Tests.Members;
 
 public sealed class GetMembersCommandHandlerTests
 {
-    [Fact]
-    public async Task Given_Members_When_HandleAsync_Then_MapsResponseAndPropagatesCancellationToken()
+    [Theory, AutoDomainData]
+    public async Task Given_Members_When_HandleAsync_Then_MapsResponseAndPropagatesCancellationToken(
+        CancellationToken cancellationToken,
+        OrganizationMember admin,
+        OrganizationMember inactiveUser)
     {
         // Given
-        var cancellationToken = new CancellationTokenSource().Token;
-        var admin = CreateMember(OrganizationRole.Admin, RecordStatus.Active);
-        var inactiveUser = CreateMember(OrganizationRole.User, RecordStatus.Inactive);
+        admin.Role = OrganizationRole.Admin;
+        admin.Status = RecordStatus.Active;
+        inactiveUser.Role = OrganizationRole.User;
+        inactiveUser.Status = RecordStatus.Inactive;
         var service = new StubMemberManagementService { Members = [admin, inactiveUser] };
         var handler = new GetMembersCommandHandler(service);
 
@@ -39,18 +43,6 @@ public sealed class GetMembersCommandHandlerTests
         // Then
         Assert.Empty(response.Members);
     }
-
-    private static OrganizationMember CreateMember(
-        OrganizationRole role,
-        RecordStatus status) => new()
-    {
-        Id = Guid.NewGuid(),
-        OrganizationId = Guid.NewGuid(),
-        Name = $"{role} Member",
-        Email = $"{role.ToString().ToLowerInvariant()}@example.com",
-        Role = role,
-        Status = status
-    };
 
     private static void AssertMember(
         Application.Models.Members.MemberResponse response,

@@ -9,6 +9,12 @@ public sealed class AssistantCoreDbContext(DbContextOptions<AssistantCoreDbConte
 
     public DbSet<OrganizationMember> OrganizationMembers => Set<OrganizationMember>();
 
+    public DbSet<Conversation> Conversations => Set<Conversation>();
+
+    public DbSet<Message> Messages => Set<Message>();
+
+    public DbSet<MessageSource> MessageSources => Set<MessageSource>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(AssistantCoreDbContext).Assembly);

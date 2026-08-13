@@ -6,16 +6,20 @@ namespace AssistantCore.Service.Tests.Authentication;
 
 public sealed class MicrosoftEntraIdentityClaimsMapperTests
 {
-    [Fact]
-    public void Given_ValidEntraClaims_When_Map_Then_ReturnsNormalizedIdentity()
+    [Theory, AutoDomainData]
+    public void Given_ValidEntraClaims_When_Map_Then_ReturnsNormalizedIdentity(
+        string tenantId,
+        string userId,
+        string displayName,
+        string email)
     {
         // Given
         var principal = CreatePrincipal(
-            new Claim("iss", "https://login.microsoftonline.com/tenant-id/v2.0"),
-            new Claim("tid", "tenant-id"),
-            new Claim("oid", "user-id"),
-            new Claim("name", "Marie Tremblay"),
-            new Claim("preferred_username", "marie@example.com"));
+            new Claim("iss", $"https://login.microsoftonline.com/{tenantId}/v2.0"),
+            new Claim("tid", tenantId),
+            new Claim("oid", userId),
+            new Claim("name", displayName),
+            new Claim("preferred_username", email));
         var mapper = new MicrosoftEntraIdentityClaimsMapper();
 
         // When
@@ -23,18 +27,18 @@ public sealed class MicrosoftEntraIdentityClaimsMapperTests
 
         // Then
         Assert.Equal(IdentityProvider.MicrosoftEntraId, identity.Provider);
-        Assert.Equal("tenant-id", identity.ExternalOrganizationId);
-        Assert.Equal("user-id", identity.ExternalUserId);
-        Assert.Equal("Marie Tremblay", identity.DisplayName);
-        Assert.Equal("marie@example.com", identity.Email);
+        Assert.Equal(tenantId, identity.ExternalOrganizationId);
+        Assert.Equal(userId, identity.ExternalUserId);
+        Assert.Equal(displayName, identity.DisplayName);
+        Assert.Equal(email, identity.Email);
     }
 
-    [Fact]
-    public void Given_EntraIssuer_When_CanMap_Then_ReturnsTrue()
+    [Theory, AutoDomainData]
+    public void Given_EntraIssuer_When_CanMap_Then_ReturnsTrue(string tenantId)
     {
         // Given
         var principal = CreatePrincipal(
-            new Claim("iss", "https://login.microsoftonline.com/tenant-id/v2.0"));
+            new Claim("iss", $"https://login.microsoftonline.com/{tenantId}/v2.0"));
         var mapper = new MicrosoftEntraIdentityClaimsMapper();
 
         // When
@@ -44,14 +48,14 @@ public sealed class MicrosoftEntraIdentityClaimsMapperTests
         Assert.True(canMap);
     }
 
-    [Fact]
-    public void Given_MappedEntraTenantClaim_When_CanMap_Then_ReturnsTrue()
+    [Theory, AutoDomainData]
+    public void Given_MappedEntraTenantClaim_When_CanMap_Then_ReturnsTrue(string tenantId)
     {
         // Given
         var principal = CreatePrincipal(
             new Claim(
                 "http://schemas.microsoft.com/identity/claims/tenantid",
-                "tenant-id"));
+                tenantId));
         var mapper = new MicrosoftEntraIdentityClaimsMapper();
 
         // When
@@ -61,11 +65,12 @@ public sealed class MicrosoftEntraIdentityClaimsMapperTests
         Assert.True(canMap);
     }
 
-    [Fact]
-    public void Given_EntraTokenWithoutObjectIdentifier_When_Map_Then_ThrowsUnauthorizedAccessException()
+    [Theory, AutoDomainData]
+    public void Given_EntraTokenWithoutObjectIdentifier_When_Map_Then_ThrowsUnauthorizedAccessException(
+        string tenantId)
     {
         // Given
-        var principal = CreatePrincipal(new Claim("tid", "tenant-id"));
+        var principal = CreatePrincipal(new Claim("tid", tenantId));
         var mapper = new MicrosoftEntraIdentityClaimsMapper();
 
         // When

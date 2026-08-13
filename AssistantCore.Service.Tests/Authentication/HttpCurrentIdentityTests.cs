@@ -8,11 +8,11 @@ namespace AssistantCore.Service.Tests.Authentication;
 
 public sealed class HttpCurrentIdentityTests
 {
-    [Fact]
-    public void Given_OneMatchingMapper_When_GetIdentity_Then_ReturnsMappedIdentity()
+    [Theory, AutoDomainData]
+    public void Given_OneMatchingMapper_When_GetIdentity_Then_ReturnsMappedIdentity(
+        AuthenticatedIdentity expectedIdentity)
     {
         // Given
-        var expectedIdentity = CreateIdentity();
         var currentIdentity = CreateCurrentIdentity(
             new StubIdentityClaimsMapper(canMap: true, expectedIdentity));
 
@@ -23,12 +23,13 @@ public sealed class HttpCurrentIdentityTests
         Assert.Same(expectedIdentity, identity);
     }
 
-    [Fact]
-    public void Given_NoMatchingMapper_When_GetIdentity_Then_ThrowsUnauthorizedAccessException()
+    [Theory, AutoDomainData]
+    public void Given_NoMatchingMapper_When_GetIdentity_Then_ThrowsUnauthorizedAccessException(
+        AuthenticatedIdentity authenticatedIdentity)
     {
         // Given
         var currentIdentity = CreateCurrentIdentity(
-            new StubIdentityClaimsMapper(canMap: false, CreateIdentity()));
+            new StubIdentityClaimsMapper(canMap: false, authenticatedIdentity));
 
         // When
         var exception = Assert.Throws<UnauthorizedAccessException>(
@@ -38,13 +39,15 @@ public sealed class HttpCurrentIdentityTests
         Assert.Contains("non supporte", exception.Message, StringComparison.Ordinal);
     }
 
-    [Fact]
-    public void Given_MultipleMatchingMappers_When_GetIdentity_Then_ThrowsUnauthorizedAccessException()
+    [Theory, AutoDomainData]
+    public void Given_MultipleMatchingMappers_When_GetIdentity_Then_ThrowsUnauthorizedAccessException(
+        AuthenticatedIdentity firstIdentity,
+        AuthenticatedIdentity secondIdentity)
     {
         // Given
         var currentIdentity = CreateCurrentIdentity(
-            new StubIdentityClaimsMapper(canMap: true, CreateIdentity()),
-            new StubIdentityClaimsMapper(canMap: true, CreateIdentity()));
+            new StubIdentityClaimsMapper(canMap: true, firstIdentity),
+            new StubIdentityClaimsMapper(canMap: true, secondIdentity));
 
         // When
         var exception = Assert.Throws<UnauthorizedAccessException>(
@@ -67,13 +70,6 @@ public sealed class HttpCurrentIdentityTests
             new HttpContextAccessor { HttpContext = context },
             mappers);
     }
-
-    private static AuthenticatedIdentity CreateIdentity() => new(
-        IdentityProvider.MicrosoftEntraId,
-        "tenant-id",
-        "user-id",
-        "Test User",
-        "test.user@example.com");
 
     private sealed class StubIdentityClaimsMapper(
         bool canMap,

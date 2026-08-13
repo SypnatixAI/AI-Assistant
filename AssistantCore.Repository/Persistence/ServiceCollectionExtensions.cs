@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using AssistantCore.Repository.Queries;
+using AssistantCore.Repository.Repositories;
 
 namespace AssistantCore.Repository.Persistence;
 
@@ -17,6 +18,7 @@ public static class ServiceCollectionExtensions
 
         services.AddScoped<IOrganizationQueries, OrganizationQueries>();
         services.AddScoped<IOrganizationMemberQueries, OrganizationMemberQueries>();
+        services.AddScoped<IConversationRepository, ConversationRepository>();
 
         return services;
     }

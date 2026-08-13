@@ -6,24 +6,15 @@ namespace AssistantCore.Service.Tests.Authentication;
 
 public sealed class AuthenticateUserCommandHandlerTests
 {
-    [Fact]
-    public async Task Given_AnAuthenticatedMember_When_HandlingCommand_Then_MapsAuthenticationResponse()
+    [Theory, AutoDomainData]
+    public async Task Given_AnAuthenticatedMember_When_HandleAsync_Then_MapsAuthenticationResponse(
+        CancellationToken cancellationToken,
+        Organization organization,
+        OrganizationMember member)
     {
         // Given
-        var cancellationToken = new CancellationTokenSource().Token;
-        var organization = new Organization
-        {
-            Id = Guid.NewGuid(),
-            Name = "Contoso"
-        };
-        var member = new OrganizationMember
-        {
-            Id = Guid.NewGuid(),
-            OrganizationId = organization.Id,
-            Name = "Admin User",
-            Email = "admin@example.com",
-            Role = OrganizationRole.Admin
-        };
+        member.OrganizationId = organization.Id;
+        member.Role = OrganizationRole.Admin;
         var service = new StubAuthenticateUserService { Result = (organization, member) };
         var handler = new AuthenticateUserCommandHandler(service);
 
