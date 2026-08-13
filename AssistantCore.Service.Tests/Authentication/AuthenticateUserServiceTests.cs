@@ -8,14 +8,17 @@ namespace AssistantCore.Service.Tests.Authentication;
 
 public sealed class AuthenticateUserServiceTests
 {
-    [Fact]
-    public async Task Given_AnExistingActiveMember_When_GettingOrganization_Then_ReturnsOrganizationAndMember()
+    [Theory, AutoDomainData]
+    public async Task Given_AnExistingActiveMember_When_GetOrganizationAsync_Then_ReturnsOrganizationAndMember(
+        CancellationToken cancellationToken,
+        Organization organization,
+        OrganizationMember member,
+        AuthenticatedIdentity authenticatedIdentity)
     {
         // Given
-        var cancellationToken = new CancellationTokenSource().Token;
-        var organization = CreateOrganization();
-        var member = CreateMember(organization.Id);
-        var identity = new StubCurrentIdentity();
+        member.OrganizationId = organization.Id;
+        member.Status = RecordStatus.Active;
+        var identity = new StubCurrentIdentity { Identity = authenticatedIdentity };
         var organizationQueries = new StubOrganizationQueries { Result = organization };
         var memberQueries = new StubOrganizationMemberQueries { FoundMember = member };
         var service = new AuthenticateUserService(identity, memberQueries, organizationQueries);
@@ -35,13 +38,14 @@ public sealed class AuthenticateUserServiceTests
         Assert.Null(memberQueries.CreatedMember);
     }
 
-    [Fact]
-    public async Task Given_AnUnknownOrganization_When_GettingOrganization_Then_ThrowsForbiddenException()
+    [Theory, AutoDomainData]
+    public async Task Given_AnUnknownOrganization_When_GetOrganizationAsync_Then_ThrowsForbiddenException(
+        AuthenticatedIdentity authenticatedIdentity)
     {
         // Given
         var memberQueries = new StubOrganizationMemberQueries();
         var service = new AuthenticateUserService(
-            new StubCurrentIdentity(),
+            new StubCurrentIdentity { Identity = authenticatedIdentity },
             memberQueries,
             new StubOrganizationQueries());
 
@@ -54,19 +58,16 @@ public sealed class AuthenticateUserServiceTests
         Assert.Equal(0, memberQueries.FindMemberCallCount);
     }
 
-    [Fact]
-    public async Task Given_NoExistingMember_When_GettingOrganization_Then_CreatesAnActiveUser()
+    [Theory, AutoDomainData]
+    public async Task Given_NoExistingMember_When_GetOrganizationAsync_Then_CreatesAnActiveUser(
+        CancellationToken cancellationToken,
+        Organization organization,
+        AuthenticatedIdentity authenticatedIdentity)
     {
         // Given
-        var cancellationToken = new CancellationTokenSource().Token;
-        var organization = CreateOrganization();
         var identity = new StubCurrentIdentity
         {
-            Identity = CreateIdentity(
-                externalOrganizationId: "customer-tenant",
-                externalUserId: "external-user",
-                displayName: "Marie Tremblay",
-                email: "marie@example.com")
+            Identity = authenticatedIdentity
         };
         var organizationQueries = new StubOrganizationQueries { Result = organization };
         var memberQueries = new StubOrganizationMemberQueries();
@@ -80,25 +81,25 @@ public sealed class AuthenticateUserServiceTests
         Assert.Same(createdMember, result.Member);
         Assert.NotEqual(Guid.Empty, createdMember.Id);
         Assert.Equal(organization.Id, createdMember.OrganizationId);
-        Assert.Equal("Marie Tremblay", createdMember.Name);
-        Assert.Equal("marie@example.com", createdMember.Email);
-        Assert.Equal(IdentityProvider.MicrosoftEntraId, createdMember.IdentityProvider);
-        Assert.Equal("external-user", createdMember.ExternalUserId);
+        Assert.Equal(authenticatedIdentity.DisplayName, createdMember.Name);
+        Assert.Equal(authenticatedIdentity.Email, createdMember.Email);
+        Assert.Equal(authenticatedIdentity.Provider, createdMember.IdentityProvider);
+        Assert.Equal(authenticatedIdentity.ExternalUserId, createdMember.ExternalUserId);
         Assert.Equal(OrganizationRole.User, createdMember.Role);
         Assert.Equal(RecordStatus.Active, createdMember.Status);
         Assert.Equal(cancellationToken, memberQueries.ReceivedCancellationToken);
     }
 
-    [Fact]
-    public async Task Given_NoDisplayName_When_CreatingMember_Then_UsesEmailAsDisplayName()
+    [Theory, AutoDomainData]
+    public async Task Given_NoDisplayName_When_GetOrganizationAsync_Then_UsesEmailAsDisplayName(
+        Organization organization,
+        AuthenticatedIdentity authenticatedIdentity)
     {
         // Given
-        var organization = CreateOrganization();
+        var identityWithoutDisplayName = authenticatedIdentity with { DisplayName = null };
         var identity = new StubCurrentIdentity
         {
-            Identity = CreateIdentity(
-                displayName: null,
-                email: "fallback@example.com")
+            Identity = identityWithoutDisplayName
         };
         var memberQueries = new StubOrganizationMemberQueries();
         var service = new AuthenticateUserService(
@@ -110,19 +111,20 @@ public sealed class AuthenticateUserServiceTests
         await service.GetOrganizationAsync(CancellationToken.None);
 
         // Then
-        Assert.Equal("fallback@example.com", memberQueries.CreatedMember?.Name);
+        Assert.Equal(identityWithoutDisplayName.Email, memberQueries.CreatedMember?.Name);
     }
 
-    [Fact]
-    public async Task Given_NoEmail_When_CreatingMember_Then_ThrowsUnauthorizedException()
+    [Theory, AutoDomainData]
+    public async Task Given_NoEmail_When_GetOrganizationAsync_Then_ThrowsUnauthorizedException(
+        Organization organization,
+        AuthenticatedIdentity authenticatedIdentity)
     {
         // Given
-        var organization = CreateOrganization();
         var memberQueries = new StubOrganizationMemberQueries();
         var service = new AuthenticateUserService(
             new StubCurrentIdentity
             {
-                Identity = CreateIdentity(email: null)
+                Identity = authenticatedIdentity with { Email = null }
             },
             memberQueries,
             new StubOrganizationQueries { Result = organization });
@@ -136,15 +138,17 @@ public sealed class AuthenticateUserServiceTests
         Assert.Null(memberQueries.CreatedMember);
     }
 
-    [Fact]
-    public async Task Given_AnInactiveMember_When_GettingOrganization_Then_ThrowsForbiddenException()
+    [Theory, AutoDomainData]
+    public async Task Given_AnInactiveMember_When_GetOrganizationAsync_Then_ThrowsForbiddenException(
+        Organization organization,
+        OrganizationMember member,
+        AuthenticatedIdentity authenticatedIdentity)
     {
         // Given
-        var organization = CreateOrganization();
-        var member = CreateMember(organization.Id);
+        member.OrganizationId = organization.Id;
         member.Status = RecordStatus.Inactive;
         var service = new AuthenticateUserService(
-            new StubCurrentIdentity(),
+            new StubCurrentIdentity { Identity = authenticatedIdentity },
             new StubOrganizationMemberQueries { FoundMember = member },
             new StubOrganizationQueries { Result = organization });
 
@@ -156,35 +160,4 @@ public sealed class AuthenticateUserServiceTests
         Assert.Equal("Organization member access denied.", exception.Message);
     }
 
-    private static Organization CreateOrganization() => new()
-    {
-        Id = Guid.NewGuid(),
-        Name = "Contoso",
-        IdentityProvider = IdentityProvider.MicrosoftEntraId,
-        ExternalTenantId = "tenant-id",
-        Status = RecordStatus.Active
-    };
-
-    private static OrganizationMember CreateMember(Guid organizationId) => new()
-    {
-        Id = Guid.NewGuid(),
-        OrganizationId = organizationId,
-        Name = "Test User",
-        Email = "test.user@example.com",
-        IdentityProvider = IdentityProvider.MicrosoftEntraId,
-        ExternalUserId = "user-id",
-        Role = OrganizationRole.User,
-        Status = RecordStatus.Active
-    };
-
-    private static AuthenticatedIdentity CreateIdentity(
-        string externalOrganizationId = "tenant-id",
-        string externalUserId = "user-id",
-        string? displayName = "Test User",
-        string? email = "test.user@example.com") => new(
-            IdentityProvider.MicrosoftEntraId,
-            externalOrganizationId,
-            externalUserId,
-            displayName,
-            email);
 }

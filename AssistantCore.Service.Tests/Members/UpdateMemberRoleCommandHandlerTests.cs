@@ -6,20 +6,14 @@ namespace AssistantCore.Service.Tests.Members;
 
 public sealed class UpdateMemberRoleCommandHandlerTests
 {
-    [Fact]
-    public async Task Given_AnUpdatedMember_When_HandleAsync_Then_MapsResponseAndPropagatesRequest()
+    [Theory, AutoDomainData]
+    public async Task Given_AnUpdatedMember_When_HandleAsync_Then_MapsResponseAndPropagatesRequest(
+        CancellationToken cancellationToken,
+        OrganizationMember member)
     {
         // Given
-        var cancellationToken = new CancellationTokenSource().Token;
-        var member = new OrganizationMember
-        {
-            Id = Guid.NewGuid(),
-            OrganizationId = Guid.NewGuid(),
-            Name = "Updated Member",
-            Email = "updated@example.com",
-            Role = OrganizationRole.Admin,
-            Status = RecordStatus.Active
-        };
+        member.Role = OrganizationRole.Admin;
+        member.Status = RecordStatus.Active;
         var service = new StubMemberManagementService { UpdatedMember = member };
         var handler = new UpdateMemberRoleCommandHandler(service);
         var command = new UpdateMemberRoleCommand(member.Id, "Admin");

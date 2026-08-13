@@ -8,15 +8,20 @@ namespace AssistantCore.Service.Tests.Repository;
 
 public sealed class ConversationRepositoryUpdateMessageStatusTests
 {
-    [Fact]
-    public async Task Given_AnOwnedMessage_When_UpdateMessageProcessingStatusAsync_Then_UpdatesStatusAndDate()
+    [Theory, AutoDomainData]
+    public async Task Given_AnOwnedMessage_When_UpdateMessageProcessingStatusAsync_Then_UpdatesStatusAndDate(
+        Guid organizationId,
+        Guid ownerMemberId,
+        Conversation conversation,
+        Message message,
+        DateTimeOffset updatedAt)
     {
         // Given
-        var organizationId = Guid.NewGuid();
-        var ownerMemberId = Guid.NewGuid();
-        var conversation = CreateConversation(organizationId, ownerMemberId);
-        var message = CreateMessage(conversation.Id);
-        var updatedAt = DateTimeOffset.UtcNow.AddMinutes(1);
+        conversation.OrganizationId = organizationId;
+        conversation.OwnerMemberId = ownerMemberId;
+        message.ConversationId = conversation.Id;
+        message.Role = MessageRole.User;
+        message.ProcessingStatus = MessageProcessingStatus.Pending;
         await using var dbContext = CreateDbContext();
         dbContext.Conversations.Add(conversation);
         dbContext.Messages.Add(message);
@@ -42,12 +47,21 @@ public sealed class ConversationRepositoryUpdateMessageStatusTests
         Assert.Equal(updatedAt, persistedMessage.UpdatedAt);
     }
 
-    [Fact]
-    public async Task Given_AWrongOrganization_When_UpdateMessageProcessingStatusAsync_Then_DoesNotModifyMessage()
+    [Theory, AutoDomainData]
+    public async Task Given_AWrongOrganization_When_UpdateMessageProcessingStatusAsync_Then_DoesNotModifyMessage(
+        Guid organizationId,
+        Guid ownerMemberId,
+        Guid wrongOrganizationId,
+        Conversation conversation,
+        Message message,
+        DateTimeOffset updatedAt)
     {
         // Given
-        var conversation = CreateConversation(Guid.NewGuid(), Guid.NewGuid());
-        var message = CreateMessage(conversation.Id);
+        conversation.OrganizationId = organizationId;
+        conversation.OwnerMemberId = ownerMemberId;
+        message.ConversationId = conversation.Id;
+        message.Role = MessageRole.User;
+        message.ProcessingStatus = MessageProcessingStatus.Pending;
         var originalUpdatedAt = message.UpdatedAt;
         await using var dbContext = CreateDbContext();
         dbContext.Conversations.Add(conversation);
@@ -58,12 +72,12 @@ public sealed class ConversationRepositoryUpdateMessageStatusTests
 
         // When
         var updated = await repository.UpdateMessageProcessingStatusAsync(
-            Guid.NewGuid(),
+            wrongOrganizationId,
             conversation.OwnerMemberId,
             conversation.Id,
             message.Id,
             MessageProcessingStatus.Failed,
-            DateTimeOffset.UtcNow.AddMinutes(1),
+            updatedAt,
             CancellationToken.None);
 
         // Then
@@ -82,26 +96,4 @@ public sealed class ConversationRepositoryUpdateMessageStatusTests
 
         return new AssistantCoreDbContext(options);
     }
-
-    private static Conversation CreateConversation(Guid organizationId, Guid ownerMemberId) => new()
-    {
-        Id = Guid.NewGuid(),
-        OrganizationId = organizationId,
-        OwnerMemberId = ownerMemberId,
-        Title = "Conversation",
-        Status = ConversationStatus.Active,
-        CreatedAt = DateTimeOffset.UtcNow,
-        UpdatedAt = DateTimeOffset.UtcNow
-    };
-
-    private static Message CreateMessage(Guid conversationId) => new()
-    {
-        Id = Guid.NewGuid(),
-        ConversationId = conversationId,
-        Role = MessageRole.User,
-        Content = "Question",
-        ProcessingStatus = MessageProcessingStatus.Pending,
-        CreatedAt = DateTimeOffset.UtcNow,
-        UpdatedAt = DateTimeOffset.UtcNow
-    };
 }

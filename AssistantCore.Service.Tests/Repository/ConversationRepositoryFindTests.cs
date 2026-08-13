@@ -8,14 +8,16 @@ namespace AssistantCore.Service.Tests.Repository;
 
 public sealed class ConversationRepositoryFindTests
 {
-    [Fact]
-    public async Task Given_ConversationsFromMultipleContexts_When_FindConversationAsync_Then_ReturnsOnlyTheOwnedConversation()
+    [Theory, AutoDomainData]
+    public async Task Given_ConversationsFromMultipleContexts_When_FindConversationAsync_Then_ReturnsOnlyTheOwnedConversation(
+        Guid organizationId,
+        Guid ownerMemberId,
+        Conversation expectedConversation,
+        Conversation otherConversation)
     {
         // Given
-        var organizationId = Guid.NewGuid();
-        var ownerMemberId = Guid.NewGuid();
-        var expectedConversation = CreateConversation(organizationId, ownerMemberId);
-        var otherConversation = CreateConversation(Guid.NewGuid(), Guid.NewGuid());
+        expectedConversation.OrganizationId = organizationId;
+        expectedConversation.OwnerMemberId = ownerMemberId;
         await using var dbContext = CreateDbContext();
         dbContext.Conversations.AddRange(expectedConversation, otherConversation);
         await dbContext.SaveChangesAsync();
@@ -36,16 +38,18 @@ public sealed class ConversationRepositoryFindTests
     }
 
     [Theory]
-    [InlineData(true, false)]
-    [InlineData(false, true)]
+    [InlineAutoDomainData(true, false)]
+    [InlineAutoDomainData(false, true)]
     public async Task Given_AnIncorrectContext_When_FindConversationAsync_Then_ReturnsNull(
         bool useWrongOrganization,
-        bool useWrongOwner)
+        bool useWrongOwner,
+        Guid organizationId,
+        Guid ownerMemberId,
+        Conversation conversation)
     {
         // Given
-        var organizationId = Guid.NewGuid();
-        var ownerMemberId = Guid.NewGuid();
-        var conversation = CreateConversation(organizationId, ownerMemberId);
+        conversation.OrganizationId = organizationId;
+        conversation.OwnerMemberId = ownerMemberId;
         await using var dbContext = CreateDbContext();
         dbContext.Conversations.Add(conversation);
         await dbContext.SaveChangesAsync();
@@ -70,17 +74,4 @@ public sealed class ConversationRepositoryFindTests
 
         return new AssistantCoreDbContext(options);
     }
-
-    private static Conversation CreateConversation(
-        Guid organizationId,
-        Guid ownerMemberId) => new()
-    {
-        Id = Guid.NewGuid(),
-        OrganizationId = organizationId,
-        OwnerMemberId = ownerMemberId,
-        Title = "Conversation",
-        Status = ConversationStatus.Active,
-        CreatedAt = DateTimeOffset.UtcNow,
-        UpdatedAt = DateTimeOffset.UtcNow
-    };
 }

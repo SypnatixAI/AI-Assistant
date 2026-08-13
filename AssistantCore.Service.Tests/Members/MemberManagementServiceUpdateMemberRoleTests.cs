@@ -8,16 +8,19 @@ namespace AssistantCore.Service.Tests.Members;
 
 public sealed class MemberManagementServiceUpdateMemberRoleTests
 {
-    [Fact]
-    public async Task Given_AUser_When_UpdateMemberRoleAsync_Then_ThrowsForbiddenWithoutQueryingMember()
+    [Theory, AutoDomainData]
+    public async Task Given_AUser_When_UpdateMemberRoleAsync_Then_ThrowsForbiddenWithoutQueryingMember(
+        Guid targetMemberId,
+        Organization organization,
+        OrganizationMember currentMember)
     {
         // Given
-        var context = CreateContext(OrganizationRole.User);
+        var context = CreateContext(organization, currentMember, OrganizationRole.User);
 
         // When
         var exception = await Assert.ThrowsAsync<ForbiddenException>(
             () => context.Service.UpdateMemberRoleAsync(
-                Guid.NewGuid(),
+                targetMemberId,
                 "Admin",
                 CancellationToken.None));
 
@@ -27,11 +30,13 @@ public sealed class MemberManagementServiceUpdateMemberRoleTests
         Assert.Equal(0, context.MemberQueries.UpdateRoleCallCount);
     }
 
-    [Fact]
-    public async Task Given_AnEmptyMemberIdentifier_When_UpdateMemberRoleAsync_Then_ThrowsBadRequestWithoutQueryingMember()
+    [Theory, AutoDomainData]
+    public async Task Given_AnEmptyMemberIdentifier_When_UpdateMemberRoleAsync_Then_ThrowsBadRequestWithoutQueryingMember(
+        Organization organization,
+        OrganizationMember currentMember)
     {
         // Given
-        var context = CreateContext();
+        var context = CreateContext(organization, currentMember);
 
         // When
         var exception = await Assert.ThrowsAsync<BadRequestException>(
@@ -47,20 +52,23 @@ public sealed class MemberManagementServiceUpdateMemberRoleTests
     }
 
     [Theory]
-    [InlineData("")]
-    [InlineData("Manager")]
-    [InlineData("admin")]
-    [InlineData(null)]
+    [InlineAutoDomainData("")]
+    [InlineAutoDomainData("Manager")]
+    [InlineAutoDomainData("admin")]
+    [InlineAutoDomainData((object?)null)]
     public async Task Given_AnInvalidRole_When_UpdateMemberRoleAsync_Then_ThrowsBadRequestWithoutQueryingMember(
-        string? role)
+        string? role,
+        Guid targetMemberId,
+        Organization organization,
+        OrganizationMember currentMember)
     {
         // Given
-        var context = CreateContext();
+        var context = CreateContext(organization, currentMember);
 
         // When
         var exception = await Assert.ThrowsAsync<BadRequestException>(
             () => context.Service.UpdateMemberRoleAsync(
-                Guid.NewGuid(),
+                targetMemberId,
                 role!,
                 CancellationToken.None));
 
@@ -70,11 +78,13 @@ public sealed class MemberManagementServiceUpdateMemberRoleTests
         Assert.Equal(0, context.MemberQueries.UpdateRoleCallCount);
     }
 
-    [Fact]
-    public async Task Given_TheCurrentAdminAsTarget_When_UpdateMemberRoleAsync_Then_ThrowsBadRequestWithoutQueryingMember()
+    [Theory, AutoDomainData]
+    public async Task Given_TheCurrentAdminAsTarget_When_UpdateMemberRoleAsync_Then_ThrowsBadRequestWithoutQueryingMember(
+        Organization organization,
+        OrganizationMember currentMember)
     {
         // Given
-        var context = CreateContext();
+        var context = CreateContext(organization, currentMember);
 
         // When
         var exception = await Assert.ThrowsAsync<BadRequestException>(
@@ -89,13 +99,15 @@ public sealed class MemberManagementServiceUpdateMemberRoleTests
         Assert.Equal(0, context.MemberQueries.UpdateRoleCallCount);
     }
 
-    [Fact]
-    public async Task Given_AnUnknownMember_When_UpdateMemberRoleAsync_Then_ThrowsNotFoundWithOrganizationScope()
+    [Theory, AutoDomainData]
+    public async Task Given_AnUnknownMember_When_UpdateMemberRoleAsync_Then_ThrowsNotFoundWithOrganizationScope(
+        CancellationToken cancellationToken,
+        Guid memberId,
+        Organization organization,
+        OrganizationMember currentMember)
     {
         // Given
-        var cancellationToken = new CancellationTokenSource().Token;
-        var memberId = Guid.NewGuid();
-        var context = CreateContext();
+        var context = CreateContext(organization, currentMember);
 
         // When
         var exception = await Assert.ThrowsAsync<NotFoundException>(
@@ -113,15 +125,17 @@ public sealed class MemberManagementServiceUpdateMemberRoleTests
         Assert.Equal(0, context.MemberQueries.UpdateRoleCallCount);
     }
 
-    [Fact]
-    public async Task Given_AnInactiveMember_When_UpdateMemberRoleAsync_Then_ThrowsBadRequestWithoutUpdatingRole()
+    [Theory, AutoDomainData]
+    public async Task Given_AnInactiveMember_When_UpdateMemberRoleAsync_Then_ThrowsBadRequestWithoutUpdatingRole(
+        Organization organization,
+        OrganizationMember currentMember,
+        OrganizationMember target)
     {
         // Given
-        var context = CreateContext();
-        var target = CreateMember(
-            context.Organization.Id,
-            OrganizationRole.User,
-            RecordStatus.Inactive);
+        var context = CreateContext(organization, currentMember);
+        target.OrganizationId = context.Organization.Id;
+        target.Role = OrganizationRole.User;
+        target.Status = RecordStatus.Inactive;
         context.MemberQueries.FoundMember = target;
 
         // When
@@ -138,22 +152,24 @@ public sealed class MemberManagementServiceUpdateMemberRoleTests
     }
 
     [Theory]
-    [InlineData("Admin", OrganizationRole.Admin)]
-    [InlineData("User", OrganizationRole.User)]
+    [InlineAutoDomainData("Admin", OrganizationRole.Admin)]
+    [InlineAutoDomainData("User", OrganizationRole.User)]
     public async Task Given_AValidRole_When_UpdateMemberRoleAsync_Then_UpdatesAndReturnsMember(
         string role,
-        OrganizationRole expectedRole)
+        OrganizationRole expectedRole,
+        CancellationToken cancellationToken,
+        Organization organization,
+        OrganizationMember currentMember,
+        OrganizationMember target)
     {
         // Given
-        var cancellationToken = new CancellationTokenSource().Token;
         var initialRole = expectedRole == OrganizationRole.Admin
             ? OrganizationRole.User
             : OrganizationRole.Admin;
-        var context = CreateContext();
-        var target = CreateMember(
-            context.Organization.Id,
-            initialRole,
-            RecordStatus.Active);
+        var context = CreateContext(organization, currentMember);
+        target.OrganizationId = context.Organization.Id;
+        target.Role = initialRole;
+        target.Status = RecordStatus.Active;
         context.MemberQueries.FoundMember = target;
 
         // When
@@ -175,21 +191,14 @@ public sealed class MemberManagementServiceUpdateMemberRoleTests
     }
 
     private static TestContext CreateContext(
+        Organization organization,
+        OrganizationMember currentMember,
         OrganizationRole currentRole = OrganizationRole.Admin,
         OrganizationMember? target = null)
     {
-        var organization = new Organization
-        {
-            Id = Guid.NewGuid(),
-            Name = "Contoso",
-            IdentityProvider = IdentityProvider.MicrosoftEntraId,
-            ExternalTenantId = "tenant-id",
-            Status = RecordStatus.Active
-        };
-        var currentMember = CreateMember(
-            organization.Id,
-            currentRole,
-            RecordStatus.Active);
+        currentMember.OrganizationId = organization.Id;
+        currentMember.Role = currentRole;
+        currentMember.Status = RecordStatus.Active;
         var memberQueries = new StubOrganizationMemberQueries { FoundMember = target };
         var service = new MemberManagementService(
             new StubAuthenticateUserService { Result = (organization, currentMember) },
@@ -197,21 +206,6 @@ public sealed class MemberManagementServiceUpdateMemberRoleTests
 
         return new TestContext(service, memberQueries, organization, currentMember);
     }
-
-    private static OrganizationMember CreateMember(
-        Guid organizationId,
-        OrganizationRole role,
-        RecordStatus status) => new()
-    {
-        Id = Guid.NewGuid(),
-        OrganizationId = organizationId,
-        Name = $"{role} Member",
-        Email = $"{role.ToString().ToLowerInvariant()}.{Guid.NewGuid():N}@example.com",
-        IdentityProvider = IdentityProvider.MicrosoftEntraId,
-        ExternalUserId = Guid.NewGuid().ToString(),
-        Role = role,
-        Status = status
-    };
 
     private sealed record TestContext(
         MemberManagementService Service,

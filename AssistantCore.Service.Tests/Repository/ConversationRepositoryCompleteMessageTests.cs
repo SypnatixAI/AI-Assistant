@@ -8,17 +8,23 @@ namespace AssistantCore.Service.Tests.Repository;
 
 public sealed class ConversationRepositoryCompleteMessageTests
 {
-    [Fact]
-    public async Task Given_AValidatedAssistantResponse_When_CompleteMessageWithAssistantResponseAsync_Then_PersistsResponseSourcesAndCompletion()
+    [Theory, AutoDomainData]
+    public async Task Given_AValidatedAssistantResponse_When_CompleteMessageWithAssistantResponseAsync_Then_PersistsResponseSourcesAndCompletion(
+        Guid organizationId,
+        Guid ownerMemberId,
+        Conversation conversation,
+        Message userMessage,
+        Message assistantMessage,
+        MessageSource source,
+        DateTimeOffset completedAt)
     {
         // Given
-        var organizationId = Guid.NewGuid();
-        var ownerMemberId = Guid.NewGuid();
-        var conversation = CreateConversation(organizationId, ownerMemberId);
-        var userMessage = CreateUserMessage(conversation.Id);
-        var assistantMessage = CreateAssistantMessage();
-        var source = CreateSource();
-        var completedAt = DateTimeOffset.UtcNow.AddMinutes(1);
+        conversation.OrganizationId = organizationId;
+        conversation.OwnerMemberId = ownerMemberId;
+        userMessage.ConversationId = conversation.Id;
+        userMessage.Role = MessageRole.User;
+        userMessage.ProcessingStatus = MessageProcessingStatus.InProgress;
+        assistantMessage.CreatedAt = userMessage.CreatedAt.AddSeconds(1);
         await using var dbContext = CreateDbContext();
         dbContext.Conversations.Add(conversation);
         dbContext.Messages.Add(userMessage);
@@ -52,12 +58,24 @@ public sealed class ConversationRepositoryCompleteMessageTests
         Assert.Equal(completedAt, persistedConversation.UpdatedAt);
     }
 
-    [Fact]
-    public async Task Given_AWrongOwner_When_CompleteMessageWithAssistantResponseAsync_Then_DoesNotPersistAssistantResponse()
+    [Theory, AutoDomainData]
+    public async Task Given_AWrongOwner_When_CompleteMessageWithAssistantResponseAsync_Then_DoesNotPersistAssistantResponse(
+        Guid organizationId,
+        Guid ownerMemberId,
+        Guid wrongOwnerMemberId,
+        Conversation conversation,
+        Message userMessage,
+        Message assistantMessage,
+        MessageSource source,
+        DateTimeOffset completedAt)
     {
         // Given
-        var conversation = CreateConversation(Guid.NewGuid(), Guid.NewGuid());
-        var userMessage = CreateUserMessage(conversation.Id);
+        conversation.OrganizationId = organizationId;
+        conversation.OwnerMemberId = ownerMemberId;
+        userMessage.ConversationId = conversation.Id;
+        userMessage.Role = MessageRole.User;
+        userMessage.ProcessingStatus = MessageProcessingStatus.InProgress;
+        var originalProcessingStatus = userMessage.ProcessingStatus;
         await using var dbContext = CreateDbContext();
         dbContext.Conversations.Add(conversation);
         dbContext.Messages.Add(userMessage);
@@ -68,19 +86,19 @@ public sealed class ConversationRepositoryCompleteMessageTests
         // When
         var result = await repository.CompleteMessageWithAssistantResponseAsync(
             conversation.OrganizationId,
-            Guid.NewGuid(),
+            wrongOwnerMemberId,
             conversation.Id,
             userMessage.Id,
-            CreateAssistantMessage(),
-            [CreateSource()],
-            DateTimeOffset.UtcNow.AddMinutes(1),
+            assistantMessage,
+            [source],
+            completedAt,
             CancellationToken.None);
 
         // Then
         dbContext.ChangeTracker.Clear();
         var persistedUserMessage = await dbContext.Messages.SingleAsync();
         Assert.Null(result);
-        Assert.Equal(MessageProcessingStatus.Pending, persistedUserMessage.ProcessingStatus);
+        Assert.Equal(originalProcessingStatus, persistedUserMessage.ProcessingStatus);
         Assert.Empty(dbContext.MessageSources);
     }
 
@@ -92,46 +110,4 @@ public sealed class ConversationRepositoryCompleteMessageTests
 
         return new AssistantCoreDbContext(options);
     }
-
-    private static Conversation CreateConversation(Guid organizationId, Guid ownerMemberId) => new()
-    {
-        Id = Guid.NewGuid(),
-        OrganizationId = organizationId,
-        OwnerMemberId = ownerMemberId,
-        Title = "Conversation",
-        Status = ConversationStatus.Active,
-        CreatedAt = DateTimeOffset.UtcNow,
-        UpdatedAt = DateTimeOffset.UtcNow
-    };
-
-    private static Message CreateUserMessage(Guid conversationId) => new()
-    {
-        Id = Guid.NewGuid(),
-        ConversationId = conversationId,
-        Role = MessageRole.User,
-        Content = "Question",
-        ProcessingStatus = MessageProcessingStatus.InProgress,
-        CreatedAt = DateTimeOffset.UtcNow,
-        UpdatedAt = DateTimeOffset.UtcNow
-    };
-
-    private static Message CreateAssistantMessage() => new()
-    {
-        Id = Guid.NewGuid(),
-        Role = MessageRole.User,
-        Content = "Reponse validee",
-        ProcessingStatus = MessageProcessingStatus.Pending,
-        Model = "gpt",
-        CreatedAt = DateTimeOffset.UtcNow.AddSeconds(1),
-        UpdatedAt = DateTimeOffset.UtcNow.AddSeconds(1)
-    };
-
-    private static MessageSource CreateSource() => new()
-    {
-        Id = Guid.NewGuid(),
-        SourceType = "sharepoint",
-        Title = "Politique",
-        Reference = "document-1",
-        Url = "https://example.com/document-1"
-    };
 }

@@ -7,17 +7,22 @@ namespace AssistantCore.Service.Tests.Members;
 
 public sealed class MemberManagementServiceGetMembersTests
 {
-    [Fact]
-    public async Task Given_AnAdmin_When_GetMembersAsync_Then_ReturnsOrganizationMembers()
+    [Theory, AutoDomainData]
+    public async Task Given_AnAdmin_When_GetMembersAsync_Then_ReturnsOrganizationMembers(
+        CancellationToken cancellationToken,
+        Organization organization,
+        OrganizationMember admin,
+        OrganizationMember user)
     {
         // Given
-        var cancellationToken = new CancellationTokenSource().Token;
-        var organization = CreateOrganization();
-        var admin = CreateMember(organization.Id, OrganizationRole.Admin);
+        admin.OrganizationId = organization.Id;
+        admin.Role = OrganizationRole.Admin;
+        user.OrganizationId = organization.Id;
+        user.Role = OrganizationRole.User;
         OrganizationMember[] members =
         [
             admin,
-            CreateMember(organization.Id, OrganizationRole.User)
+            user
         ];
         var authenticateUserService = new StubAuthenticateUserService
         {
@@ -37,12 +42,14 @@ public sealed class MemberManagementServiceGetMembersTests
         Assert.Equal(1, memberQueries.GetMembersCallCount);
     }
 
-    [Fact]
-    public async Task Given_AUser_When_GetMembersAsync_Then_ThrowsForbiddenWithoutQueryingMembers()
+    [Theory, AutoDomainData]
+    public async Task Given_AUser_When_GetMembersAsync_Then_ThrowsForbiddenWithoutQueryingMembers(
+        Organization organization,
+        OrganizationMember user)
     {
         // Given
-        var organization = CreateOrganization();
-        var user = CreateMember(organization.Id, OrganizationRole.User);
+        user.OrganizationId = organization.Id;
+        user.Role = OrganizationRole.User;
         var memberQueries = new StubOrganizationMemberQueries();
         var service = new MemberManagementService(
             new StubAuthenticateUserService { Result = (organization, user) },
@@ -57,26 +64,4 @@ public sealed class MemberManagementServiceGetMembersTests
         Assert.Equal(0, memberQueries.GetMembersCallCount);
     }
 
-    private static Organization CreateOrganization() => new()
-    {
-        Id = Guid.NewGuid(),
-        Name = "Contoso",
-        IdentityProvider = IdentityProvider.MicrosoftEntraId,
-        ExternalTenantId = "tenant-id",
-        Status = RecordStatus.Active
-    };
-
-    private static OrganizationMember CreateMember(
-        Guid organizationId,
-        OrganizationRole role) => new()
-    {
-        Id = Guid.NewGuid(),
-        OrganizationId = organizationId,
-        Name = $"{role} Member",
-        Email = $"{role.ToString().ToLowerInvariant()}.{Guid.NewGuid():N}@example.com",
-        IdentityProvider = IdentityProvider.MicrosoftEntraId,
-        ExternalUserId = Guid.NewGuid().ToString(),
-        Role = role,
-        Status = RecordStatus.Active
-    };
 }

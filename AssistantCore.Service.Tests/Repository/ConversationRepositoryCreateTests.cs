@@ -8,16 +8,17 @@ namespace AssistantCore.Service.Tests.Repository;
 
 public sealed class ConversationRepositoryCreateTests
 {
-    [Fact]
-    public async Task Given_AConversationAndFirstMessage_When_CreateConversationWithFirstMessageAsync_Then_PersistsBothInTheProvidedContext()
+    [Theory, AutoDomainData]
+    public async Task Given_AConversationAndFirstMessage_When_CreateConversationWithFirstMessageAsync_Then_PersistsBothInTheProvidedContext(
+        Guid organizationId,
+        Guid ownerMemberId,
+        Conversation conversation,
+        Message userMessage)
     {
         // Given
-        var organizationId = Guid.NewGuid();
-        var ownerMemberId = Guid.NewGuid();
-        var conversation = CreateConversation();
         conversation.OrganizationId = organizationId;
         conversation.OwnerMemberId = ownerMemberId;
-        var userMessage = CreateUserMessage(conversation.Id);
+        userMessage.ConversationId = conversation.Id;
         await using var dbContext = CreateDbContext();
         var repository = new ConversationRepository(dbContext);
 
@@ -42,16 +43,17 @@ public sealed class ConversationRepositoryCreateTests
         Assert.Equal(MessageProcessingStatus.Pending, persistedMessage.ProcessingStatus);
     }
 
-    [Fact]
-    public async Task Given_EmptyContextIdentifiers_When_CreateConversationWithFirstMessageAsync_Then_AssignsProvidedContext()
+    [Theory, AutoDomainData]
+    public async Task Given_EmptyContextIdentifiers_When_CreateConversationWithFirstMessageAsync_Then_AssignsProvidedContext(
+        Guid organizationId,
+        Guid ownerMemberId,
+        Conversation conversation,
+        Message userMessage)
     {
         // Given
-        var organizationId = Guid.NewGuid();
-        var ownerMemberId = Guid.NewGuid();
-        var conversation = CreateConversation();
         conversation.OrganizationId = Guid.Empty;
         conversation.OwnerMemberId = Guid.Empty;
-        var userMessage = CreateUserMessage(Guid.Empty);
+        userMessage.ConversationId = Guid.Empty;
         await using var dbContext = CreateDbContext();
         var repository = new ConversationRepository(dbContext);
 
@@ -70,26 +72,26 @@ public sealed class ConversationRepositoryCreateTests
     }
 
     [Theory]
-    [InlineData("organization")]
-    [InlineData("owner")]
-    [InlineData("conversation")]
+    [InlineAutoDomainData("organization")]
+    [InlineAutoDomainData("owner")]
+    [InlineAutoDomainData("conversation")]
     public async Task Given_AConflictingIdentifier_When_CreateConversationWithFirstMessageAsync_Then_ThrowsWithoutPersisting(
-        string conflictingIdentifier)
+        string conflictingIdentifier,
+        Guid organizationId,
+        Guid ownerMemberId,
+        Conversation conversation,
+        Message userMessage)
     {
         // Given
-        var organizationId = Guid.NewGuid();
-        var ownerMemberId = Guid.NewGuid();
-        var conversation = CreateConversation();
         conversation.OrganizationId = conflictingIdentifier == "organization"
             ? Guid.NewGuid()
             : organizationId;
         conversation.OwnerMemberId = conflictingIdentifier == "owner"
             ? Guid.NewGuid()
             : ownerMemberId;
-        var userMessage = CreateUserMessage(
-            conflictingIdentifier == "conversation"
-                ? Guid.NewGuid()
-                : conversation.Id);
+        userMessage.ConversationId = conflictingIdentifier == "conversation"
+            ? Guid.NewGuid()
+            : conversation.Id;
         await using var dbContext = CreateDbContext();
         var repository = new ConversationRepository(dbContext);
 
@@ -116,26 +118,4 @@ public sealed class ConversationRepositoryCreateTests
 
         return new AssistantCoreDbContext(options);
     }
-
-    private static Conversation CreateConversation() => new()
-    {
-        Id = Guid.NewGuid(),
-        OrganizationId = Guid.NewGuid(),
-        OwnerMemberId = Guid.NewGuid(),
-        Title = "Question initiale",
-        Status = ConversationStatus.Active,
-        CreatedAt = DateTimeOffset.UtcNow,
-        UpdatedAt = DateTimeOffset.UtcNow
-    };
-
-    private static Message CreateUserMessage(Guid conversationId) => new()
-    {
-        Id = Guid.NewGuid(),
-        ConversationId = conversationId,
-        Role = MessageRole.Assistant,
-        Content = "Question",
-        ProcessingStatus = MessageProcessingStatus.Completed,
-        CreatedAt = DateTimeOffset.UtcNow,
-        UpdatedAt = DateTimeOffset.UtcNow
-    };
 }
