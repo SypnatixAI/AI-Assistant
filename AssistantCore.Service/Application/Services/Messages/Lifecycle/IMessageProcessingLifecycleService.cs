@@ -10,6 +10,10 @@ public interface IMessageProcessingLifecycleService
         string message,
         CancellationToken cancellationToken);
 
+    Task MarkAsInProgressAsync(
+        StartedMessageProcessing processing,
+        CancellationToken cancellationToken);
+
     Task<CompletedMessageProcessing> CompleteAsync(
         StartedMessageProcessing processing,
         MessageOrchestrationResult result,
