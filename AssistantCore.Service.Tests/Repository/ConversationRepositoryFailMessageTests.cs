@@ -115,6 +115,7 @@ public sealed class ConversationRepositoryFailMessageTests
         userMessage.ConversationId = conversation.Id;
         userMessage.Role = MessageRole.User;
         userMessage.ProcessingStatus = MessageProcessingStatus.InProgress;
+        userMessage.ProcessingErrorCode = null;
         var originalUpdatedAt = userMessage.UpdatedAt;
         await using var dbContext = CreateDbContext();
         dbContext.Conversations.Add(conversation);
