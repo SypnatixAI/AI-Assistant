@@ -16,6 +16,8 @@ public sealed class Message
 
     public string? Model { get; set; }
 
+    public string? ProcessingErrorCode { get; set; }
+
     public DateTimeOffset CreatedAt { get; set; }
 
     public DateTimeOffset UpdatedAt { get; set; }
@@ -23,4 +25,6 @@ public sealed class Message
     public Conversation Conversation { get; set; } = null!;
 
     public ICollection<MessageSource> Sources { get; set; } = [];
+
+    public ICollection<MessageWarning> Warnings { get; set; } = [];
 }

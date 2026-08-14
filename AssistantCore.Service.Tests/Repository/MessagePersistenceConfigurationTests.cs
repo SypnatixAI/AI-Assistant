@@ -21,6 +21,7 @@ public sealed class MessagePersistenceConfigurationTests
         Assert.Equal(20, entityType.FindProperty(nameof(Message.Role))?.GetMaxLength());
         Assert.Equal(20, entityType.FindProperty(nameof(Message.ProcessingStatus))?.GetMaxLength());
         Assert.Equal(100, entityType.FindProperty(nameof(Message.Model))?.GetMaxLength());
+        Assert.Equal(100, entityType.FindProperty(nameof(Message.ProcessingErrorCode))?.GetMaxLength());
         AssertIndex(
             entityType,
             nameof(Message.ConversationId),
@@ -54,6 +55,26 @@ public sealed class MessagePersistenceConfigurationTests
             typeof(Message),
             DeleteBehavior.Cascade,
             nameof(MessageSource.MessageId));
+    }
+
+    [Fact]
+    public void Given_MessageWarningModel_When_InspectingConfiguration_Then_ConstraintsLookupIndexAndCascadeAreConfigured()
+    {
+        // Given
+        using var dbContext = CreateDbContext();
+
+        // When
+        var entityType = dbContext.Model.FindEntityType(typeof(MessageWarning));
+
+        // Then
+        Assert.NotNull(entityType);
+        Assert.Equal(1000, entityType.FindProperty(nameof(MessageWarning.Content))?.GetMaxLength());
+        AssertIndex(entityType, nameof(MessageWarning.MessageId));
+        AssertForeignKey(
+            entityType,
+            typeof(Message),
+            DeleteBehavior.Cascade,
+            nameof(MessageWarning.MessageId));
     }
 
     private static AssistantCoreDbContext CreateDbContext()

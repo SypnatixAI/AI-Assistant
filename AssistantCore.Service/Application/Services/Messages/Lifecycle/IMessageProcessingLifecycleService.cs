@@ -1,3 +1,4 @@
+using AssistantCore.Repository.Domain.Entities;
 using AssistantCore.Service.Application.Models.Messages.Lifecycle;
 using AssistantCore.Service.Application.Models.Messages.Orchestration;
 
@@ -8,6 +9,8 @@ public interface IMessageProcessingLifecycleService
     Task<StartedMessageProcessing> StartAsync(
         Guid? conversationId,
         string message,
+        Organization organization,
+        OrganizationMember member,
         CancellationToken cancellationToken);
 
     Task MarkAsInProgressAsync(

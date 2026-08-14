@@ -57,6 +57,41 @@ public sealed class ConversationRepository(AssistantCoreDbContext dbContext)
                 cancellationToken);
     }
 
+    public async Task<Message?> AddUserMessageAsync(
+        Guid organizationId,
+        Guid ownerMemberId,
+        Guid conversationId,
+        Message userMessage,
+        CancellationToken cancellationToken = default)
+    {
+        ValidateIdentifier(
+            userMessage.ConversationId,
+            conversationId,
+            nameof(userMessage.ConversationId));
+
+        var conversationExists = await dbContext.Conversations
+            .AnyAsync(
+                conversation =>
+                    conversation.Id == conversationId
+                    && conversation.OrganizationId == organizationId
+                    && conversation.OwnerMemberId == ownerMemberId,
+                cancellationToken);
+
+        if (!conversationExists)
+        {
+            return null;
+        }
+
+        userMessage.ConversationId = conversationId;
+        userMessage.Role = MessageRole.User;
+        userMessage.ProcessingStatus = MessageProcessingStatus.Pending;
+
+        dbContext.Messages.Add(userMessage);
+        await dbContext.SaveChangesAsync(cancellationToken);
+
+        return userMessage;
+    }
+
     public async Task<bool> UpdateMessageProcessingStatusAsync(
         Guid organizationId,
         Guid ownerMemberId,
@@ -95,6 +130,7 @@ public sealed class ConversationRepository(AssistantCoreDbContext dbContext)
         Guid userMessageId,
         Message assistantMessage,
         IReadOnlyCollection<MessageSource> sources,
+        IReadOnlyCollection<MessageWarning> warnings,
         DateTimeOffset completedAt,
         CancellationToken cancellationToken = default)
     {
@@ -104,6 +140,7 @@ public sealed class ConversationRepository(AssistantCoreDbContext dbContext)
                 message =>
                     message.Id == userMessageId
                     && message.Role == MessageRole.User
+                    && message.ProcessingStatus == MessageProcessingStatus.InProgress
                     && message.ConversationId == conversationId
                     && message.Conversation.OrganizationId == organizationId
                     && message.Conversation.OwnerMemberId == ownerMemberId,
@@ -124,6 +161,12 @@ public sealed class ConversationRepository(AssistantCoreDbContext dbContext)
             assistantMessage.Sources.Add(source);
         }
 
+        foreach (var warning in warnings)
+        {
+            warning.MessageId = assistantMessage.Id;
+            assistantMessage.Warnings.Add(warning);
+        }
+
         userMessage.ProcessingStatus = MessageProcessingStatus.Completed;
         userMessage.UpdatedAt = completedAt;
         userMessage.Conversation.UpdatedAt = completedAt;
@@ -132,6 +175,50 @@ public sealed class ConversationRepository(AssistantCoreDbContext dbContext)
         await dbContext.SaveChangesAsync(cancellationToken);
 
         return assistantMessage;
+    }
+
+    public async Task<bool> FailMessageProcessingAsync(
+        Guid organizationId,
+        Guid ownerMemberId,
+        Guid conversationId,
+        Guid userMessageId,
+        MessageProcessingStatus failureStatus,
+        string errorCode,
+        DateTimeOffset failedAt,
+        CancellationToken cancellationToken = default)
+    {
+        if (failureStatus is not MessageProcessingStatus.Failed
+            and not MessageProcessingStatus.Cancelled)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(failureStatus),
+                failureStatus,
+                "The failure status must be Failed or Cancelled.");
+        }
+
+        var userMessage = await dbContext.Messages
+            .SingleOrDefaultAsync(
+                message =>
+                    message.Id == userMessageId
+                    && message.Role == MessageRole.User
+                    && message.ProcessingStatus == MessageProcessingStatus.InProgress
+                    && message.ConversationId == conversationId
+                    && message.Conversation.OrganizationId == organizationId
+                    && message.Conversation.OwnerMemberId == ownerMemberId,
+                cancellationToken);
+
+        if (userMessage is null)
+        {
+            return false;
+        }
+
+        userMessage.ProcessingStatus = failureStatus;
+        userMessage.ProcessingErrorCode = errorCode;
+        userMessage.UpdatedAt = failedAt;
+
+        await dbContext.SaveChangesAsync(cancellationToken);
+
+        return true;
     }
 
     private static void ValidateIdentifier(
