@@ -67,6 +67,33 @@ public sealed class ExceptionMiddleware(
 
             await context.Response.WriteAsync(JsonSerializer.Serialize(response));
         }
+        catch (OperationCanceledException) when (context.RequestAborted.IsCancellationRequested)
+        {
+            logger.LogInformation("The client cancelled the request.");
+        }
+        catch (AiProviderException exception)
+        {
+            logger.LogWarning(
+                "AI provider request failed. Provider: {ProviderName}; code: {TechnicalCode}.",
+                exception.ProviderName,
+                exception.TechnicalCode);
+
+            context.Response.StatusCode = exception switch
+            {
+                AiProviderTimeoutException => StatusCodes.Status504GatewayTimeout,
+                AiProviderLimitException => StatusCodes.Status429TooManyRequests,
+                AiProviderUnavailableException or AiProviderInvalidResponseException =>
+                    StatusCodes.Status502BadGateway,
+                _ => StatusCodes.Status500InternalServerError
+            };
+            context.Response.ContentType = "application/json";
+
+            var response = new ExceptionResponse(
+                exception.Message,
+                environment.IsDevelopment() ? exception.Message : null);
+
+            await context.Response.WriteAsync(JsonSerializer.Serialize(response));
+        }
         catch (Exception exception)
         {
             logger.LogError(exception, "An unhandled exception occurred while processing the request.");

@@ -4,7 +4,7 @@ namespace AssistantCore.Service.Application.Services.Messages.AiModels;
 
 public interface IAiModelProvider
 {
-    string ModelFamily { get; }
+    string ProviderName { get; }
 
     Task<AiModelResponse> GetNextActionAsync(
         AiModelRequest request,

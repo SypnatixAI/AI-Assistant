@@ -23,6 +23,10 @@
   * Configuration / Dependency Injection
 * Éviter la logique métier dans les controllers.
 * Éviter que la couche Domain dépende d’Infrastructure ou d’EF Core.
+* Tout appel réseau ou SDK vers une API externe doit être implémenté dans le projet `AssistantCore.ExternalServices`.
+* La couche Application ne doit jamais dépendre de `AssistantCore.ExternalServices` ni d’un SDK fournisseur.
+* Un appel à une API externe doit suivre la chaîne `Provider applicatif -> interface applicative -> Adapter Infrastructure -> client AssistantCore.ExternalServices -> SDK externe`.
+* Le provider applicatif ne doit jamais appeler directement un adapter, un client `AssistantCore.ExternalServices` ou le SDK externe. Seuls les adapters Infrastructure et la configuration d’injection de dépendances peuvent référencer `AssistantCore.ExternalServices`.
 * Favoriser des services petits, testables et lisibles.
 * Respecter le flow applicatif obligatoire : `Controller -> IDispatcher -> CommandHandler -> Application Service -> Repository ou service externe`.
 * Un controller doit injecter uniquement `IDispatcher` et ne doit jamais appeler directement un service applicatif, un repository ou un `DbContext`.

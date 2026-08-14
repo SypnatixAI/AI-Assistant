@@ -19,6 +19,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\AssistantCore.ExternalServices\AssistantCore.ExternalServices.csproj" />
     <ProjectReference Include="..\AssistantCore.Repository\AssistantCore.Repository.csproj" />
     <ProjectReference Include="..\AssistantCore.Service\AssistantCore.Service.csproj" />
   </ItemGroup>

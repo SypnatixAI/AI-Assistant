@@ -1,7 +1,7 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
-VisualStudioVersion = 17.12.35506.116 d17.12
+VisualStudioVersion = 17.12.35506.116
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AssistantCore.Service", "AssistantCore.Service\AssistantCore.Service.csproj", "{867539EF-B9AA-41DA-9A0C-C15D35348EF2}"
 EndProject
@@ -11,10 +11,9 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AssistantCore.Service.Tests
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AssistantCore.Architecture.Tests", "AssistantCore.Architecture.Tests\AssistantCore.Architecture.Tests.csproj", "{4A0C2BB8-1D7F-4C3C-B7A5-EDFD7636155D}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AssistantCore.ExternalServices", "AssistantCore.ExternalServices\AssistantCore.ExternalServices.csproj", "{BF33F8DE-D356-4D98-B269-E7A8F3520238}"
+EndProject
 Global
-	GlobalSection(SolutionProperties) = preSolution
-		HideSolutionNode = FALSE
-	EndGlobalSection
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
 		Debug|x64 = Debug|x64
@@ -72,5 +71,20 @@ Global
 		{4A0C2BB8-1D7F-4C3C-B7A5-EDFD7636155D}.Release|x64.Build.0 = Release|Any CPU
 		{4A0C2BB8-1D7F-4C3C-B7A5-EDFD7636155D}.Release|x86.ActiveCfg = Release|Any CPU
 		{4A0C2BB8-1D7F-4C3C-B7A5-EDFD7636155D}.Release|x86.Build.0 = Release|Any CPU
+		{BF33F8DE-D356-4D98-B269-E7A8F3520238}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{BF33F8DE-D356-4D98-B269-E7A8F3520238}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{BF33F8DE-D356-4D98-B269-E7A8F3520238}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{BF33F8DE-D356-4D98-B269-E7A8F3520238}.Debug|x64.Build.0 = Debug|Any CPU
+		{BF33F8DE-D356-4D98-B269-E7A8F3520238}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{BF33F8DE-D356-4D98-B269-E7A8F3520238}.Debug|x86.Build.0 = Debug|Any CPU
+		{BF33F8DE-D356-4D98-B269-E7A8F3520238}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{BF33F8DE-D356-4D98-B269-E7A8F3520238}.Release|Any CPU.Build.0 = Release|Any CPU
+		{BF33F8DE-D356-4D98-B269-E7A8F3520238}.Release|x64.ActiveCfg = Release|Any CPU
+		{BF33F8DE-D356-4D98-B269-E7A8F3520238}.Release|x64.Build.0 = Release|Any CPU
+		{BF33F8DE-D356-4D98-B269-E7A8F3520238}.Release|x86.ActiveCfg = Release|Any CPU
+		{BF33F8DE-D356-4D98-B269-E7A8F3520238}.Release|x86.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
 	EndGlobalSection
 EndGlobal

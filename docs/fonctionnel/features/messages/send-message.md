@@ -98,7 +98,7 @@ Aucune permission applicative supplementaire n'est utilisee.
 {
   "conversationId": "c5bd45dd-5e70-4e9d-bf49-06367a9c7928",
   "message": "Quelle est l'evolution des ventes pour le dernier trimestre?",
-  "model": "gpt"
+  "model": "gpt-5.6-luna"
 }
 ```
 
@@ -124,10 +124,11 @@ Le frontend envoie la question telle qu'elle a ete ecrite. Il n'a pas a la trans
 
 Ce champ est optionnel.
 
-Exemples de familles de modeles :
+Exemples de modeles autorises :
 
-- `gpt`
-- `claude`
+- `gpt-5.6-luna`
+- `gpt-5.6-terra`
+- `gpt-5.6-sol`
 
 Si `model` est absent :
 
@@ -138,7 +139,8 @@ Si `model` est present :
 - verifier qu'il fait partie des modeles autorises et configures pour l'organisation
 - refuser une valeur inconnue ou non configuree
 
-Le frontend ne fournit jamais une cle API, une URL de fournisseur ou un secret de connexion.
+Le nom precis du modele peut etre expose au frontend. Le frontend ne fournit
+jamais une cle API, une URL de fournisseur ou un secret de connexion.
 
 ---
 
@@ -164,7 +166,7 @@ Le backend determine ces informations a partir de l'identite, de la question et 
   "conversationId": "c5bd45dd-5e70-4e9d-bf49-06367a9c7928",
   "messageId": "cd88b599-833c-4ad0-bfd8-9b65e73198a4",
   "answer": "Les ventes du dernier trimestre ont augmente de 8 % par rapport au trimestre precedent.",
-  "model": "gpt",
+  "model": "gpt-5.6-luna",
   "sources": [
     {
       "type": "SharePoint",
@@ -189,7 +191,7 @@ Le backend determine ces informations a partir de l'identite, de la question et 
 - `conversationId` identifie la conversation utilisee ou creee
 - `messageId` identifie la reponse de l'assistant enregistree
 - `answer` contient la reponse finale en langage naturel
-- `model` indique la famille de modele reellement utilisee
+- `model` indique le modele precis reellement utilise
 - `sources` contient les documents ou donnees utilises pour produire la reponse
 - `warnings` indique les sources qui n'ont pas pu etre consultees completement
 - `createdAt` indique la date de creation de la reponse
@@ -394,14 +396,18 @@ Concretement :
 
 - utiliser `model` s'il a ete demande et autorise
 - sinon utiliser le modele par defaut de l'organisation
-- charger la configuration backend correspondant a la famille choisie
+- charger la configuration backend correspondant au modele choisi
 
-Exemples de familles :
+Pour la premiere version, les modeles autorises sont configures explicitement.
+Par exemple :
 
-- `gpt`
-- `claude`
+- `gpt-5.6-luna`
+- `gpt-5.6-terra`
+- `gpt-5.6-sol`
 
-La configuration backend determine ensuite la version precise du modele, son fournisseur, ses limites et ses secrets.
+La configuration backend associe chaque modele a son fournisseur, son delai
+maximal et son etat actif. L'adresse du fournisseur et ses secrets restent
+exclusivement dans le backend.
 
 Le reste de l'orchestration utilise une interface commune. Ainsi, les details techniques de GPT et Claude restent dans des adaptateurs differents, mais le flux metier reste le meme.
 
@@ -707,6 +713,29 @@ Le backend rappelle ensuite le meme modele avec :
 - les appels d'outils demandes
 - les resultats normalises
 - les references `evidenceId`
+
+<a id="messages-provider-continuity"></a>
+#### Preserver la continuite entre les appels au modele
+
+Lorsque le fournisseur demande un outil, l'appel suivant doit conserver le
+contexte technique necessaire pour que le modele rattache chaque resultat a la
+bonne demande.
+
+Pour OpenAI et la Responses API, l'adaptateur doit utiliser une strategie
+coherente parmi les deux suivantes :
+
+- retransmettre tous les elements requis de la reponse precedente, notamment
+  les appels d'outils et les elements de raisonnement exiges par le modele;
+- conserver l'identifiant de la reponse precedente et utiliser
+  `PreviousResponseId` lors de l'envoi des resultats d'outils.
+
+L'adaptateur ne doit pas reconstruire un historique partiel. Chaque resultat
+d'outil conserve le `callId` produit par le modele.
+
+Ce choix reste interne au fournisseur. L'orchestrateur manipule un contexte de
+continuation generique et ne depend jamais d'un type ou d'un identifiant propre
+au SDK OpenAI. Ce contexte n'est ni retourne au frontend ni enregistre comme
+contenu d'un message.
 
 <a id="messages-orchestration"></a>
 ### 16. Demander au modele s'il faut continuer ou arreter
@@ -1014,8 +1043,8 @@ Il doit retourner une erreur technique adaptee, par exemple `502 Bad Gateway` ou
 - le backend impose des budgets techniques configurables de temps, d'appels, de tokens et de cout
 - le backend bloque les recherches identiques et les boucles sans nouvelle preuve
 - les droits du systeme source doivent toujours etre respectes
-- seules les familles de modeles configurees peuvent etre utilisees
-- la version precise du modele et les secrets restent dans le backend
+- seuls les modeles precis et actifs dans la configuration peuvent etre utilises
+- le nom du modele peut etre retourne au frontend, mais l'adresse du fournisseur et les secrets restent dans le backend
 - le message utilisateur est enregistre avant les appels externes
 - la reponse de l'assistant est enregistree avant d'etre retournee
 - chaque source retournee doit correspondre a une donnee reellement consultee
