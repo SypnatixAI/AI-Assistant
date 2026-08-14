@@ -1,6 +1,7 @@
 using AssistantCore.Service.Application;
 using AssistantCore.Service.Application.Abstractions;
 using AssistantCore.Service.Infrastructure.Authentication;
+using AssistantCore.Service.Infrastructure.AiModels;
 using AssistantCore.Service.Middleware;
 using AssistantCore.Repository.Persistence;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -24,6 +25,7 @@ builder.Services.AddSwaggerGen(options =>
 });
 builder.Services.AddApplication();
 builder.Services.AddAuthenticationInfrastructure();
+builder.Services.AddAiModelInfrastructure(builder.Configuration);
 builder.Services.AddDispatcher(Assembly.GetExecutingAssembly());
 builder.Services.AddPersistence(builder.Configuration);
 

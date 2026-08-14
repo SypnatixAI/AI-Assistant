@@ -56,6 +56,52 @@ public sealed class ExceptionMiddlewareTests
         Assert.Equal("Database unavailable.", response.RootElement.GetProperty("Detail").GetString());
     }
 
+    [Theory]
+    [InlineData("timeout", StatusCodes.Status504GatewayTimeout)]
+    [InlineData("limit", StatusCodes.Status429TooManyRequests)]
+    [InlineData("unavailable", StatusCodes.Status502BadGateway)]
+    [InlineData("invalid-response", StatusCodes.Status502BadGateway)]
+    public async Task Given_AProviderException_When_InvokeAsync_Then_ReturnsTheControlledStatus(
+        string failureType,
+        int expectedStatusCode)
+    {
+        // Given
+        var exception = CreateProviderException(failureType);
+        var context = CreateHttpContext();
+        var middleware = CreateMiddleware(
+            _ => Task.FromException(exception),
+            Environments.Development);
+
+        // When
+        await middleware.InvokeAsync(context);
+
+        // Then
+        using var response = await ReadResponse(context);
+        Assert.Equal(expectedStatusCode, context.Response.StatusCode);
+        Assert.Equal(exception.Message, response.RootElement.GetProperty("Message").GetString());
+        Assert.DoesNotContain("ApiKey", response.RootElement.GetRawText(), StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task Given_AClientCancellation_When_InvokeAsync_Then_DoesNotWriteAnErrorResponse()
+    {
+        // Given
+        using var cancellationSource = new CancellationTokenSource();
+        await cancellationSource.CancelAsync();
+        var context = CreateHttpContext();
+        context.RequestAborted = cancellationSource.Token;
+        var middleware = CreateMiddleware(
+            _ => Task.FromCanceled(cancellationSource.Token),
+            Environments.Production);
+
+        // When
+        await middleware.InvokeAsync(context);
+
+        // Then
+        Assert.Equal(0, context.Response.Body.Length);
+        Assert.Null(context.Response.ContentType);
+    }
+
     [Fact]
     public async Task Given_AnUnexpectedExceptionInProduction_When_InvokingMiddleware_Then_HidesTechnicalDetail()
     {
@@ -127,6 +173,16 @@ public sealed class ExceptionMiddlewareTests
             "bad-request" => new BadRequestException(message),
             "not-found" => new NotFoundException(message),
             _ => throw new ArgumentOutOfRangeException(nameof(exceptionType), exceptionType, null)
+        };
+
+    private static AiProviderException CreateProviderException(string failureType) =>
+        failureType switch
+        {
+            "timeout" => new AiProviderTimeoutException("OpenAI"),
+            "limit" => new AiProviderLimitException("OpenAI"),
+            "unavailable" => new AiProviderUnavailableException("OpenAI"),
+            "invalid-response" => new AiProviderInvalidResponseException("OpenAI"),
+            _ => throw new ArgumentOutOfRangeException(nameof(failureType), failureType, null)
         };
 
     private sealed class StubHostEnvironment : IHostEnvironment
