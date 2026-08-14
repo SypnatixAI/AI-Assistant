@@ -25,8 +25,11 @@ internal sealed class DomainCustomization : ICustomization
             .Without(conversation => conversation.Messages));
         fixture.Customize<Message>(composer => composer
             .Without(message => message.Conversation)
-            .Without(message => message.Sources));
+            .Without(message => message.Sources)
+            .Without(message => message.Warnings));
         fixture.Customize<MessageSource>(composer =>
             composer.Without(source => source.Message));
+        fixture.Customize<MessageWarning>(composer =>
+            composer.Without(warning => warning.Message));
     }
 }

@@ -35,6 +35,9 @@ public sealed class MessageConfiguration : IEntityTypeConfiguration<Message>
         builder.Property(message => message.Model)
             .HasMaxLength(100);
 
+        builder.Property(message => message.ProcessingErrorCode)
+            .HasMaxLength(100);
+
         builder.Property(message => message.CreatedAt)
             .HasColumnType("datetimeoffset")
             .IsRequired();
@@ -46,6 +49,11 @@ public sealed class MessageConfiguration : IEntityTypeConfiguration<Message>
         builder.HasMany(message => message.Sources)
             .WithOne(source => source.Message)
             .HasForeignKey(source => source.MessageId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        builder.HasMany(message => message.Warnings)
+            .WithOne(warning => warning.Message)
+            .HasForeignKey(warning => warning.MessageId)
             .OnDelete(DeleteBehavior.Cascade);
 
         builder.HasIndex(message => new

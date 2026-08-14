@@ -15,6 +15,8 @@ public sealed class AssistantCoreDbContext(DbContextOptions<AssistantCoreDbConte
 
     public DbSet<MessageSource> MessageSources => Set<MessageSource>();
 
+    public DbSet<MessageWarning> MessageWarnings => Set<MessageWarning>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(AssistantCoreDbContext).Assembly);

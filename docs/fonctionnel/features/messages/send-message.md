@@ -3,6 +3,7 @@
 ## Table des matieres
 
 - [But](#but)
+- [Fonctionnement general](#messages-overview)
 - [Route](#route)
 - [Acces](#qui-peut-utiliser-cet-endpoint)
 - [Contrat du frontend](#messages-contracts)
@@ -20,6 +21,7 @@
 - [Normalisation des preuves](#messages-evidence)
 - [Orchestration modele-outils](#messages-orchestration)
 - [Construction et validation de la reponse](#17-construire-la-reponse-finale)
+- [Finalisation atomique](#messages-completion)
 - [Gestion des echecs](#messages-resilience)
 - [Erreurs HTTP](#erreurs-a-prevoir)
 - [Regles metier](#regles-metier-fixes)
@@ -50,6 +52,24 @@ Les sources peuvent notamment etre :
 - CRM
 - bases de donnees internes
 - autres connecteurs configures pour l'organisation
+
+<a id="messages-overview"></a>
+## Fonctionnement general
+
+Le membre envoie une question valide avec, au choix, aucune conversation ou une
+conversation existante. Sans identifiant, le backend cree la conversation et
+sa premiere question. Avec un identifiant, il verifie que la conversation
+appartient bien au membre et a l'organisation courants. Une conversation
+absente ou etrangere retourne le meme `404 Not Found`.
+
+La question est enregistree et marquee `InProgress` avant l'orchestration. Le
+backend choisit ensuite le modele et les outils autorises, collecte les preuves,
+fait produire une reponse et valide les sources citees.
+
+Si la reponse est valide, le message Assistant, le modele, les sources, les
+avertissements et l'etat `Completed` de la question sont enregistres ensemble.
+Si le traitement echoue, aucune fausse reponse Assistant n'est creee et la
+question conserve un etat permettant de suivre cet echec.
 
 ---
 
@@ -847,18 +867,50 @@ Si les informations sont insuffisantes, la reponse doit le dire clairement, par 
 
 Le backend ne doit pas fabriquer une source pour rendre la reponse plus convaincante.
 
-### 19. Enregistrer la reponse de l'assistant
+<a id="messages-completion"></a>
+### 19. Terminer un message avec une reponse valide
 
-Concretement :
+**Etat de depart**
 
-- creer un message avec le type `Assistant`
-- enregistrer le texte final
-- enregistrer le modele utilise
-- enregistrer les references des sources
-- enregistrer les avertissements et la date
-- marquer le traitement du message utilisateur comme termine
+- la question utilisateur existe deja dans la conversation
+- son statut est `InProgress`
+- l'orchestrateur a retourne une reponse non vide, le modele reellement utilise,
+  les sources valides et les avertissements eventuels
 
-Si le traitement echoue, enregistrer un etat d'echec technique sans enregistrer une fausse reponse de l'assistant.
+**Ecritures a effectuer**
+
+1. Creer un nouveau message avec le role `Assistant` et le texte final.
+2. Enregistrer sur ce message le modele reellement utilise.
+3. Enregistrer chaque source rattachee a ce message Assistant.
+4. Enregistrer chaque avertissement rattache a ce message Assistant.
+5. Marquer la question utilisateur `Completed`.
+6. Mettre a jour la date d'activite de la conversation.
+
+**Garantie transactionnelle**
+
+Ces ecritures representent une seule operation. Elles doivent utiliser une
+transaction unique et reussir ou echouer ensemble.
+
+Exemple : si l'enregistrement d'une source echoue, aucun message Assistant ne
+doit rester en base et la question utilisateur ne doit pas devenir `Completed`.
+Le service retourne seulement apres la confirmation de toutes les ecritures.
+
+**Resultat retourne**
+
+En cas de succes, le service de cycle de vie confirme l'identifiant du nouveau
+message Assistant et sa date de creation. Le service applicatif d'envoi possede
+deja la conversation et le resultat de l'orchestrateur; il combine donc ces
+donnees avec la confirmation du service de cycle de vie pour construire le
+`SendMessageResponse` documente. Le handler retourne cette reponse sans y
+ajouter de logique metier.
+
+Si la conversation ou la question n'est plus accessible avec
+`organizationId + ownerMemberId`, l'operation echoue comme une ressource
+introuvable et ne modifie aucune donnee.
+
+Si l'orchestration echoue avant de produire une reponse valide, cette etape
+n'est pas executee : le traitement suit le chemin d'echec decrit plus bas et
+n'enregistre aucune fausse reponse Assistant.
 
 ### 20. Retourner la reponse au frontend
 

@@ -54,6 +54,9 @@
 
 * Rédiger les documents et tickets dans un langage simple, clair et concret.
 * Éviter les formulations vagues qui obligent le lecteur à deviner le travail attendu.
+* Rendre les actions attendues compréhensibles avec des explications précises et des exemples courts lorsque ceux-ci apportent une clarification utile.
+* Choisir la structure qui convient au comportement décrit. Ne pas imposer systématiquement des sections comme `État de départ`, `Action`, `Succès` ou `Échec` lorsque le document est déjà clair.
+* Ne pas ajouter une section générique ou répétitive uniquement pour reformuler des informations déjà expliquées ailleurs dans le document.
 * Expliquer l’objectif, le périmètre, les étapes principales et les critères d’acceptation.
 * Donner assez de détails techniques pour guider le développeur, sans décrire toute l’implémentation ligne par ligne.
 * Préciser les contraintes importantes d’architecture, de sécurité et de comportement.

@@ -16,6 +16,7 @@ public sealed class ConversationRepositoryCompleteMessageTests
         Message userMessage,
         Message assistantMessage,
         MessageSource source,
+        MessageWarning warning,
         DateTimeOffset completedAt)
     {
         // Given
@@ -40,6 +41,7 @@ public sealed class ConversationRepositoryCompleteMessageTests
             userMessage.Id,
             assistantMessage,
             [source],
+            [warning],
             completedAt,
             CancellationToken.None);
 
@@ -50,11 +52,14 @@ public sealed class ConversationRepositoryCompleteMessageTests
             .OrderBy(message => message.CreatedAt)
             .ToArrayAsync();
         var persistedSource = await dbContext.MessageSources.SingleAsync();
+        var persistedWarning = await dbContext.MessageWarnings.SingleAsync();
         Assert.Same(assistantMessage, result);
         Assert.Equal(MessageProcessingStatus.Completed, persistedMessages[0].ProcessingStatus);
         Assert.Equal(MessageRole.Assistant, persistedMessages[1].Role);
         Assert.Equal(conversation.Id, persistedMessages[1].ConversationId);
         Assert.Equal(assistantMessage.Id, persistedSource.MessageId);
+        Assert.Equal(assistantMessage.Id, persistedWarning.MessageId);
+        Assert.Equal(warning.Content, persistedWarning.Content);
         Assert.Equal(completedAt, persistedConversation.UpdatedAt);
     }
 
@@ -67,6 +72,7 @@ public sealed class ConversationRepositoryCompleteMessageTests
         Message userMessage,
         Message assistantMessage,
         MessageSource source,
+        MessageWarning warning,
         DateTimeOffset completedAt)
     {
         // Given
@@ -91,6 +97,7 @@ public sealed class ConversationRepositoryCompleteMessageTests
             userMessage.Id,
             assistantMessage,
             [source],
+            [warning],
             completedAt,
             CancellationToken.None);
 
@@ -100,6 +107,57 @@ public sealed class ConversationRepositoryCompleteMessageTests
         Assert.Null(result);
         Assert.Equal(originalProcessingStatus, persistedUserMessage.ProcessingStatus);
         Assert.Empty(dbContext.MessageSources);
+        Assert.Empty(dbContext.MessageWarnings);
+    }
+
+    [Theory]
+    [InlineAutoDomainData(MessageProcessingStatus.Pending)]
+    [InlineAutoDomainData(MessageProcessingStatus.Completed)]
+    [InlineAutoDomainData(MessageProcessingStatus.Failed)]
+    [InlineAutoDomainData(MessageProcessingStatus.Cancelled)]
+    public async Task Given_AUserMessageNotInProgress_When_CompleteMessageWithAssistantResponseAsync_Then_DoesNotPersistCompletion(
+        MessageProcessingStatus processingStatus,
+        Guid organizationId,
+        Guid ownerMemberId,
+        Conversation conversation,
+        Message userMessage,
+        Message assistantMessage,
+        MessageSource source,
+        MessageWarning warning,
+        DateTimeOffset completedAt)
+    {
+        // Given
+        conversation.OrganizationId = organizationId;
+        conversation.OwnerMemberId = ownerMemberId;
+        userMessage.ConversationId = conversation.Id;
+        userMessage.Role = MessageRole.User;
+        userMessage.ProcessingStatus = processingStatus;
+        await using var dbContext = CreateDbContext();
+        dbContext.Conversations.Add(conversation);
+        dbContext.Messages.Add(userMessage);
+        await dbContext.SaveChangesAsync();
+        dbContext.ChangeTracker.Clear();
+        var repository = new ConversationRepository(dbContext);
+
+        // When
+        var result = await repository.CompleteMessageWithAssistantResponseAsync(
+            organizationId,
+            ownerMemberId,
+            conversation.Id,
+            userMessage.Id,
+            assistantMessage,
+            [source],
+            [warning],
+            completedAt,
+            CancellationToken.None);
+
+        // Then
+        dbContext.ChangeTracker.Clear();
+        var persistedUserMessage = await dbContext.Messages.SingleAsync();
+        Assert.Null(result);
+        Assert.Equal(processingStatus, persistedUserMessage.ProcessingStatus);
+        Assert.Empty(dbContext.MessageSources);
+        Assert.Empty(dbContext.MessageWarnings);
     }
 
     private static AssistantCoreDbContext CreateDbContext()

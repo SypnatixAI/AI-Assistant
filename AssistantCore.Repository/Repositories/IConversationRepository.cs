@@ -18,6 +18,13 @@ public interface IConversationRepository
         Guid conversationId,
         CancellationToken cancellationToken = default);
 
+    Task<Message?> AddUserMessageAsync(
+        Guid organizationId,
+        Guid ownerMemberId,
+        Guid conversationId,
+        Message userMessage,
+        CancellationToken cancellationToken = default);
+
     Task<bool> UpdateMessageProcessingStatusAsync(
         Guid organizationId,
         Guid ownerMemberId,
@@ -34,6 +41,17 @@ public interface IConversationRepository
         Guid userMessageId,
         Message assistantMessage,
         IReadOnlyCollection<MessageSource> sources,
+        IReadOnlyCollection<MessageWarning> warnings,
         DateTimeOffset completedAt,
+        CancellationToken cancellationToken = default);
+
+    Task<bool> FailMessageProcessingAsync(
+        Guid organizationId,
+        Guid ownerMemberId,
+        Guid conversationId,
+        Guid userMessageId,
+        MessageProcessingStatus failureStatus,
+        string errorCode,
+        DateTimeOffset failedAt,
         CancellationToken cancellationToken = default);
 }
