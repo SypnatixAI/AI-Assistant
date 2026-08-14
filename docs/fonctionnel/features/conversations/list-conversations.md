@@ -290,7 +290,8 @@ Ces comportements auront leurs propres endpoints et documents.
 ## Relation avec les autres endpoints
 
 - `POST /api/messages` cree une conversation avec le premier message.
-- Un futur `GET /api/conversations/{id}` chargera l'historique et les sources.
+- `GET /api/conversations/{conversationId}/messages` charge l'historique
+  pagine et les sources enregistrees.
 - Un futur `PATCH /api/conversations/{id}` permettra de renommer ou archiver.
 - Un futur `DELETE /api/conversations/{id}` appliquera la politique de
   suppression et de retention.

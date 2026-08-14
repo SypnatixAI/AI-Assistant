@@ -7,6 +7,7 @@ Ce dossier contient la documentation fonctionnelle du projet.
 - [Authentifier un utilisateur](features/authentification/authenticate-user.md)
 - [Gerer les membres](features/membres/manage-members.md)
 - [Lister les conversations](features/conversations/list-conversations.md)
+- [Charger les messages d'une conversation](features/conversations/get-conversation-messages.md)
 - [Envoyer un message](features/messages/send-message.md)
 - [Feuille de route Azure AI Search](../tickets/azure-ai-search/README.md)
 
