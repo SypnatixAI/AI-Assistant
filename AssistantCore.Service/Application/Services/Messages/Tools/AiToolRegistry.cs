@@ -4,12 +4,15 @@ using AssistantCore.Repository.Domain.Enums;
 using AssistantCore.Repository.Queries;
 using AssistantCore.Service.Application.Models.Messages.Tools;
 using AssistantCore.Service.Application.Services.AuthenticateUser;
+using AssistantCore.Service.Application.Services.Messages.Connectors;
 
 namespace AssistantCore.Service.Application.Services.Messages.Tools;
 
 public sealed class AiToolRegistry(
     IAuthenticateUserService authenticateUserService,
-    IOrganizationConnectorQueries organizationConnectorQueries) : IAiToolRegistry
+    IOrganizationConnectorQueries organizationConnectorQueries,
+    IEnumerable<IErpConnector> erpConnectors,
+    IEnumerable<ICrmConnector> crmConnectors) : IAiToolRegistry
 {
     public async Task<IReadOnlyCollection<AiToolDefinition>> GetAvailableToolsAsync(
         CancellationToken cancellationToken)
@@ -25,12 +28,12 @@ public sealed class AiToolRegistry(
             .ToArray();
     }
 
-    private static AiToolDefinition? CreateToolDefinition(OrganizationConnector connector) =>
+    private AiToolDefinition? CreateToolDefinition(OrganizationConnector connector) =>
         connector.Type switch
         {
             ConnectorType.Microsoft365 => CreateMicrosoft365Tool(connector),
-            ConnectorType.Erp => CreateErpTool(),
-            ConnectorType.Crm => CreateCrmTool(),
+            ConnectorType.Erp when erpConnectors.Any() => CreateErpTool(),
+            ConnectorType.Crm when crmConnectors.Any() => CreateCrmTool(),
             ConnectorType.InternalData => CreateInternalDataTool(),
             _ => null
         };

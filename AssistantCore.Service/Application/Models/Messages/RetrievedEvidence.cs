@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace AssistantCore.Service.Application.Models.Messages;
 
 public sealed record RetrievedEvidence(
@@ -7,4 +9,5 @@ public sealed record RetrievedEvidence(
     string Content,
     string Reference,
     string? Url,
-    DateTimeOffset? OccurredAt);
+    DateTimeOffset? OccurredAt,
+    [property: JsonIgnore] double? RelevanceScore = null);

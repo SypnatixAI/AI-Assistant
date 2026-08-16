@@ -31,7 +31,11 @@ public sealed class AiToolRegistryTests
                 CreateConnector(ConnectorType.InternalData)
             ]
         };
-        var registry = new AiToolRegistry(authenticateUserService, connectorQueries);
+        var registry = new AiToolRegistry(
+            authenticateUserService,
+            connectorQueries,
+            [new FakeErpConnector()],
+            [new FakeCrmConnector()]);
 
         // When
         var tools = await registry.GetAvailableToolsAsync(CancellationToken.None);
@@ -88,13 +92,80 @@ public sealed class AiToolRegistryTests
         {
             Connectors = [CreateConnector(ConnectorType.Microsoft365)]
         };
-        var registry = new AiToolRegistry(authenticateUserService, connectorQueries);
+        var registry = new AiToolRegistry(
+            authenticateUserService,
+            connectorQueries,
+            [],
+            []);
 
         // When
         var tools = await registry.GetAvailableToolsAsync(CancellationToken.None);
 
         // Then
         Assert.Empty(tools);
+    }
+
+    [Theory, AutoDomainData]
+    public async Task Given_ErpAndCrmHaveNoRegisteredAdapter_When_GetAvailableToolsAsync_Then_OmitsTheirTools(
+        Organization organization,
+        OrganizationMember member)
+    {
+        // Given
+        var authenticateUserService = new StubAuthenticateUserService
+        {
+            Result = (organization, member)
+        };
+        var connectorQueries = new StubOrganizationConnectorQueries
+        {
+            Connectors =
+            [
+                CreateConnector(ConnectorType.Erp),
+                CreateConnector(ConnectorType.Crm)
+            ]
+        };
+        var registry = new AiToolRegistry(
+            authenticateUserService,
+            connectorQueries,
+            [],
+            []);
+
+        // When
+        var tools = await registry.GetAvailableToolsAsync(CancellationToken.None);
+
+        // Then
+        Assert.Empty(tools);
+    }
+
+    [Theory, AutoDomainData]
+    public async Task Given_OnlyErpHasARegisteredAdapter_When_GetAvailableToolsAsync_Then_ReturnsOnlyErpTool(
+        Organization organization,
+        OrganizationMember member)
+    {
+        // Given
+        var authenticateUserService = new StubAuthenticateUserService
+        {
+            Result = (organization, member)
+        };
+        var connectorQueries = new StubOrganizationConnectorQueries
+        {
+            Connectors =
+            [
+                CreateConnector(ConnectorType.Erp),
+                CreateConnector(ConnectorType.Crm)
+            ]
+        };
+        var registry = new AiToolRegistry(
+            authenticateUserService,
+            connectorQueries,
+            [new FakeErpConnector()],
+            []);
+
+        // When
+        var tools = await registry.GetAvailableToolsAsync(CancellationToken.None);
+
+        // Then
+        var tool = Assert.Single(tools);
+        Assert.Equal(AiToolNames.QueryErp, tool.Name);
     }
 
     private static OrganizationConnector CreateConnector(
