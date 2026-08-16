@@ -44,6 +44,8 @@
 * Noms de classes, méthodes et variables explicites.
 * Ajouter ou ajuster les tests quand c’est pertinent.
 * Toute nouvelle fonctionnalité ou modification de comportement doit inclure les tests pertinents.
+* Dans `AssistantCore.Service.Tests`, utiliser `[Theory, AutoDomainData]` pour tout nouveau test, meme lorsqu'une seule execution est necessaire.
+* Utiliser `[InlineAutoDomainData]` lorsque le scenario exige une ou plusieurs valeurs explicites.
 * Nommer les tests avec la convention Gherkin `Given_<contexte>_When_<methode_testee>_Then_<resultat>`.
 * La partie `When` du nom d'un test doit toujours contenir le nom exact de la méthode testée.
 * Structurer le corps des tests avec les sections `// Given`, `// When` et `// Then`.

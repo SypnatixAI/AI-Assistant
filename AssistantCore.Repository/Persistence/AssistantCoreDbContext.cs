@@ -9,6 +9,10 @@ public sealed class AssistantCoreDbContext(DbContextOptions<AssistantCoreDbConte
 
     public DbSet<OrganizationMember> OrganizationMembers => Set<OrganizationMember>();
 
+    public DbSet<OrganizationConnector> OrganizationConnectors => Set<OrganizationConnector>();
+
+    public DbSet<OrganizationConnectorSource> OrganizationConnectorSources => Set<OrganizationConnectorSource>();
+
     public DbSet<Conversation> Conversations => Set<Conversation>();
 
     public DbSet<Message> Messages => Set<Message>();
