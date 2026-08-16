@@ -11,6 +11,8 @@ public sealed class AiToolArgumentSecurityValidator : IAiToolArgumentSecurityVal
             "providerUrl",
             "endpoint",
             "sql",
+            "table",
+            "tableName",
             "organizationId",
             "tenantId",
             "token",

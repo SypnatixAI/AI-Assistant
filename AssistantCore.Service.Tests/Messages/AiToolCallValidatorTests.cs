@@ -122,6 +122,8 @@ public sealed class AiToolCallValidatorTests
     [InlineAutoDomainData("providerUrl")]
     [InlineAutoDomainData("endpoint")]
     [InlineAutoDomainData("sql")]
+    [InlineAutoDomainData("table")]
+    [InlineAutoDomainData("tableName")]
     [InlineAutoDomainData("organizationId")]
     [InlineAutoDomainData("tenantId")]
     [InlineAutoDomainData("token")]
