@@ -16,9 +16,16 @@ internal sealed class DomainCustomization : ICustomization
 
         fixture.Behaviors.Add(new OmitOnRecursionBehavior());
         fixture.Customize<Organization>(composer =>
-            composer.Without(organization => organization.Members));
+            composer
+                .Without(organization => organization.Members)
+                .Without(organization => organization.Connectors));
         fixture.Customize<OrganizationMember>(composer =>
             composer.Without(member => member.Organization));
+        fixture.Customize<OrganizationConnector>(composer => composer
+            .Without(connector => connector.Organization)
+            .Without(connector => connector.Sources));
+        fixture.Customize<OrganizationConnectorSource>(composer =>
+            composer.Without(source => source.OrganizationConnector));
         fixture.Customize<Conversation>(composer => composer
             .Without(conversation => conversation.Organization)
             .Without(conversation => conversation.OwnerMember)

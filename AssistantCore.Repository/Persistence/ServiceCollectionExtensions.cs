@@ -18,6 +18,7 @@ public static class ServiceCollectionExtensions
 
         services.AddScoped<IOrganizationQueries, OrganizationQueries>();
         services.AddScoped<IOrganizationMemberQueries, OrganizationMemberQueries>();
+        services.AddScoped<IOrganizationConnectorQueries, OrganizationConnectorQueries>();
         services.AddScoped<IConversationRepository, ConversationRepository>();
 
         return services;
