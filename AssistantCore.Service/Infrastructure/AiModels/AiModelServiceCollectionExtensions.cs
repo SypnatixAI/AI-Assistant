@@ -29,7 +29,7 @@ public static class AiModelServiceCollectionExtensions
             return new OpenAiResponsesClient(
                 new OpenAiClientSettings(openAiOptions.Endpoint, openAiOptions.ApiKey));
         });
-        services.AddSingleton<OpenAiResponsesRequestMapper>();
+        services.AddSingleton<OpenAiResponsesRequestAdapter>();
         services.AddSingleton<IOpenAiResponsesClient, OpenAiResponsesClientAdapter>();
         services.AddSingleton<OpenAiResponseMapper>();
         services.AddSingleton<IAiModelProvider>(serviceProvider =>

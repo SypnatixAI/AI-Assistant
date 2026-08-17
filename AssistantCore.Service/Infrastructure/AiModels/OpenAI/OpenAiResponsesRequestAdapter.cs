@@ -7,7 +7,7 @@ using ApplicationOpenAi = AssistantCore.Service.Application.Services.Messages.Ai
 
 namespace AssistantCore.Service.Infrastructure.AiModels.OpenAI;
 
-public sealed class OpenAiResponsesRequestMapper
+public sealed class OpenAiResponsesRequestAdapter
 {
     private static readonly JsonSerializerOptions SerializerOptions = new()
     {

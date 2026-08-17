@@ -5,7 +5,7 @@ using AssistantCore.Service.Infrastructure.AiModels.OpenAI;
 
 namespace AssistantCore.Service.Tests.Messages;
 
-public sealed class OpenAiResponsesRequestMapperTests
+public sealed class OpenAiResponsesRequestAdapterTests
 {
     [Theory, AutoDomainData]
     public void Given_AnInitialRequest_When_Map_Then_IncludesQuestionAndConversationHistory(
@@ -13,10 +13,10 @@ public sealed class OpenAiResponsesRequestMapperTests
     {
         // Given
         var request = CreateRequest(question, continuationContext: null, toolResults: []);
-        var mapper = new OpenAiResponsesRequestMapper();
+        var adapter = new OpenAiResponsesRequestAdapter();
 
         // When
-        var result = mapper.Map(request);
+        var result = adapter.Map(request);
 
         // Then
         Assert.Null(result.PreviousResponseId);
@@ -36,10 +36,10 @@ public sealed class OpenAiResponsesRequestMapperTests
         var continuation = new AiModelContinuationContext("OpenAI", responseId);
         var toolResult = ToolExecutionResult.Succeeded(callId, []);
         var request = CreateRequest(question, continuation, [toolResult]);
-        var mapper = new OpenAiResponsesRequestMapper();
+        var adapter = new OpenAiResponsesRequestAdapter();
 
         // When
-        var result = mapper.Map(request);
+        var result = adapter.Map(request);
 
         // Then
         Assert.Equal(responseId, result.PreviousResponseId);

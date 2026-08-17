@@ -7,7 +7,7 @@ namespace AssistantCore.Service.Infrastructure.AiModels.OpenAI;
 
 public sealed class OpenAiResponsesClientAdapter(
     OpenAiResponsesClient externalClient,
-    OpenAiResponsesRequestMapper requestMapper) : ApplicationOpenAi.IOpenAiResponsesClient
+    OpenAiResponsesRequestAdapter requestAdapter) : ApplicationOpenAi.IOpenAiResponsesClient
 {
     public async Task<ApplicationOpenAiResponsesResult> CreateResponseAsync(
         AiModelRequest request,
@@ -15,7 +15,7 @@ public sealed class OpenAiResponsesClientAdapter(
     {
         try
         {
-            var externalRequest = requestMapper.Map(request);
+            var externalRequest = requestAdapter.Map(request);
             var response = await externalClient.CreateResponseAsync(
                 externalRequest,
                 cancellationToken);
