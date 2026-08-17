@@ -10,6 +10,7 @@ public interface IMessageToolOrchestrator
     Task<MessageOrchestrationResult> OrchestrateAsync(
         StartedMessageProcessing processing,
         SelectedAiModel selectedModel,
+        IReadOnlyCollection<AiConversationMessage> conversationHistory,
         IReadOnlyCollection<AiToolDefinition> availableTools,
         OrchestrationExecutionLimits limits,
         CancellationToken cancellationToken);

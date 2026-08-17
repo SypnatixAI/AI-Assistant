@@ -71,6 +71,21 @@ public sealed class ExceptionMiddleware(
         {
             logger.LogInformation("The client cancelled the request.");
         }
+        catch (ExternalSourcesUnavailableException exception)
+        {
+            logger.LogWarning(
+                "External sources required by the orchestration are unavailable. Code: {TechnicalCode}.",
+                ExternalSourcesUnavailableException.TechnicalCode);
+
+            context.Response.StatusCode = StatusCodes.Status502BadGateway;
+            context.Response.ContentType = "application/json";
+
+            var response = new ExceptionResponse(
+                exception.Message,
+                environment.IsDevelopment() ? exception.Message : null);
+
+            await context.Response.WriteAsync(JsonSerializer.Serialize(response));
+        }
         catch (AiProviderException exception)
         {
             logger.LogWarning(

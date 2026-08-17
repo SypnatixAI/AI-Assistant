@@ -127,7 +127,7 @@ public sealed class MessageProcessingLifecycleService(
     {
         var completedAt = timeProvider.GetUtcNow();
         var assistantMessage = CreateAssistantMessage(result, completedAt);
-        var sources = CreateSources(result.UsedEvidence);
+        var sources = CreateSources(result.CitedEvidence);
         var warnings = CreateWarnings(result.Warnings);
 
         var completedMessage = await conversationRepository
@@ -211,7 +211,7 @@ public sealed class MessageProcessingLifecycleService(
             Role = MessageRole.Assistant,
             Content = result.Answer,
             ProcessingStatus = MessageProcessingStatus.Completed,
-            Model = result.UsedModel,
+            Model = result.ModelName,
             CreatedAt = completedAt,
             UpdatedAt = completedAt
         };

@@ -1,4 +1,5 @@
 using System.Text.Json;
+using AssistantCore.Service.Application.Models.Messages.Connectors;
 using AssistantCore.Service.Application.Models.Messages.Tools;
 
 namespace AssistantCore.Service.Application.Services.Messages.Tools;
@@ -14,8 +15,11 @@ public abstract class AiToolExecutionHandler<TArguments>(string toolName)
 
     public async Task<ToolExecutionResult> ExecuteAsync(
         ValidatedToolCall validatedToolCall,
+        ConnectorExecutionContext executionContext,
         CancellationToken cancellationToken)
     {
+        ArgumentNullException.ThrowIfNull(validatedToolCall);
+        ArgumentNullException.ThrowIfNull(executionContext);
         cancellationToken.ThrowIfCancellationRequested();
 
         TArguments? arguments;
@@ -40,11 +44,13 @@ public abstract class AiToolExecutionHandler<TArguments>(string toolName)
         return await ExecuteAsync(
             validatedToolCall.CallId,
             arguments,
+            executionContext,
             cancellationToken);
     }
 
     protected abstract Task<ToolExecutionResult> ExecuteAsync(
         string toolCallId,
         TArguments arguments,
+        ConnectorExecutionContext executionContext,
         CancellationToken cancellationToken);
 }

@@ -2,9 +2,9 @@ using AssistantCore.Service.Application.Models.Messages;
 
 namespace AssistantCore.Service.Application.Services.Messages.Evidence;
 
-public interface IEvidenceCitationValidator
+public interface IEvidenceCitationResolver
 {
-    IReadOnlyCollection<RetrievedEvidence> ResolveCitations(
+    IReadOnlyCollection<RetrievedEvidence> Resolve(
         IReadOnlyCollection<string> citedEvidenceIds,
-        IReadOnlyCollection<RetrievedEvidence> availableEvidence);
+        IReadOnlyCollection<RetrievedEvidence> collectedEvidence);
 }

@@ -3,10 +3,10 @@ using AssistantCore.Service.Application.Services.Messages.Evidence;
 
 namespace AssistantCore.Service.Tests.Messages;
 
-public sealed class EvidenceCitationValidatorTests
+public sealed class EvidenceCitationResolverTests
 {
     [Theory, AutoDomainData]
-    public void Given_KnownDuplicateAndUnknownIds_When_ResolveCitations_Then_ReturnsUniqueKnownEvidence(
+    public void Given_KnownDuplicateAndUnknownIds_When_Resolve_Then_ReturnsUniqueKnownEvidence(
         RetrievedEvidence firstEvidence,
         RetrievedEvidence secondEvidence,
         string unknownEvidenceId)
@@ -20,10 +20,10 @@ public sealed class EvidenceCitationValidatorTests
             string.Empty,
             firstEvidence.EvidenceId
         };
-        var validator = new EvidenceCitationValidator();
+        var resolver = new EvidenceCitationResolver();
 
         // When
-        var results = validator.ResolveCitations(
+        var results = resolver.Resolve(
             citedEvidenceIds,
             [firstEvidence, secondEvidence]);
 
@@ -32,15 +32,15 @@ public sealed class EvidenceCitationValidatorTests
     }
 
     [Theory, AutoDomainData]
-    public void Given_NoKnownId_When_ResolveCitations_Then_ReturnsNoReplacement(
+    public void Given_NoKnownId_When_Resolve_Then_ReturnsNoReplacement(
         RetrievedEvidence availableEvidence,
         string unknownEvidenceId)
     {
         // Given
-        var validator = new EvidenceCitationValidator();
+        var resolver = new EvidenceCitationResolver();
 
         // When
-        var results = validator.ResolveCitations(
+        var results = resolver.Resolve(
             [unknownEvidenceId],
             [availableEvidence]);
 

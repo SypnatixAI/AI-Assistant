@@ -1,12 +1,13 @@
 using System.Text.Json;
 using AssistantCore.Service.Application.Models.Messages;
+using AssistantCore.Service.Application.Models.Messages.Connectors;
 using AssistantCore.Service.Application.Models.Messages.Tools;
 using AssistantCore.Service.Application.Models.Messages.Tools.Arguments;
 using AssistantCore.Service.Application.Services.Messages.Tools;
 
 namespace AssistantCore.Service.Tests.Messages;
 
-public sealed class AiToolExecutorTests
+public sealed class ToolExecutionRouterTests
 {
     [Theory, AutoDomainData]
     public async Task Given_AMatchingHandler_When_ExecuteAsync_Then_MapsArgumentsAndReturnsHandlerResult(
@@ -17,16 +18,21 @@ public sealed class AiToolExecutorTests
         // Given
         var expectedResult = ToolExecutionResult.Succeeded(callId.ToString(), [evidence]);
         var handler = new RecordingInternalDataHandler(expectedResult);
-        var executor = new AiToolExecutor([handler]);
+        var router = new ToolExecutionRouter([handler]);
         var validatedToolCall = CreateValidatedToolCall(callId, query);
+        var executionContext = new ConnectorExecutionContext(Guid.NewGuid(), Guid.NewGuid());
 
         // When
-        var result = await executor.ExecuteAsync(validatedToolCall, CancellationToken.None);
+        var result = await router.ExecuteAsync(
+            validatedToolCall,
+            executionContext,
+            CancellationToken.None);
 
         // Then
         Assert.Same(expectedResult, result);
         Assert.Equal(query, handler.ReceivedArguments?.Query);
         Assert.Equal(callId.ToString(), handler.ReceivedToolCallId);
+        Assert.Same(executionContext, handler.ReceivedExecutionContext);
     }
 
     [Theory, AutoDomainData]
@@ -35,11 +41,15 @@ public sealed class AiToolExecutorTests
         string query)
     {
         // Given
-        var executor = new AiToolExecutor([]);
+        var router = new ToolExecutionRouter([]);
         var validatedToolCall = CreateValidatedToolCall(callId, query);
+        var executionContext = new ConnectorExecutionContext(Guid.NewGuid(), Guid.NewGuid());
 
         // When
-        var result = await executor.ExecuteAsync(validatedToolCall, CancellationToken.None);
+        var result = await router.ExecuteAsync(
+            validatedToolCall,
+            executionContext,
+            CancellationToken.None);
 
         // Then
         Assert.Equal(ToolExecutionStatus.Failed, result.Status);
@@ -55,15 +65,19 @@ public sealed class AiToolExecutorTests
     {
         // Given
         var handlerResult = ToolExecutionResult.Succeeded(callId.ToString(), [evidence]);
-        var executor = new AiToolExecutor(
+        var router = new ToolExecutionRouter(
             [
                 new RecordingInternalDataHandler(handlerResult),
                 new RecordingInternalDataHandler(handlerResult)
             ]);
         var validatedToolCall = CreateValidatedToolCall(callId, query);
+        var executionContext = new ConnectorExecutionContext(Guid.NewGuid(), Guid.NewGuid());
 
         // When
-        var result = await executor.ExecuteAsync(validatedToolCall, CancellationToken.None);
+        var result = await router.ExecuteAsync(
+            validatedToolCall,
+            executionContext,
+            CancellationToken.None);
 
         // Then
         Assert.Equal(ToolExecutionStatus.Failed, result.Status);
@@ -78,14 +92,18 @@ public sealed class AiToolExecutorTests
         // Given
         var handlerResult = ToolExecutionResult.Succeeded(callId.ToString(), [evidence]);
         var handler = new RecordingInternalDataHandler(handlerResult);
-        var executor = new AiToolExecutor([handler]);
+        var router = new ToolExecutionRouter([handler]);
         var validatedToolCall = new ValidatedToolCall(
             callId.ToString(),
             AiToolNames.SearchInternalData,
             JsonSerializer.SerializeToElement(new { query = 123 }));
+        var executionContext = new ConnectorExecutionContext(Guid.NewGuid(), Guid.NewGuid());
 
         // When
-        var result = await executor.ExecuteAsync(validatedToolCall, CancellationToken.None);
+        var result = await router.ExecuteAsync(
+            validatedToolCall,
+            executionContext,
+            CancellationToken.None);
 
         // Then
         Assert.Equal(ToolExecutionStatus.Failed, result.Status);
@@ -99,14 +117,18 @@ public sealed class AiToolExecutorTests
         string query)
     {
         // Given
-        var executor = new AiToolExecutor([]);
+        var router = new ToolExecutionRouter([]);
         var validatedToolCall = CreateValidatedToolCall(callId, query);
+        var executionContext = new ConnectorExecutionContext(Guid.NewGuid(), Guid.NewGuid());
         using var cancellationSource = new CancellationTokenSource();
         await cancellationSource.CancelAsync();
 
         // When
         var exception = await Record.ExceptionAsync(() =>
-            executor.ExecuteAsync(validatedToolCall, cancellationSource.Token));
+            router.ExecuteAsync(
+                validatedToolCall,
+                executionContext,
+                cancellationSource.Token));
 
         // Then
         Assert.IsType<OperationCanceledException>(exception);
@@ -125,13 +147,17 @@ public sealed class AiToolExecutorTests
 
         public SearchInternalDataToolArguments? ReceivedArguments { get; private set; }
 
+        public ConnectorExecutionContext? ReceivedExecutionContext { get; private set; }
+
         protected override Task<ToolExecutionResult> ExecuteAsync(
             string toolCallId,
             SearchInternalDataToolArguments arguments,
+            ConnectorExecutionContext executionContext,
             CancellationToken cancellationToken)
         {
             ReceivedToolCallId = toolCallId;
             ReceivedArguments = arguments;
+            ReceivedExecutionContext = executionContext;
             return Task.FromResult(result);
         }
     }
