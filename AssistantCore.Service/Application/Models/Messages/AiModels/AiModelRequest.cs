@@ -6,6 +6,8 @@ public sealed record AiModelRequest(
     SelectedAiModel Model,
     string Instructions,
     string UserMessage,
-    IReadOnlyCollection<AiToolDefinition> AvailableTools,
-    IReadOnlyCollection<AiRequestedToolCall> PreviousToolCalls,
-    IReadOnlyCollection<ToolExecutionResult> ToolResults);
+    IReadOnlyCollection<AiConversationMessage> ConversationHistory,
+    IReadOnlyCollection<AiToolDefinition> AllowedTools,
+    IReadOnlyCollection<AiRequestedToolCall> RequestedToolCalls,
+    IReadOnlyCollection<ToolExecutionResult> ToolResults,
+    AiModelContinuationContext? ContinuationContext = null);

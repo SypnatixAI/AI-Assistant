@@ -203,7 +203,15 @@ public sealed class MessageProcessingLifecycleServiceTests
             "gpt",
             [evidence],
             ["Quebec inventory was unavailable."],
-            new AiModelUsage(100, 20, 2, 1, 0.01m));
+            new OrchestrationExecutionUsage(
+                TimeSpan.FromSeconds(2),
+                InputTokens: 100,
+                OutputTokens: 20,
+                ModelCallCount: 2,
+                ToolCallCount: 1,
+                EstimatedCost: 0.01m,
+                ContextSize: 100,
+                RepeatedToolCallCount: 0));
         var repository = new RecordingConversationRepository();
         var service = new MessageProcessingLifecycleService(
             repository,
@@ -221,7 +229,7 @@ public sealed class MessageProcessingLifecycleServiceTests
         Assert.Equal(MessageRole.Assistant, repository.CompletedAssistantMessage.Role);
         Assert.Equal(MessageProcessingStatus.Completed, repository.CompletedAssistantMessage.ProcessingStatus);
         Assert.Equal(orchestrationResult.Answer, repository.CompletedAssistantMessage.Content);
-        Assert.Equal(orchestrationResult.UsedModel, repository.CompletedAssistantMessage.Model);
+        Assert.Equal(orchestrationResult.ModelName, repository.CompletedAssistantMessage.Model);
         Assert.Equal(completedAt, repository.CompletedAssistantMessage.CreatedAt);
         var persistedSource = Assert.Single(repository.CompletedSources);
         Assert.Equal(evidence.SourceType, persistedSource.SourceType);

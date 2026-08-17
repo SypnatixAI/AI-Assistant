@@ -18,9 +18,9 @@ public sealed class OpenAiResponseMapper
     public AiModelResponse Map(OpenAiResponsesResult response)
     {
         var requestedToolCalls = MapToolCalls(response.ToolCalls);
-        var nextAction = requestedToolCalls.Count > 0
-            ? CreateToolAction(requestedToolCalls)
-            : CreateTextAction(response.OutputText);
+        var decision = requestedToolCalls.Count > 0
+            ? CreateUseToolsDecision(requestedToolCalls)
+            : CreateTextDecision(response.OutputText);
 
         var usage = new AiModelUsage(
             response.InputTokens,
@@ -29,7 +29,12 @@ public sealed class OpenAiResponseMapper
             ToolCallCount: requestedToolCalls.Count,
             EstimatedCost: null);
 
-        return new AiModelResponse(nextAction, usage);
+        return new AiModelResponse(
+            decision,
+            usage,
+            new AiModelContinuationContext(
+                OpenAiModelProvider.OpenAiProviderName,
+                response.ResponseId));
     }
 
     private static IReadOnlyCollection<AiRequestedToolCall> MapToolCalls(
@@ -46,16 +51,16 @@ public sealed class OpenAiResponseMapper
             arguments.RootElement.Clone());
     }
 
-    private static AiModelNextAction CreateToolAction(
+    private static AiModelDecision CreateUseToolsDecision(
         IReadOnlyCollection<AiRequestedToolCall> requestedToolCalls) =>
         new(
-            AiModelNextActionType.ContinueWithTools,
+            AiModelDecisionType.UseTools,
             "The model requested one or more tools.",
             requestedToolCalls,
-            ProposedAnswer: null,
+            Answer: null,
             CitedEvidenceIds: []);
 
-    private static AiModelNextAction CreateTextAction(string outputText)
+    private static AiModelDecision CreateTextDecision(string outputText)
     {
         if (string.IsNullOrWhiteSpace(outputText))
         {
@@ -75,15 +80,15 @@ public sealed class OpenAiResponseMapper
 
         var action = decision.Decision?.Trim().ToLowerInvariant() switch
         {
-            "answer" => AiModelNextActionType.ReturnAnswer,
-            "cannotanswer" => AiModelNextActionType.CannotAnswer,
+            "answer" => AiModelDecisionType.Answer,
+            "cannotanswer" => AiModelDecisionType.InsufficientInformation,
             _ => throw CreateInvalidResponseException()
         };
 
-        return new AiModelNextAction(
+        return new AiModelDecision(
             action,
             decision.Reason,
-            RequestedToolCalls: [],
+            ToolCalls: [],
             decision.Answer,
             decision.EvidenceIds ?? []);
     }
