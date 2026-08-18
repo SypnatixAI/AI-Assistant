@@ -15,6 +15,7 @@ public sealed class OpenAiModelProviderTests
         var client = new StubOpenAiResponsesClient
         {
             Handler = (_, _) => Task.FromResult(new OpenAiResponsesResult(
+                "response-001",
                 """
                 {
                   "decision": "answer",
@@ -33,12 +34,14 @@ public sealed class OpenAiModelProviderTests
         var result = await provider.GetNextActionAsync(CreateRequest(), CancellationToken.None);
 
         // Then
-        Assert.Equal(AiModelNextActionType.ReturnAnswer, result.NextAction.Action);
-        Assert.Equal("Sales increased by eight percent.", result.NextAction.ProposedAnswer);
-        Assert.Equal(["source-001"], result.NextAction.CitedEvidenceIds);
+        Assert.Equal(AiModelDecisionType.Answer, result.Decision.Type);
+        Assert.Equal("Sales increased by eight percent.", result.Decision.Answer);
+        Assert.Equal(["source-001"], result.Decision.CitedEvidenceIds);
         Assert.Equal(120, result.Usage.InputTokens);
         Assert.Equal(40, result.Usage.OutputTokens);
         Assert.Equal(1, result.Usage.ModelCallCount);
+        Assert.Equal("OpenAI", result.ContinuationContext?.Provider);
+        Assert.Equal("response-001", result.ContinuationContext?.Token);
     }
 
     [Fact]
@@ -48,6 +51,7 @@ public sealed class OpenAiModelProviderTests
         var client = new StubOpenAiResponsesClient
         {
             Handler = (_, _) => Task.FromResult(new OpenAiResponsesResult(
+                "response-002",
                 string.Empty,
                 [new OpenAiToolCall("call-001", "query_erp", "{\"metric\":\"sales\"}")],
                 InputTokens: 80,
@@ -59,12 +63,12 @@ public sealed class OpenAiModelProviderTests
         var result = await provider.GetNextActionAsync(CreateRequest(), CancellationToken.None);
 
         // Then
-        Assert.Equal(AiModelNextActionType.ContinueWithTools, result.NextAction.Action);
-        var toolCall = Assert.Single(result.NextAction.RequestedToolCalls);
+        Assert.Equal(AiModelDecisionType.UseTools, result.Decision.Type);
+        var toolCall = Assert.Single(result.Decision.ToolCalls);
         Assert.Equal("call-001", toolCall.CallId);
         Assert.Equal("query_erp", toolCall.ToolName);
         Assert.Equal("sales", toolCall.Arguments.GetProperty("metric").GetString());
-        Assert.Null(result.NextAction.ProposedAnswer);
+        Assert.Null(result.Decision.Answer);
         Assert.Equal(1, result.Usage.ToolCallCount);
     }
 
@@ -75,6 +79,7 @@ public sealed class OpenAiModelProviderTests
         var client = new StubOpenAiResponsesClient
         {
             Handler = (_, _) => Task.FromResult(new OpenAiResponsesResult(
+                "response-003",
                 string.Empty,
                 [
                     new OpenAiToolCall("call-001", "query_erp", "{\"metric\":\"sales\"}"),
@@ -92,9 +97,9 @@ public sealed class OpenAiModelProviderTests
         var result = await provider.GetNextActionAsync(CreateRequest(), CancellationToken.None);
 
         // Then
-        Assert.Equal(AiModelNextActionType.ContinueWithTools, result.NextAction.Action);
+        Assert.Equal(AiModelDecisionType.UseTools, result.Decision.Type);
         Assert.Collection(
-            result.NextAction.RequestedToolCalls,
+            result.Decision.ToolCalls,
             toolCall =>
             {
                 Assert.Equal("call-001", toolCall.CallId);
@@ -115,6 +120,7 @@ public sealed class OpenAiModelProviderTests
         var client = new StubOpenAiResponsesClient
         {
             Handler = (_, _) => Task.FromResult(new OpenAiResponsesResult(
+                "response-004",
                 """
                 {
                   "decision": "cannotAnswer",
@@ -133,11 +139,11 @@ public sealed class OpenAiModelProviderTests
         var result = await provider.GetNextActionAsync(CreateRequest(), CancellationToken.None);
 
         // Then
-        Assert.Equal(AiModelNextActionType.CannotAnswer, result.NextAction.Action);
+        Assert.Equal(AiModelDecisionType.InsufficientInformation, result.Decision.Type);
         Assert.Equal(
             "I could not find enough information to answer.",
-            result.NextAction.ProposedAnswer);
-        Assert.Empty(result.NextAction.CitedEvidenceIds);
+            result.Decision.Answer);
+        Assert.Empty(result.Decision.CitedEvidenceIds);
     }
 
     [Theory]
@@ -151,6 +157,7 @@ public sealed class OpenAiModelProviderTests
         var client = new StubOpenAiResponsesClient
         {
             Handler = (_, _) => Task.FromResult(new OpenAiResponsesResult(
+                "response-005",
                 outputText,
                 [],
                 InputTokens: 0,
@@ -265,6 +272,7 @@ public sealed class OpenAiModelProviderTests
             new SelectedAiModel("OpenAI", "gpt-5.6-luna"),
             "Return a structured orchestration decision.",
             "What happened to sales?",
+            [],
             [],
             [],
             []);

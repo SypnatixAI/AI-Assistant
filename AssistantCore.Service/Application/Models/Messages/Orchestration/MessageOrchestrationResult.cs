@@ -2,7 +2,7 @@ namespace AssistantCore.Service.Application.Models.Messages.Orchestration;
 
 public sealed record MessageOrchestrationResult(
     string Answer,
-    string UsedModel,
-    IReadOnlyCollection<RetrievedEvidence> UsedEvidence,
+    string ModelName,
+    IReadOnlyCollection<RetrievedEvidence> CitedEvidence,
     IReadOnlyCollection<string> Warnings,
-    AiModelUsage ModelUsage);
+    OrchestrationExecutionUsage Usage);

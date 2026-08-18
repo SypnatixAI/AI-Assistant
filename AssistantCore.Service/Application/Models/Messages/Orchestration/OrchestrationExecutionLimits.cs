@@ -7,4 +7,5 @@ public sealed record OrchestrationExecutionLimits(
     decimal MaximumEstimatedCost,
     int MaximumResultsPerTool,
     int MaximumContextSize,
-    int MaximumRepeatedToolCalls);
+    int MaximumRepeatedToolCalls,
+    int MaximumParallelToolCalls = 4);

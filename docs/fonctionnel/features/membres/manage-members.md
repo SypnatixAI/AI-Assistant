@@ -281,3 +281,6 @@ Retourner `200 OK` avec les informations actuelles du membre et son nouveau role
 `GET /api/members` verifie l'Admin connecte et retourne uniquement les membres de son organisation.
 
 `PATCH /api/members/{memberId}/role` verifie le meme contexte, valide le membre cible et enregistre son role `Admin` ou `User`.
+
+La désactivation et la réactivation utilisent un contrat séparé décrit dans
+[Gérer le statut d'un membre](manage-member-status.md).

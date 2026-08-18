@@ -44,6 +44,8 @@
 * Noms de classes, méthodes et variables explicites.
 * Ajouter ou ajuster les tests quand c’est pertinent.
 * Toute nouvelle fonctionnalité ou modification de comportement doit inclure les tests pertinents.
+* Dans `AssistantCore.Service.Tests`, utiliser `[Theory, AutoDomainData]` pour tout nouveau test, meme lorsqu'une seule execution est necessaire.
+* Utiliser `[InlineAutoDomainData]` lorsque le scenario exige une ou plusieurs valeurs explicites.
 * Nommer les tests avec la convention Gherkin `Given_<contexte>_When_<methode_testee>_Then_<resultat>`.
 * La partie `When` du nom d'un test doit toujours contenir le nom exact de la méthode testée.
 * Structurer le corps des tests avec les sections `// Given`, `// When` et `// Then`.
@@ -62,6 +64,7 @@
 * Choisir la structure qui convient au comportement décrit. Ne pas imposer systématiquement des sections comme `État de départ`, `Action`, `Succès` ou `Échec` lorsque le document est déjà clair.
 * Ne pas ajouter une section générique ou répétitive uniquement pour reformuler des informations déjà expliquées ailleurs dans le document.
 * Expliquer l’objectif, le périmètre, les étapes principales et les critères d’acceptation.
+* Décrire chaque ticket pas à pas, avec des étapes de réalisation concrètes, précises et ordonnées. Éviter les étapes génériques qui ne permettent pas au développeur de savoir exactement quelle action accomplir.
 * Donner assez de détails techniques pour guider le développeur, sans décrire toute l’implémentation ligne par ligne.
 * Préciser les contraintes importantes d’architecture, de sécurité et de comportement.
 * Ne pas imposer les noms de toutes les classes, méthodes ou colonnes lorsque ce choix peut raisonnablement être laissé au développeur.

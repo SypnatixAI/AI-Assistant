@@ -82,6 +82,25 @@ public sealed class ExceptionMiddlewareTests
         Assert.DoesNotContain("ApiKey", response.RootElement.GetRawText(), StringComparison.OrdinalIgnoreCase);
     }
 
+    [Theory, AutoDomainData]
+    public async Task Given_AllExternalSourcesUnavailable_When_InvokeAsync_Then_ReturnsBadGateway(
+        ExternalSourcesUnavailableException exception)
+    {
+        // Given
+        var context = CreateHttpContext();
+        var middleware = CreateMiddleware(
+            _ => Task.FromException(exception),
+            Environments.Development);
+
+        // When
+        await middleware.InvokeAsync(context);
+
+        // Then
+        using var response = await ReadResponse(context);
+        Assert.Equal(StatusCodes.Status502BadGateway, context.Response.StatusCode);
+        Assert.Equal(exception.Message, response.RootElement.GetProperty("Message").GetString());
+    }
+
     [Fact]
     public async Task Given_AClientCancellation_When_InvokeAsync_Then_DoesNotWriteAnErrorResponse()
     {

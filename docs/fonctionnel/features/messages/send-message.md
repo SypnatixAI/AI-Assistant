@@ -182,6 +182,14 @@ Le backend determine ces informations a partir de l'identite, de la question et 
     }
   ],
   "warnings": [],
+  "usage": {
+    "requestTokens": 8460,
+    "tokenLimit": 1000000,
+    "tokensUsed": 436460,
+    "tokensRemaining": 563540,
+    "periodEndsAt": "2026-09-01T00:00:00Z",
+    "isExhausted": false
+  },
   "createdAt": "2026-08-06T14:30:00Z"
 }
 ```
@@ -194,7 +202,13 @@ Le backend determine ces informations a partir de l'identite, de la question et 
 - `model` indique le modele precis reellement utilise
 - `sources` contient les documents ou donnees utilises pour produire la reponse
 - `warnings` indique les sources qui n'ont pas pu etre consultees completement
+- `usage.requestTokens` indique les jetons consommes par tous les appels au modele pour cette demande
+- `usage.tokensRemaining` permet au frontend de remplacer son compteur avec le solde calcule par le backend
+- `usage.periodEndsAt` indique la prochaine remise a zero du quota de l'organisation
 - `createdAt` indique la date de creation de la reponse
+
+Le bloc `usage` represente le quota mensuel partage par l'organisation. Il est
+decrit dans [Consulter le quota de jetons](../usage/get-token-usage.md).
 
 ---
 
@@ -452,6 +466,14 @@ Exemples :
 - si Outlook n'est pas autorise, `outlook` n'apparait pas dans `allowedSourceTypes`
 - les identifiants techniques et secrets des connecteurs ne sont jamais fournis au modele
 
+La configuration des connecteurs est persistee par organisation. Elle est creee
+ou mise a jour par un flux administratif distinct. Le traitement d'un message
+consulte cette configuration en lecture seule et ne cree jamais de connecteur.
+
+Les secrets techniques ne sont pas conserves dans le registre des outils. Une
+source Microsoft 365 devient disponible pour le modele seulement lorsque sa
+configuration est active et que son indexation a ete confirmee par le backend.
+
 ### 8. Decrire chaque outil avec un contrat strict
 
 Chaque outil fourni au modele doit avoir :
@@ -572,6 +594,17 @@ Pour chaque `ToolCall`, il doit verifier :
 - que la demande est une operation de lecture
 - que le nombre maximal d'appels n'est pas depasse
 
+La premiere version limite chaque chaine recue du modele a 500 caracteres et
+chaque liste a 20 valeurs uniques. Les dates utilisent strictement le format
+`YYYY-MM-DD`; lorsque les deux bornes sont presentes, `dateFrom` ne peut pas
+etre posterieure a `dateTo`.
+
+Le validateur refuse tout champ absent du schema courant. Il refuse aussi
+explicitement les champs techniques libres, notamment une URL fournisseur, du
+SQL, un identifiant d'organisation ou de tenant, un token, une cle API, un nom
+d'index, un endpoint ou un filtre OData. Ce controle a lieu avant tout appel a
+un connecteur.
+
 Si le modele invente un outil comme `delete_erp_invoice`, le backend le refuse sans l'executer.
 
 <a id="messages-azure-search"></a>
@@ -651,6 +684,15 @@ Concretement :
 
 Les appels independants peuvent etre executes en parallele apres validation.
 
+Apres validation, le dispatcher d'outils selectionne un executeur par le nom
+stable de l'outil. Le dispatcher ne connait aucun contrat propre a Microsoft
+365, a un ERP ou a un CRM. Un adaptateur d'execution generique convertit les
+arguments JSON valides vers l'objet type attendu par l'executeur specialise.
+
+L'absence d'executeur, plusieurs executeurs pour le meme outil ou un echec de
+conversion des arguments produit un resultat d'echec controle. Aucun appel
+externe n'est tente dans ces cas.
+
 <a id="messages-evidence"></a>
 ### 14. Normaliser les resultats en preuves
 
@@ -701,6 +743,16 @@ Le backend construit un resultat associe au `ToolCall` original :
   ]
 }
 ```
+
+Tous les executeurs utilisent le meme contrat de resultat :
+
+- `Success` ne contient aucun code d'erreur
+- `PartialSuccess` contient au moins une preuve et un avertissement
+- `Failed` ne contient aucune preuve et possede un code d'erreur controle
+
+Les collections de preuves et d'avertissements sont toujours non nulles. Le
+dispatcher generique ne transforme pas les donnees propres aux connecteurs; ce
+travail appartient a chaque executeur specialise.
 
 L'adaptateur du modele convertit ce resultat interne :
 
@@ -1009,6 +1061,15 @@ Il doit retourner une erreur technique adaptee, par exemple `502 Bad Gateway` ou
 
 - la conversation n'existe pas pour cet utilisateur dans l'organisation courante
 
+### 429 Too Many Requests
+
+- le quota de jetons de l'organisation est epuise
+- le fournisseur du modele applique temporairement une limite
+
+Le backend retourne un code d'erreur stable pour distinguer ces situations.
+`organization_token_quota_exhausted` indique que l'envoi doit rester bloque
+jusqu'au renouvellement du quota.
+
 ### 502 Bad Gateway
 
 - un fournisseur externe ou un connecteur retourne une erreur qui empeche de produire une reponse
@@ -1050,6 +1111,8 @@ Il doit retourner une erreur technique adaptee, par exemple `502 Bad Gateway` ou
 - chaque source retournee doit correspondre a une donnee reellement consultee
 - aucune donnee d'une autre organisation ne doit etre exposee
 - la premiere version retourne une reponse complete sans streaming
+- le quota de jetons est partage par les membres de l'organisation
+- le frontend utilise le solde retourne par le backend et ne calcule pas lui-meme la consommation
 
 ---
 

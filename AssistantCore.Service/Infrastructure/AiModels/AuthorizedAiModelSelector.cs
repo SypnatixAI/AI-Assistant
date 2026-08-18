@@ -11,6 +11,9 @@ public sealed class AuthorizedAiModelSelector(
 {
     private readonly AiModelsOptions _options = options.Value;
 
+    public bool IsAvailable(string? requestedModel) =>
+        FindModel(requestedModel) is not null;
+
     public Task<SelectedAiModel> SelectAsync(
         Guid organizationId,
         string? requestedModel,
@@ -19,6 +22,13 @@ public sealed class AuthorizedAiModelSelector(
         ArgumentOutOfRangeException.ThrowIfEqual(organizationId, Guid.Empty);
         cancellationToken.ThrowIfCancellationRequested();
 
+        return Task.FromResult(
+            FindModel(requestedModel)
+            ?? throw new BadRequestException("The requested AI model is not available."));
+    }
+
+    private SelectedAiModel? FindModel(string? requestedModel)
+    {
         var modelName = string.IsNullOrWhiteSpace(requestedModel)
             ? _options.DefaultModel
             : requestedModel.Trim();
@@ -36,11 +46,10 @@ public sealed class AuthorizedAiModelSelector(
 
             if (!string.IsNullOrEmpty(configuredModel.Key))
             {
-                return Task.FromResult(
-                    new SelectedAiModel(providerName, configuredModel.Key));
+                return new SelectedAiModel(providerName, configuredModel.Key);
             }
         }
 
-        throw new BadRequestException("The requested AI model is not available.");
+        return null;
     }
 }

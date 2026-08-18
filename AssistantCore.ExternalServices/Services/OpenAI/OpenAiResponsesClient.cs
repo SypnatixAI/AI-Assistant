@@ -43,6 +43,7 @@ public sealed class OpenAiResponsesClient
                 .ToArray();
 
             return new OpenAiResponsesResult(
+                response.Id,
                 response.GetOutputText(),
                 toolCalls,
                 response.Usage?.InputTokenCount ?? 0,
@@ -61,17 +62,34 @@ public sealed class OpenAiResponsesClient
             Model = request.Model,
             Instructions = request.Instructions,
             ParallelToolCallsEnabled = true,
-            StoredOutputEnabled = false
+            StoredOutputEnabled = true,
+            PreviousResponseId = request.PreviousResponseId
         };
 
-        options.InputItems.Add(ResponseItem.CreateUserMessageItem(request.UserMessage));
-
-        foreach (var toolCall in request.PreviousToolCalls)
+        if (request.PreviousResponseId is null)
         {
-            options.InputItems.Add(ResponseItem.CreateFunctionCallItem(
-                toolCall.CallId,
-                toolCall.ToolName,
-                BinaryData.FromString(toolCall.ArgumentsJson)));
+            foreach (var message in request.ConversationHistory)
+            {
+                options.InputItems.Add(message.Role switch
+                {
+                    OpenAiConversationRole.User =>
+                        ResponseItem.CreateUserMessageItem(message.Content),
+                    OpenAiConversationRole.Assistant =>
+                        ResponseItem.CreateAssistantMessageItem(message.Content),
+                    _ => throw new ArgumentOutOfRangeException(
+                        nameof(request),
+                        message.Role,
+                        "Unsupported conversation role.")
+                });
+            }
+
+            options.InputItems.Add(ResponseItem.CreateUserMessageItem(request.UserMessage));
+        }
+
+        if (request.PreviousResponseId is null && request.ToolResults.Count > 0)
+        {
+            throw new InvalidOperationException(
+                "Tool results require a previous OpenAI response identifier.");
         }
 
         foreach (var toolResult in request.ToolResults)
