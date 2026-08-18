@@ -39,6 +39,11 @@ public sealed class OrganizationConnectorConfiguration : IEntityTypeConfiguratio
             .HasForeignKey(source => source.OrganizationConnectorId)
             .OnDelete(DeleteBehavior.Cascade);
 
+        builder.HasOne(connector => connector.Microsoft365Connection)
+            .WithOne(connection => connection.OrganizationConnector)
+            .HasForeignKey<Microsoft365Connection>(connection => connection.OrganizationConnectorId)
+            .OnDelete(DeleteBehavior.Cascade);
+
         builder.HasIndex(connector => new { connector.OrganizationId, connector.Type })
             .IsUnique();
     }

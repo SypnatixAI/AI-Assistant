@@ -17,4 +17,6 @@ public sealed class Organization
     public ICollection<OrganizationMember> Members { get; set; } = [];
 
     public ICollection<OrganizationConnector> Connectors { get; set; } = [];
+
+    public ICollection<Microsoft365Connection> Microsoft365Connections { get; set; } = [];
 }

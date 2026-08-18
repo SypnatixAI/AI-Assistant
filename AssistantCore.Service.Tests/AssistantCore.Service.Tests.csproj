@@ -22,6 +22,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\AssistantCore.Ingestion.Worker\AssistantCore.Ingestion.Worker.csproj" />
     <ProjectReference Include="..\AssistantCore.Service\AssistantCore.Service.csproj" />
   </ItemGroup>
 

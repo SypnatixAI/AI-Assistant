@@ -279,6 +279,147 @@ ne conserve pas le texte complet des documents.
 <a id="m365-sharepoint-onboarding"></a>
 ## Connexion du tenant Microsoft 365
 
+### But du consentement
+
+Le consentement administrateur autorise le Worker AssistantCore à obtenir un
+token technique Microsoft Graph pour le tenant du client. Le Worker peut alors
+lire les sources SharePoint et OneDrive que l'organisation a choisi d'activer,
+puis injecter leur contenu dans Azure AI Search.
+
+Sans ce consentement, Azure AI Search reste disponible, mais le Worker ne peut
+obtenir aucun contenu Microsoft 365 :
+
+```text
+Microsoft Graph refuse l'accès au Worker
+  -> aucune source SharePoint ou OneDrive ne peut être lue
+  -> aucun document Microsoft 365 ne peut être traité
+  -> aucun passage Microsoft 365 ne peut être injecté dans Azure AI Search
+```
+
+Le consentement n'active pas automatiquement tous les sites du tenant. Il
+autorise les appels Graph; AssistantCore applique ensuite sa propre liste de
+sites et de sources explicitement activés.
+
+### Flow détaillé de connexion
+
+```text
+Admin connecté
+  -> POST /api/microsoft365/consent
+  -> Controller -> Dispatcher -> Handler -> Service
+  -> création d'une connexion PendingConsent et d'un state protégé
+  <- authorizationUrl Microsoft
+
+Admin chez Microsoft
+  -> accepte les permissions
+  -> GET /api/microsoft365/consent/callback?code=...&state=...
+  -> Controller -> Dispatcher -> Handler -> Service
+  -> validation du state et identification du tenant
+  -> connexion Active
+  -> Worker autorisé à obtenir un token Graph et à lire les sources activées
+```
+
+#### Démarrer le consentement
+
+L'administrateur authentifié appelle :
+
+```http
+POST /api/microsoft365/consent
+Authorization: Bearer <JWT AssistantCore>
+```
+
+Le controller envoie une commande au `IDispatcher` et ne contient aucune
+logique métier. Le handler appelle uniquement le service applicatif de
+connexion Microsoft 365.
+
+Le service retrouve l'utilisateur et son organisation depuis le JWT. Aucun
+`organizationId` n'est accepté depuis la requête. Il vérifie ensuite que le
+membre possède le rôle `Admin`; sinon, il retourne `403 Forbidden`.
+
+Le service génère un `state` contenant l'organisation, un nonce aléatoire et
+une expiration courte. Le `state` est chiffré et signé. Seule son empreinte est
+persistée afin de reconnaître le callback sans conserver sa valeur brute.
+
+La connexion passe à l'état suivant :
+
+```text
+Status: PendingConsent
+TenantId: inconnu
+Consentement: pas encore accordé
+```
+
+Le client Microsoft construit ensuite l'URL multitenant et l'endpoint la
+retourne au frontend :
+
+```json
+{
+  "authorizationUrl": "https://login.microsoftonline.com/organizations/..."
+}
+```
+
+Le frontend redirige le navigateur vers cette URL. À la fin de cette première
+opération, aucune source Microsoft 365 ne peut encore être lue.
+
+#### Terminer le consentement
+
+Après la décision de l'administrateur, Microsoft rappelle AssistantCore :
+
+```http
+GET /api/microsoft365/consent/callback?code=<code>&state=<state>
+```
+
+Le service valide la signature, l'expiration, l'organisation et l'usage unique
+du `state`. Il échange ensuite le code auprès de Microsoft, identifie le tenant
+consenti et refuse ce tenant s'il est déjà associé à une autre organisation.
+
+Après un retour valide, la connexion devient :
+
+```text
+Status: Active
+TenantId: tenant Microsoft validé
+ConsentValidatedAt: date du callback
+```
+
+Le token technique est protégé et n'est jamais écrit dans les logs. Le Worker
+dispose alors de la condition nécessaire pour demander un token Graph et lire
+les sources qui seront activées dans les étapes suivantes de l'ingestion.
+
+Le callback ne découvre pas encore les sites, ne télécharge aucun document et
+n'écrit rien dans Azure AI Search. Ces traitements appartiennent aux étapes de
+découverte et de synchronisation.
+
+#### Révoquer la connexion
+
+Un administrateur peut retirer l'accès d'AssistantCore avec :
+
+```http
+DELETE /api/microsoft365/connections/{connectionId}
+Authorization: Bearer <JWT AssistantCore>
+```
+
+Le controller transmet une commande au `IDispatcher`. Le handler appelle le
+service de connexion, qui retrouve l'organisation depuis le JWT et refuse un
+membre non administrateur. Aucun `organizationId` n'est accepté dans la
+requête.
+
+Le service recherche la connexion avec son identifiant et l'organisation
+courante. Une connexion appartenant à une autre organisation est traitée comme
+absente. Lorsqu'elle est trouvée, la connexion et son connecteur deviennent
+inactifs et le jeton technique conservé est supprimé :
+
+```text
+Admin connecté
+  -> DELETE /api/microsoft365/connections/{connectionId}
+  -> Controller -> Dispatcher -> Handler -> Service
+  -> connexion Revoked
+  -> connecteur Inactive
+  -> suppression du jeton technique
+  -> Worker refuse les nouveaux traitements
+```
+
+Un nouvel appel de consentement est nécessaire pour remettre cette connexion
+en service. Une connexion révoquée ne peut pas passer directement à `Active`
+ou `Error`.
+
 Le travail demandé au client doit être limité à une séance d’onboarding.
 
 L’administrateur :
@@ -486,6 +627,20 @@ La persistence doit représenter au minimum :
 - état du consentement;
 - date de dernière validation;
 - état général du connecteur.
+
+Les états persistés par le socle d’ingestion sont :
+
+| Élément | États | Signification |
+| --- | --- | --- |
+| Connexion | `PendingConsent`, `Active`, `Error`, `Revoked` | Consentement en cours, connexion utilisable, erreur contrôlée ou accès révoqué. |
+| Source | `Discovered`, `Enabled`, `Disabled`, `Error` | Source trouvée, autorisée, désactivée ou invalide. |
+| Souscription | `Pending`, `Active`, `RenewalRequired`, `Error`, `Revoked`, `Expired` | Cycle de vie d’un webhook Microsoft Graph. |
+| Synchronisation | `Pending`, `Running`, `Succeeded`, `TemporaryFailure`, `PermanentFailure`, `Cancelled` | Cycle de vie d’une exécution d’ingestion. |
+
+Une seule connexion Microsoft 365 existe par organisation. Un tenant Microsoft
+ne peut être associé qu’à une seule organisation AssistantCore. Le démarrage du
+consentement conserve uniquement l’empreinte du `state`; sa valeur signée et
+expirante revient dans le callback et ne peut être consommée qu’une fois.
 
 ### Site SharePoint
 
@@ -716,6 +871,17 @@ relance aussi le delta afin de couvrir une notification perdue.
 
 <a id="m365-sharepoint-worker"></a>
 ## Traitement par le worker
+
+Le projet `AssistantCore.Ingestion.Worker` possède son propre démarrage et sa
+propre injection de dépendances. Le socle du ticket 45 permet de vérifier une
+connexion fournie par son identifiant interne au démarrage. Seule une connexion
+`Active` est acceptée; les états `PendingConsent`, `Error` et `Revoked` sont
+refusés avant tout appel à Microsoft.
+
+Cette vérification est volontairement minimale. Elle confirme que le processus
+séparé démarre, accède à la persistence et applique l'état de la connexion. La
+consommation des files Service Bus et la synchronisation réelle sont ajoutées
+par les tickets suivants.
 
 Utiliser au minimum deux files de travail :
 
@@ -1274,6 +1440,10 @@ Configuration non secrète attendue :
 {
   "Microsoft365": {
     "ClientId": "<application-multitenant>",
+    "AuthorityBaseUrl": "https://login.microsoftonline.com",
+    "GraphBaseUrl": "https://graph.microsoft.com",
+    "ConsentCallbackUrl": "https://<api>/api/microsoft365/consent/callback",
+    "ConsentStateLifetimeMinutes": 10,
     "WebhookBaseUrl": "https://<url-publique>",
     "SynchronizationIntervalMinutes": 15,
     "PermissionReconciliationIntervalHours": 6,
@@ -1304,10 +1474,21 @@ Configuration non secrète attendue :
 }
 ```
 
+Le démarrage refuse une URL non HTTPS, un `ClientId` vide, un secret absent ou
+une durée de `state` hors de la plage de 1 à 60 minutes. Le secret reste absent
+des fichiers versionnés et provient de `user-secrets` en local.
+
 La valeur `Dimensions` est un exemple et doit correspondre au modèle
 réellement choisi.
 
 En local, les secrets utilisent `dotnet user-secrets`.
+
+Le secret de l’App Registration Microsoft 365 est configuré sans être ajouté à
+`appsettings.json` :
+
+```bash
+dotnet user-secrets --project AssistantCore.Service set "Microsoft365:ClientSecret" "<secret>"
+```
 
 Dans Azure :
 

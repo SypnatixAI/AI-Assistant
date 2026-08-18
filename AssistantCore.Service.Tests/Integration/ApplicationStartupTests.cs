@@ -30,7 +30,8 @@ public sealed class ApplicationStartupTests
                         new Dictionary<string, string?>
                         {
                             [$"Messages:Orchestration:{optionName}"] = "0",
-                            ["AiModels:Providers:OpenAI:ApiKey"] = "integration-test-secret"
+                            ["AiModels:Providers:OpenAI:ApiKey"] = "integration-test-secret",
+                            ["Microsoft365:ClientSecret"] = "integration-test-secret"
                         }));
             });
 
@@ -61,7 +62,8 @@ public sealed class ApplicationStartupTests
                         new Dictionary<string, string?>
                         {
                             ["Messages:MaximumMessageLength"] = maximumMessageLength.ToString(),
-                            ["AiModels:Providers:OpenAI:ApiKey"] = "integration-test-secret"
+                            ["AiModels:Providers:OpenAI:ApiKey"] = "integration-test-secret",
+                            ["Microsoft365:ClientSecret"] = "integration-test-secret"
                         }));
             });
 
@@ -88,7 +90,8 @@ public sealed class ApplicationStartupTests
                     configuration.AddInMemoryCollection(
                         new Dictionary<string, string?>
                         {
-                            ["AiModels:Providers:OpenAI:ApiKey"] = string.Empty
+                            ["AiModels:Providers:OpenAI:ApiKey"] = string.Empty,
+                            ["Microsoft365:ClientSecret"] = "integration-test-secret"
                         }));
             });
 
@@ -103,6 +106,32 @@ public sealed class ApplicationStartupTests
             StringComparison.Ordinal);
     }
 
+    [Theory, AutoDomainData]
+    public void Given_AClientSecretMissing_When_CreateClient_Then_Microsoft365StartupFails(
+        string openAiSecret)
+    {
+        // Given
+        using var factory = new WebApplicationFactory<Program>()
+            .WithWebHostBuilder(builder =>
+            {
+                builder.UseEnvironment(Environments.Development);
+                builder.ConfigureAppConfiguration(configuration =>
+                    configuration.AddInMemoryCollection(
+                        new Dictionary<string, string?>
+                        {
+                            ["AiModels:Providers:OpenAI:ApiKey"] = openAiSecret,
+                            ["Microsoft365:ClientSecret"] = string.Empty
+                        }));
+            });
+
+        // When
+        var exception = Assert.Throws<OptionsValidationException>(() =>
+            factory.CreateClient());
+
+        // Then
+        Assert.Contains("Microsoft365", exception.Message, StringComparison.Ordinal);
+    }
+
     [Fact]
     public async Task Given_ValidDevelopmentConfiguration_When_StartingApplication_Then_RootEndpointRespondsWithoutError()
     {
@@ -115,7 +144,8 @@ public sealed class ApplicationStartupTests
                     configuration.AddInMemoryCollection(
                         new Dictionary<string, string?>
                         {
-                            ["AiModels:Providers:OpenAI:ApiKey"] = "integration-test-secret"
+                            ["AiModels:Providers:OpenAI:ApiKey"] = "integration-test-secret",
+                            ["Microsoft365:ClientSecret"] = "integration-test-secret"
                         }));
             });
 
