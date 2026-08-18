@@ -114,7 +114,10 @@ public sealed class MessagesEndpointValidationTests
         protected override Task<AuthenticateResult> HandleAuthenticateAsync()
         {
             var identity = new ClaimsIdentity(
-                [new Claim(ClaimTypes.NameIdentifier, "test-user")],
+                [
+                    new Claim(ClaimTypes.NameIdentifier, "test-user"),
+                    new Claim("scp", "access_as_user")
+                ],
                 AuthenticationScheme);
             var principal = new ClaimsPrincipal(identity);
             var ticket = new AuthenticationTicket(principal, AuthenticationScheme);

@@ -17,7 +17,6 @@ builder.Services
     .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddMicrosoftIdentityWebApi(builder.Configuration.GetSection("AzureAd"));
 
-builder.Services.AddAuthorization();
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(options =>
@@ -25,7 +24,7 @@ builder.Services.AddSwaggerGen(options =>
     options.EnableAnnotations();
 });
 builder.Services.AddApplication(builder.Configuration);
-builder.Services.AddAuthenticationInfrastructure();
+builder.Services.AddAuthenticationInfrastructure(builder.Configuration);
 builder.Services.AddAiModelInfrastructure(builder.Configuration);
 builder.Services.AddConnectorInfrastructure(builder.Configuration);
 builder.Services.AddDispatcher(Assembly.GetExecutingAssembly());

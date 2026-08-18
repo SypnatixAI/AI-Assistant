@@ -45,7 +45,7 @@ public sealed class CoreControllerTests
         // Then
         Assert.NotNull(method);
         Assert.Equal("api/[controller]", controllerRoute?.Template);
-        Assert.NotNull(method.GetCustomAttribute<AuthorizeAttribute>());
+        Assert.NotNull(controllerType.GetCustomAttribute<AuthorizeAttribute>());
         Assert.Equal("authenticateUser", method.GetCustomAttribute<HttpGetAttribute>()?.Template);
     }
 }
