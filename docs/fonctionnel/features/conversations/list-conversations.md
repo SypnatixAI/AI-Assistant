@@ -292,6 +292,8 @@ Ces comportements auront leurs propres endpoints et documents.
 - `POST /api/messages` cree une conversation avec le premier message.
 - `GET /api/conversations/{conversationId}/messages` charge l'historique
   pagine et les sources enregistrees.
-- Un futur `PATCH /api/conversations/{id}` permettra de renommer ou archiver.
-- Un futur `DELETE /api/conversations/{id}` appliquera la politique de
-  suppression et de retention.
+- `PATCH /api/conversations/{id}` permet de renommer ou archiver une conversation.
+- `DELETE /api/conversations/{id}` démarre sa suppression selon la politique
+  de rétention.
+- Ces contrats sont décrits dans
+  [Gérer le cycle de vie d'une conversation](manage-conversation.md).

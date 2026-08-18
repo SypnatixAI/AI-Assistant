@@ -269,7 +269,17 @@ Le membre cree automatiquement recoit toujours :
 - l'organisation determinee depuis `tid`
 - l'identite externe determinee depuis `oid`
 
-Les utilisateurs invites ne sont pas autorises dans le MVP. Ils ne doivent pas etre affectes a `AssistantCore.Access`. Une prise en charge future devra definir leur tenant de rattachement, leurs droits et leur cycle de revocation avant de les accepter.
+Les utilisateurs invites peuvent être autorisés dans la première version
+seulement s’ils possèdent un objet invité dans le tenant Microsoft Entra du
+client et sont affectés explicitement à `AssistantCore.Access`.
+
+Le claim `tid` doit correspondre au tenant client qui héberge l’objet invité.
+Le claim `oid` doit correspondre à l’identifiant de cet objet invité dans ce
+tenant. L’adresse courriel ou le tenant d’origine de l’invité ne remplace
+jamais ces identifiants.
+
+Le retrait de `AssistantCore.Access`, la désactivation du membre interne ou la
+suppression de l’objet invité retire l’accès à AssistantCore.
 
 ### Retirer l'acces
 
@@ -281,6 +291,10 @@ Pour retirer l'acces a un utilisateur :
 4. le membre reste en base pour conserver son historique
 
 Pour un retrait urgent, la desactivation interne doit etre faite en premier, car un token deja emis peut rester valide jusqu'a son expiration.
+
+La désactivation interne utilise
+`PATCH /api/members/{memberId}/status`, décrit dans
+[Gérer le statut d'un membre](../membres/manage-member-status.md).
 
 ---
 
@@ -342,7 +356,9 @@ Dans l'Enterprise Application AssistantCore du tenant client :
 5. cliquer sur `Assign`
 6. verifier que chaque affectation apparait avec le bon role
 
-Pour le MVP, ne pas affecter de compte invite, de service principal ou de groupe dont le perimetre n'est pas maitrise.
+Ne pas affecter de service principal ou de groupe dont le périmètre n’est pas
+maîtrisé. Un compte invité doit être affecté individuellement ou par un groupe
+explicitement approuvé.
 
 ### E. Verifier le token et le premier acces
 

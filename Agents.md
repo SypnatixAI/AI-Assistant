@@ -64,6 +64,7 @@
 * Choisir la structure qui convient au comportement décrit. Ne pas imposer systématiquement des sections comme `État de départ`, `Action`, `Succès` ou `Échec` lorsque le document est déjà clair.
 * Ne pas ajouter une section générique ou répétitive uniquement pour reformuler des informations déjà expliquées ailleurs dans le document.
 * Expliquer l’objectif, le périmètre, les étapes principales et les critères d’acceptation.
+* Décrire chaque ticket pas à pas, avec des étapes de réalisation concrètes, précises et ordonnées. Éviter les étapes génériques qui ne permettent pas au développeur de savoir exactement quelle action accomplir.
 * Donner assez de détails techniques pour guider le développeur, sans décrire toute l’implémentation ligne par ligne.
 * Préciser les contraintes importantes d’architecture, de sécurité et de comportement.
 * Ne pas imposer les noms de toutes les classes, méthodes ou colonnes lorsque ce choix peut raisonnablement être laissé au développeur.
