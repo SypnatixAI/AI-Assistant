@@ -1,6 +1,8 @@
 using AssistantCore.Service.Application.Models.Messages.Connectors;
+using AssistantCore.Service.Application.Models.Messages.Tools;
 using AssistantCore.Service.Application.Models.Messages.Tools.Arguments;
 using AssistantCore.Service.Application.Services.Messages.Connectors;
+using AssistantCore.Service.Application.Services.Messages.Tools;
 
 namespace AssistantCore.Service.Tests;
 
@@ -41,5 +43,21 @@ internal sealed class FakeCrmConnector : ICrmConnector
         ReceivedRequest = request;
         ReceivedContext = context;
         return Task.FromResult(Result);
+    }
+}
+
+internal sealed class FakeToolExecutionHandler(string toolName) : IAiToolExecutionHandler
+{
+    public string ToolName { get; } = toolName;
+
+    public Task<ToolExecutionResult> ExecuteAsync(
+        ValidatedToolCall validatedToolCall,
+        ConnectorExecutionContext executionContext,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        return Task.FromResult(ToolExecutionResult.Failed(
+            validatedToolCall.CallId,
+            ToolExecutionErrorCodes.ExecutorNotFound));
     }
 }

@@ -3,38 +3,54 @@ using AssistantCore.Repository.Domain.Entities;
 using AssistantCore.Repository.Domain.Enums;
 using AssistantCore.Repository.Queries;
 using AssistantCore.Service.Application.Models.Messages.Tools;
-using AssistantCore.Service.Application.Services.AuthenticateUser;
 using AssistantCore.Service.Application.Services.Messages.Connectors;
 
 namespace AssistantCore.Service.Application.Services.Messages.Tools;
 
 public sealed class AiToolRegistry(
-    IAuthenticateUserService authenticateUserService,
     IOrganizationConnectorQueries organizationConnectorQueries,
     IEnumerable<IErpConnector> erpConnectors,
-    IEnumerable<ICrmConnector> crmConnectors) : IAiToolRegistry
+    IEnumerable<ICrmConnector> crmConnectors,
+    IEnumerable<IAiToolExecutionHandler> toolHandlers) : IAiToolRegistry
 {
     public async Task<IReadOnlyCollection<AiToolDefinition>> GetAvailableToolsAsync(
+        Guid organizationId,
         CancellationToken cancellationToken)
     {
-        var (organization, _) = await authenticateUserService.GetOrganizationAsync(cancellationToken);
+        ArgumentOutOfRangeException.ThrowIfEqual(organizationId, Guid.Empty);
+
         var connectors = await organizationConnectorQueries.GetActiveConfiguredConnectors(
-            organization.Id,
+            organizationId,
             cancellationToken);
+        var executableTools = toolHandlers
+            .Select(handler => handler.ToolName)
+            .ToHashSet(StringComparer.Ordinal);
 
         return connectors
-            .Select(CreateToolDefinition)
+            .Select(connector => CreateToolDefinition(connector, executableTools))
             .OfType<AiToolDefinition>()
             .ToArray();
     }
 
-    private AiToolDefinition? CreateToolDefinition(OrganizationConnector connector) =>
+    private AiToolDefinition? CreateToolDefinition(
+        OrganizationConnector connector,
+        IReadOnlySet<string> executableTools) =>
         connector.Type switch
         {
-            ConnectorType.Microsoft365 => CreateMicrosoft365Tool(connector),
-            ConnectorType.Erp when erpConnectors.Any() => CreateErpTool(),
-            ConnectorType.Crm when crmConnectors.Any() => CreateCrmTool(),
-            ConnectorType.InternalData => CreateInternalDataTool(),
+            ConnectorType.Microsoft365
+                when executableTools.Contains(AiToolNames.SearchMicrosoft365) =>
+                CreateMicrosoft365Tool(connector),
+            ConnectorType.Erp
+                when erpConnectors.Any()
+                    && executableTools.Contains(AiToolNames.QueryErp) =>
+                CreateErpTool(),
+            ConnectorType.Crm
+                when crmConnectors.Any()
+                    && executableTools.Contains(AiToolNames.QueryCrm) =>
+                CreateCrmTool(),
+            ConnectorType.InternalData
+                when executableTools.Contains(AiToolNames.SearchInternalData) =>
+                CreateInternalDataTool(),
             _ => null
         };
 

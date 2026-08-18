@@ -102,6 +102,26 @@ public sealed class AuthorizedAiModelSelectorTests
         Assert.IsType<OperationCanceledException>(exception);
     }
 
+    [Theory]
+    [InlineAutoDomainData("", true)]
+    [InlineAutoDomainData("gpt-5.6-luna", true)]
+    [InlineAutoDomainData("  GPT-5.6-TERRA  ", true)]
+    [InlineAutoDomainData("gpt-disabled", false)]
+    [InlineAutoDomainData("gpt-unknown", false)]
+    public void Given_ARequestedModel_When_IsAvailable_Then_ReturnsItsConfigurationStatus(
+        string? requestedModel,
+        bool expectedAvailability)
+    {
+        // Given
+        var selector = CreateSelector();
+
+        // When
+        var isAvailable = selector.IsAvailable(requestedModel);
+
+        // Then
+        Assert.Equal(expectedAvailability, isAvailable);
+    }
+
     private static AuthorizedAiModelSelector CreateSelector()
     {
         var options = new AiModelsOptions
