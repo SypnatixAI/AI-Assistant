@@ -12,6 +12,5 @@ public interface IMessageToolOrchestrator
         SelectedAiModel selectedModel,
         IReadOnlyCollection<AiConversationMessage> conversationHistory,
         IReadOnlyCollection<AiToolDefinition> availableTools,
-        OrchestrationExecutionLimits limits,
         CancellationToken cancellationToken);
 }

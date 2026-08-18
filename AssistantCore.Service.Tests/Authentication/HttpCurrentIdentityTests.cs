@@ -9,6 +9,25 @@ namespace AssistantCore.Service.Tests.Authentication;
 public sealed class HttpCurrentIdentityTests
 {
     [Theory, AutoDomainData]
+    public void Given_AnUnauthenticatedPrincipal_When_GetIdentity_Then_ThrowsUnauthorizedAccessException(
+        Guid _)
+    {
+        // Given
+        var context = new DefaultHttpContext();
+        context.User = new ClaimsPrincipal(new ClaimsIdentity());
+        var currentIdentity = new HttpCurrentIdentity(
+            new HttpContextAccessor { HttpContext = context },
+            []);
+
+        // When
+        var exception = Assert.Throws<UnauthorizedAccessException>(
+            currentIdentity.GetIdentity);
+
+        // Then
+        Assert.Equal("Aucun utilisateur authentifie.", exception.Message);
+    }
+
+    [Theory, AutoDomainData]
     public void Given_OneMatchingMapper_When_GetIdentity_Then_ReturnsMappedIdentity(
         AuthenticatedIdentity expectedIdentity)
     {

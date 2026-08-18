@@ -10,14 +10,9 @@ public sealed class AiToolRegistryTests
 {
     [Theory, AutoDomainData]
     public async Task Given_AllConnectorsAreAvailable_When_GetAvailableToolsAsync_Then_ReturnsStrictToolDefinitions(
-        Organization organization,
-        OrganizationMember member)
+        Organization organization)
     {
         // Given
-        var authenticateUserService = new StubAuthenticateUserService
-        {
-            Result = (organization, member)
-        };
         var connectorQueries = new StubOrganizationConnectorQueries
         {
             Connectors =
@@ -32,13 +27,19 @@ public sealed class AiToolRegistryTests
             ]
         };
         var registry = new AiToolRegistry(
-            authenticateUserService,
             connectorQueries,
             [new FakeErpConnector()],
-            [new FakeCrmConnector()]);
+            [new FakeCrmConnector()],
+            CreateHandlers(
+                AiToolNames.SearchMicrosoft365,
+                AiToolNames.QueryErp,
+                AiToolNames.QueryCrm,
+                AiToolNames.SearchInternalData));
 
         // When
-        var tools = await registry.GetAvailableToolsAsync(CancellationToken.None);
+        var tools = await registry.GetAvailableToolsAsync(
+            organization.Id,
+            CancellationToken.None);
 
         // Then
         Assert.Equal(
@@ -80,26 +81,23 @@ public sealed class AiToolRegistryTests
 
     [Theory, AutoDomainData]
     public async Task Given_Microsoft365HasNoAvailableSource_When_GetAvailableToolsAsync_Then_OmitsMicrosoft365Tool(
-        Organization organization,
-        OrganizationMember member)
+        Organization organization)
     {
         // Given
-        var authenticateUserService = new StubAuthenticateUserService
-        {
-            Result = (organization, member)
-        };
         var connectorQueries = new StubOrganizationConnectorQueries
         {
             Connectors = [CreateConnector(ConnectorType.Microsoft365)]
         };
         var registry = new AiToolRegistry(
-            authenticateUserService,
             connectorQueries,
             [],
-            []);
+            [],
+            CreateHandlers(AiToolNames.SearchMicrosoft365));
 
         // When
-        var tools = await registry.GetAvailableToolsAsync(CancellationToken.None);
+        var tools = await registry.GetAvailableToolsAsync(
+            organization.Id,
+            CancellationToken.None);
 
         // Then
         Assert.Empty(tools);
@@ -107,14 +105,9 @@ public sealed class AiToolRegistryTests
 
     [Theory, AutoDomainData]
     public async Task Given_ErpAndCrmHaveNoRegisteredAdapter_When_GetAvailableToolsAsync_Then_OmitsTheirTools(
-        Organization organization,
-        OrganizationMember member)
+        Organization organization)
     {
         // Given
-        var authenticateUserService = new StubAuthenticateUserService
-        {
-            Result = (organization, member)
-        };
         var connectorQueries = new StubOrganizationConnectorQueries
         {
             Connectors =
@@ -124,13 +117,15 @@ public sealed class AiToolRegistryTests
             ]
         };
         var registry = new AiToolRegistry(
-            authenticateUserService,
             connectorQueries,
             [],
-            []);
+            [],
+            CreateHandlers(AiToolNames.QueryErp, AiToolNames.QueryCrm));
 
         // When
-        var tools = await registry.GetAvailableToolsAsync(CancellationToken.None);
+        var tools = await registry.GetAvailableToolsAsync(
+            organization.Id,
+            CancellationToken.None);
 
         // Then
         Assert.Empty(tools);
@@ -138,14 +133,9 @@ public sealed class AiToolRegistryTests
 
     [Theory, AutoDomainData]
     public async Task Given_OnlyErpHasARegisteredAdapter_When_GetAvailableToolsAsync_Then_ReturnsOnlyErpTool(
-        Organization organization,
-        OrganizationMember member)
+        Organization organization)
     {
         // Given
-        var authenticateUserService = new StubAuthenticateUserService
-        {
-            Result = (organization, member)
-        };
         var connectorQueries = new StubOrganizationConnectorQueries
         {
             Connectors =
@@ -155,18 +145,56 @@ public sealed class AiToolRegistryTests
             ]
         };
         var registry = new AiToolRegistry(
-            authenticateUserService,
             connectorQueries,
             [new FakeErpConnector()],
-            []);
+            [],
+            CreateHandlers(AiToolNames.QueryErp, AiToolNames.QueryCrm));
 
         // When
-        var tools = await registry.GetAvailableToolsAsync(CancellationToken.None);
+        var tools = await registry.GetAvailableToolsAsync(
+            organization.Id,
+            CancellationToken.None);
 
         // Then
         var tool = Assert.Single(tools);
         Assert.Equal(AiToolNames.QueryErp, tool.Name);
     }
+
+    [Theory, AutoDomainData]
+    public async Task Given_AConfiguredConnectorWithoutExecutionHandler_When_GetAvailableToolsAsync_Then_OmitsItsTool(
+        Organization organization)
+    {
+        // Given
+        var connectorQueries = new StubOrganizationConnectorQueries
+        {
+            Connectors =
+            [
+                CreateConnector(
+                    ConnectorType.Microsoft365,
+                    Microsoft365SourceType.SharePoint),
+                CreateConnector(ConnectorType.InternalData)
+            ]
+        };
+        var registry = new AiToolRegistry(
+            connectorQueries,
+            [],
+            [],
+            []);
+
+        // When
+        var tools = await registry.GetAvailableToolsAsync(
+            organization.Id,
+            CancellationToken.None);
+
+        // Then
+        Assert.Empty(tools);
+    }
+
+    private static IReadOnlyCollection<IAiToolExecutionHandler> CreateHandlers(
+        params string[] toolNames) =>
+        toolNames
+            .Select(toolName => new FakeToolExecutionHandler(toolName))
+            .ToArray();
 
     private static OrganizationConnector CreateConnector(
         ConnectorType type,
