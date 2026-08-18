@@ -182,6 +182,14 @@ Le backend determine ces informations a partir de l'identite, de la question et 
     }
   ],
   "warnings": [],
+  "usage": {
+    "requestTokens": 8460,
+    "tokenLimit": 1000000,
+    "tokensUsed": 436460,
+    "tokensRemaining": 563540,
+    "periodEndsAt": "2026-09-01T00:00:00Z",
+    "isExhausted": false
+  },
   "createdAt": "2026-08-06T14:30:00Z"
 }
 ```
@@ -194,7 +202,13 @@ Le backend determine ces informations a partir de l'identite, de la question et 
 - `model` indique le modele precis reellement utilise
 - `sources` contient les documents ou donnees utilises pour produire la reponse
 - `warnings` indique les sources qui n'ont pas pu etre consultees completement
+- `usage.requestTokens` indique les jetons consommes par tous les appels au modele pour cette demande
+- `usage.tokensRemaining` permet au frontend de remplacer son compteur avec le solde calcule par le backend
+- `usage.periodEndsAt` indique la prochaine remise a zero du quota de l'organisation
 - `createdAt` indique la date de creation de la reponse
+
+Le bloc `usage` represente le quota mensuel partage par l'organisation. Il est
+decrit dans [Consulter le quota de jetons](../usage/get-token-usage.md).
 
 ---
 
@@ -1047,6 +1061,15 @@ Il doit retourner une erreur technique adaptee, par exemple `502 Bad Gateway` ou
 
 - la conversation n'existe pas pour cet utilisateur dans l'organisation courante
 
+### 429 Too Many Requests
+
+- le quota de jetons de l'organisation est epuise
+- le fournisseur du modele applique temporairement une limite
+
+Le backend retourne un code d'erreur stable pour distinguer ces situations.
+`organization_token_quota_exhausted` indique que l'envoi doit rester bloque
+jusqu'au renouvellement du quota.
+
 ### 502 Bad Gateway
 
 - un fournisseur externe ou un connecteur retourne une erreur qui empeche de produire une reponse
@@ -1088,6 +1111,8 @@ Il doit retourner une erreur technique adaptee, par exemple `502 Bad Gateway` ou
 - chaque source retournee doit correspondre a une donnee reellement consultee
 - aucune donnee d'une autre organisation ne doit etre exposee
 - la premiere version retourne une reponse complete sans streaming
+- le quota de jetons est partage par les membres de l'organisation
+- le frontend utilise le solde retourne par le backend et ne calcule pas lui-meme la consommation
 
 ---
 
