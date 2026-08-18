@@ -8,10 +8,10 @@ using Swashbuckle.AspNetCore.Annotations;
 namespace AssistantCore.Service.Controllers;
 
 [ApiController]
+[Authorize]
 [Route("api/[controller]")]
 public class CoreController(IDispatcher dispatcher) : ControllerBase
 {
-    [Authorize]
     [HttpGet("authenticateUser")]
     [SwaggerOperation(Summary = "Identifier l'utilisateur à partir du JWT")]
     [SwaggerResponse(StatusCodes.Status200OK, "Authentication request handled successfully.", typeof(AuthenticateUserResponse))]

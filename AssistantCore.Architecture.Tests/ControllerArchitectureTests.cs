@@ -1,5 +1,6 @@
 using AssistantCore.Service.Application.Abstractions;
 using AssistantCore.Service.Controllers;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using NetArchTest.Rules;
 using Xunit;
@@ -40,6 +41,33 @@ public sealed class ControllerArchitectureTests
         // Then
         Assert.Empty(violations);
     }
+
+    [Fact]
+    public void Given_Controllers_When_ValidateControllerAuthorization_Then_EveryControllerRequiresAuthorization()
+    {
+        // Given
+        var controllers = ControllerTypes;
+
+        // When
+        var violations = ValidateControllerAuthorization(controllers);
+
+        // Then
+        Assert.Empty(violations);
+    }
+
+    private static IReadOnlyCollection<string> ValidateControllerAuthorization(IEnumerable<Type> controllers)
+    {
+        return controllers
+            .Where(controller =>
+                !HasAttribute<AuthorizeAttribute>(controller)
+                && !HasAttribute<AllowAnonymousAttribute>(controller))
+            .Select(controller => controller.FullName ?? controller.Name)
+            .ToArray();
+    }
+
+    private static bool HasAttribute<TAttribute>(Type controller)
+        where TAttribute : Attribute =>
+        controller.GetCustomAttributes(typeof(TAttribute), inherit: true).Length is not 0;
 
     private static IReadOnlyCollection<string> ValidateControllerConstructors(IEnumerable<Type> controllers)
     {
