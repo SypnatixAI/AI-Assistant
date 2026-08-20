@@ -59,16 +59,40 @@
 ## Documentation et issues
 
 * Rédiger les documents et tickets dans un langage simple, clair et concret.
+* Choisir chaque mot pour que le texte paraisse naturel à une personne qui découvre le sujet. Éviter les tournures artificielles, les traductions littérales et le jargon inutile.
+* Préférer les expressions courantes comme `membre créé automatiquement` à des formulations techniques comme `membre provisionné`. Lorsqu'un terme technique est indispensable, l'expliquer simplement à sa première utilisation.
+* Relire chaque ticket du point de vue d'un humain qui doit comprendre le besoin sans connaître le vocabulaire interne du projet.
 * Éviter les formulations vagues qui obligent le lecteur à deviner le travail attendu.
-* Rendre les actions attendues compréhensibles avec des explications précises et des exemples courts lorsque ceux-ci apportent une clarification utile.
-* Choisir la structure qui convient au comportement décrit. Ne pas imposer systématiquement des sections comme `État de départ`, `Action`, `Succès` ou `Échec` lorsque le document est déjà clair.
+* Tous les tickets doivent commencer par expliquer le but réel de la fonctionnalité et la capacité finale qu'elle débloque.
+* Chaque ticket doit contenir les sections `But`, `Pourquoi cette fonctionnalité est nécessaire`, `Flow détaillé`, `Résultat concret`, `Limites`, `Réalisation pas à pas`, `Critères d'acceptation` et `Documentation de référence`.
+* Chaque section possède une responsabilité précise :
+  * `But` explique la capacité finale recherchée;
+  * `Pourquoi cette fonctionnalité est nécessaire` explique ce qui est impossible, bloqué ou risqué sans elle;
+  * `Flow détaillé` explique le comportement complet, étape par étape;
+  * `Résultat concret` résume ce qui fonctionne à la fin;
+  * `Limites` indique clairement ce qui ne fonctionne pas encore;
+  * `Réalisation pas à pas` contient uniquement les actions de développement, sans répéter le flow;
+  * `Critères d'acceptation` contient uniquement des résultats vérifiables, sans recopier les étapes de réalisation.
+* Le `Flow détaillé` ne doit pas être limité à un diagramme ou à une liste de composants. Après le résumé visuel, expliquer chaque étape en texte simple, précis et concret.
+* Pour chaque étape importante du flow, préciser lorsque pertinent :
+  * qui déclenche l'action;
+  * la requête envoyée et la réponse attendue;
+  * les données reçues;
+  * les validations d'identité, d'autorisation et de sécurité;
+  * le chemin `Controller -> Dispatcher -> Handler -> Service`;
+  * la responsabilité exacte de chaque couche;
+  * les lectures et écritures en base;
+  * les appels aux services externes;
+  * les changements d'état;
+  * ce que fait ensuite le frontend, le Worker ou un autre consommateur.
+* Une information doit être expliquée complètement à l'endroit le plus pertinent, puis seulement référencée ailleurs si nécessaire.
+* Ajouter un exemple de requête, réponse, état ou appel frontend seulement lorsqu'il aide réellement à comprendre le comportement.
+* Terminer le flow en décrivant explicitement l'état du système avant et après l'opération.
+* Le lecteur ne doit pas avoir à déduire pourquoi une étape existe ni ce qu'elle rend possible pour l'étape suivante.
 * Ne pas ajouter une section générique ou répétitive uniquement pour reformuler des informations déjà expliquées ailleurs dans le document.
-* Expliquer l’objectif, le périmètre, les étapes principales et les critères d’acceptation.
-* Décrire chaque ticket pas à pas, avec des étapes de réalisation concrètes, précises et ordonnées. Éviter les étapes génériques qui ne permettent pas au développeur de savoir exactement quelle action accomplir.
 * Donner assez de détails techniques pour guider le développeur, sans décrire toute l’implémentation ligne par ligne.
 * Préciser les contraintes importantes d’architecture, de sécurité et de comportement.
 * Ne pas imposer les noms de toutes les classes, méthodes ou colonnes lorsque ce choix peut raisonnablement être laissé au développeur.
-* Utiliser un exemple court lorsqu’il rend le résultat attendu plus facile à comprendre.
 * Un ticket doit pouvoir être commencé sans clarification majeure, tout en laissant au développeur les décisions techniques locales.
 * Chaque document de fonctionnalité doit contenir une table des matières cliquable.
 * Ajouter des ancres stables aux sections référencées par des tickets afin que les liens restent valides si un titre change.

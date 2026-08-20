@@ -1010,6 +1010,20 @@ La premiere version retourne une reponse JSON complete. Elle ne fait pas de stre
 <a id="messages-resilience"></a>
 ## Gestion des echecs de connecteurs
 
+Les tests d'integration doivent verifier le parcours complet sans appeler de
+service Internet reel. Les fournisseurs d'IA, les connecteurs et les moteurs
+de recherche sont remplaces par des versions controlees qui permettent de
+simuler un succes, une indisponibilite, un delai depasse ou une annulation.
+
+Les logs, les mesures et les traces doivent permettre de savoir a quelle grande
+etape le traitement s'est arrete : validation, enregistrement de la question,
+appel du modele, execution d'un outil ou finalisation. Ils peuvent contenir des
+identifiants techniques, une duree et un resultat, mais jamais le message, la
+reponse, le contenu des preuves, un courriel, un token ou un secret.
+
+Cette observabilite sert a comprendre une panne de production sans exposer les
+donnees de l'utilisateur.
+
 ### Une source echoue, mais d'autres sources fonctionnent
 
 Le backend peut continuer si les informations restantes permettent de repondre.

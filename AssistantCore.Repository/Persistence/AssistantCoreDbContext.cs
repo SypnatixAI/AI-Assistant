@@ -13,6 +13,14 @@ public sealed class AssistantCoreDbContext(DbContextOptions<AssistantCoreDbConte
 
     public DbSet<OrganizationConnectorSource> OrganizationConnectorSources => Set<OrganizationConnectorSource>();
 
+    public DbSet<Microsoft365Connection> Microsoft365Connections => Set<Microsoft365Connection>();
+
+    public DbSet<Microsoft365Source> Microsoft365Sources => Set<Microsoft365Source>();
+
+    public DbSet<Microsoft365Subscription> Microsoft365Subscriptions => Set<Microsoft365Subscription>();
+
+    public DbSet<Microsoft365Synchronization> Microsoft365Synchronizations => Set<Microsoft365Synchronization>();
+
     public DbSet<Conversation> Conversations => Set<Conversation>();
 
     public DbSet<Message> Messages => Set<Message>();

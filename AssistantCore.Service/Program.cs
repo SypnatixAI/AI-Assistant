@@ -3,6 +3,7 @@ using AssistantCore.Service.Application.Abstractions;
 using AssistantCore.Service.Infrastructure.Authentication;
 using AssistantCore.Service.Infrastructure.AiModels;
 using AssistantCore.Service.Infrastructure.Connectors;
+using AssistantCore.Service.Infrastructure.Microsoft365;
 using AssistantCore.Service.Middleware;
 using AssistantCore.Repository.Persistence;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -27,6 +28,7 @@ builder.Services.AddApplication(builder.Configuration);
 builder.Services.AddAuthenticationInfrastructure(builder.Configuration);
 builder.Services.AddAiModelInfrastructure(builder.Configuration);
 builder.Services.AddConnectorInfrastructure(builder.Configuration);
+builder.Services.AddMicrosoft365Infrastructure(builder.Configuration);
 builder.Services.AddDispatcher(Assembly.GetExecutingAssembly());
 builder.Services.AddPersistence(builder.Configuration);
 

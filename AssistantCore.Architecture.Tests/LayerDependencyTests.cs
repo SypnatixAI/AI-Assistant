@@ -1,9 +1,12 @@
 using AssistantCore.ExternalServices;
 using AssistantCore.ExternalServices.Services.OpenAI;
+using AssistantCore.ExternalServices.Services.Microsoft;
 using AssistantCore.Repository.Domain.Entities;
 using AssistantCore.Service.Application.Services.Messages.AiModels.Providers.OpenAI;
 using AssistantCore.Service.Controllers;
 using AssistantCore.Service.Infrastructure.AiModels.OpenAI;
+using AssistantCore.Service.Infrastructure.Microsoft365;
+using AssistantCore.Service.Application.Services.Microsoft365;
 using NetArchTest.Rules;
 using Xunit;
 
@@ -130,6 +133,36 @@ public sealed class LayerDependencyTests
             applicationClientType,
             adapterType,
             externalClientType);
+
+        // Then
+        Assert.Empty(violations);
+    }
+
+    [Fact]
+    public void Given_Microsoft365ConsentService_When_ValidateMicrosoftExternalCallChain_Then_ServiceUsesAdapterAndExternalClients()
+    {
+        // Given
+        var serviceType = typeof(Microsoft365ConnectionService);
+        var applicationClientType = typeof(IMicrosoft365ConsentClient);
+        var adapterType = typeof(Microsoft365ConsentClientAdapter);
+
+        // When
+        var violations = new List<string>();
+        if (!HasConstructorParameter(serviceType, applicationClientType))
+        {
+            violations.Add($"{serviceType.FullName} must depend on {applicationClientType.FullName}.");
+        }
+
+        if (!applicationClientType.IsAssignableFrom(adapterType))
+        {
+            violations.Add($"{adapterType.FullName} must implement {applicationClientType.FullName}.");
+        }
+
+        if (!HasConstructorParameter(adapterType, typeof(MicrosoftIdentityClient))
+            || !HasConstructorParameter(adapterType, typeof(MicrosoftGraphClient)))
+        {
+            violations.Add($"{adapterType.FullName} must depend on both Microsoft external clients.");
+        }
 
         // Then
         Assert.Empty(violations);

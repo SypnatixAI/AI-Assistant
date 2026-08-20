@@ -46,6 +46,11 @@ public sealed class OrganizationConfiguration : IEntityTypeConfiguration<Organiz
             .HasForeignKey(connector => connector.OrganizationId)
             .OnDelete(DeleteBehavior.Cascade);
 
+        builder.HasMany(organization => organization.Microsoft365Connections)
+            .WithOne(connection => connection.Organization)
+            .HasForeignKey(connection => connection.OrganizationId)
+            .OnDelete(DeleteBehavior.Restrict);
+
         builder.HasIndex(organization => new { organization.IdentityProvider, organization.ExternalTenantId })
             .IsUnique();
     }

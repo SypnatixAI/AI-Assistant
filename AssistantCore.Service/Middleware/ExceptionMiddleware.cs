@@ -86,6 +86,19 @@ public sealed class ExceptionMiddleware(
 
             await context.Response.WriteAsync(JsonSerializer.Serialize(response));
         }
+        catch (Microsoft365ExternalException exception)
+        {
+            logger.LogWarning(exception, "Microsoft 365 consent provider is unavailable.");
+
+            context.Response.StatusCode = StatusCodes.Status502BadGateway;
+            context.Response.ContentType = "application/json";
+
+            var response = new ExceptionResponse(
+                "Microsoft 365 consent could not be completed.",
+                environment.IsDevelopment() ? exception.Message : null);
+
+            await context.Response.WriteAsync(JsonSerializer.Serialize(response));
+        }
         catch (AiProviderException exception)
         {
             logger.LogWarning(

@@ -204,6 +204,16 @@ Pourquoi le role `User` :
 Le point important :
 un utilisateur authentifie peut entrer dans la plateforme meme s'il n'existait pas encore en base, parce que la creation automatique est autorisee.
 
+Deux appels simultanes peuvent chercher le meme utilisateur avant que sa
+creation soit terminee. La base doit garantir qu'un seul membre existe pour la
+meme organisation, le meme fournisseur d'identite et le meme identifiant
+externe.
+
+Si une requete perd cette course parce que l'autre a cree le membre en premier,
+elle recharge le membre cree et continue seulement s'il appartient a
+l'organisation attendue et qu'il est actif. Une autre erreur de base de donnees
+ne doit pas etre presentee comme une creation concurrente reussie.
+
 ---
 
 <a id="auth-oauth-authorization"></a>
@@ -458,14 +468,63 @@ Le backend ne doit jamais retourner :
 <a id="auth-last-login"></a>
 ### 10. Enregistrer la derniere connexion
 
-Une fois `authenticateUser` termine avec succes, le backend peut enregistrer des informations de suivi.
+Cette date indique la derniere fois ou un membre a reussi a construire sa
+session AssistantCore complete.
 
-Concretement :
-- mettre a jour la date de derniere connexion
-- enregistrer la date du dernier `authenticateUser` reussi
-- garder une trace utile pour l'administration ou le support
+Elle permet notamment :
 
-Cette etape est secondaire, mais utile.
+- de distinguer un membre cree automatiquement qui n'a jamais termine ce flow;
+- d'aider le support a verifier qu'un membre a recemment accede a
+  AssistantCore;
+- de confirmer que le tenant, l'organisation, l'admission et le membre ont
+  tous ete valides.
+
+Elle ne constitue pas une preuve d'activite metier. Le frontend peut appeler
+`authenticateUser` lors d'une connexion, d'un chargement ou d'un
+rafraichissement de page, meme si le membre n'effectue ensuite aucune action.
+
+Sans cette date, AssistantCore connait l'existence du membre, mais ne peut pas
+savoir s'il a deja termine ce flow avec succes.
+
+Le flow est le suivant :
+
+```text
+Frontend avec un token valide
+  -> GET /api/Core/authenticateUser
+  -> Controller -> Dispatcher -> Handler -> AuthenticateUserService
+  -> validation de l'organisation et du membre
+  -> lecture de l'heure UTC depuis TimeProvider
+  -> creation ou mise a jour du membre en base
+  -> enregistrement reussi de LastSuccessfulAuthenticationAt
+  <- 200 OK avec la session AssistantCore
+```
+
+La date est enregistree seulement apres la validation :
+
+- du token;
+- du tenant et du droit d'acceder a AssistantCore;
+- de l'organisation active;
+- du membre actif.
+
+Pour un nouveau membre, la date est enregistree dans la meme operation que sa
+creation. Pour un membre existant, la nouvelle date est enregistree avant le
+retour `200 OK`.
+
+Une reponse `401`, une reponse `403`, une annulation, une erreur technique ou
+une erreur d'enregistrement en base ne modifie pas la date. Si l'enregistrement
+echoue, AssistantCore ne doit pas retourner la session comme si tout avait
+reussi.
+
+Deux appels rapproches ou simultanes ne doivent jamais remplacer une date
+recente par une date plus ancienne.
+
+A la fin d'un appel reussi :
+
+```text
+Membre: actif et autorise
+LastSuccessfulAuthenticationAt: date UTC du dernier authenticateUser reussi
+Reponse frontend: session AssistantCore complete
+```
 
 ---
 

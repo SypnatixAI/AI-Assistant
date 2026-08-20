@@ -17,4 +17,6 @@ public sealed class OrganizationConnector
     public Organization Organization { get; set; } = null!;
 
     public ICollection<OrganizationConnectorSource> Sources { get; set; } = [];
+
+    public Microsoft365Connection? Microsoft365Connection { get; set; }
 }

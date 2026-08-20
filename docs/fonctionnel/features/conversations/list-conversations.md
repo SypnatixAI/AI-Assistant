@@ -92,6 +92,11 @@ Le curseur doit permettre une pagination stable selon :
 Le backend ne doit pas utiliser une pagination basee uniquement sur un
 numero de page.
 
+Cette pagination par curseur evite qu'une nouvelle conversation ajoutee entre
+deux appels decale les resultats et provoque un doublon ou un oubli. Le contrat
+du curseur est defini dans la couche Application; la requete en base applique
+ensuite exactement le meme ordre sur `updatedAt` et `id`.
+
 ## Exemple de reponse
 
 ```json
