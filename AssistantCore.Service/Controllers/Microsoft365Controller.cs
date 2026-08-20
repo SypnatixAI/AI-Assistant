@@ -13,9 +13,9 @@ namespace AssistantCore.Service.Controllers;
 
 [ApiController]
 [Route("api/microsoft365")]
+[Authorize]
 public sealed class Microsoft365Controller(IDispatcher dispatcher) : ControllerBase
 {
-    [Authorize]
     [HttpPost("consent")]
     [SwaggerOperation(Summary = "Démarrer le consentement administrateur Microsoft 365")]
     [SwaggerResponse(StatusCodes.Status200OK, "Consent URL created.", typeof(StartMicrosoft365ConsentResponse))]
@@ -49,7 +49,6 @@ public sealed class Microsoft365Controller(IDispatcher dispatcher) : ControllerB
         return Ok(response);
     }
 
-    [Authorize]
     [HttpDelete("connections/{connectionId:guid}")]
     [SwaggerOperation(Summary = "Révoquer une connexion Microsoft 365")]
     [SwaggerResponse(StatusCodes.Status200OK, "Microsoft 365 connection revoked.", typeof(RevokeMicrosoft365ConnectionResponse))]
