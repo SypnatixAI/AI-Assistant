@@ -95,7 +95,8 @@ public sealed class RequiredScopeAuthorizationTests
                     configuration.AddInMemoryCollection(
                         new Dictionary<string, string?>
                         {
-                            ["AiModels:Providers:OpenAI:ApiKey"] = "integration-test-secret"
+                            ["AiModels:Providers:OpenAI:ApiKey"] = "integration-test-secret",
+                            ["Microsoft365:ClientSecret"] = "integration-test-secret"
                         }));
 
                 if (!useTestAuthentication)
