@@ -10,8 +10,7 @@ public sealed class MicrosoftGraphClientTests
     public async Task Given_AccessToken_When_GetCurrentTenantAsync_Then_ReturnsTenantIdentifiedByGraph(
         string tenantId,
         string displayName,
-        string accessToken,
-        CancellationToken cancellationToken)
+        string accessToken)
     {
         // Given
         AuthenticationHeaderValue? authorization = null;
@@ -30,7 +29,7 @@ public sealed class MicrosoftGraphClientTests
         var result = await client.GetCurrentTenantAsync(
             "https://graph.microsoft.com",
             accessToken,
-            cancellationToken);
+            CancellationToken.None);
 
         // Then
         Assert.Equal(tenantId, result.Id);

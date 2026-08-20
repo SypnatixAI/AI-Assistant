@@ -10,8 +10,7 @@ public sealed class Microsoft365IngestionWorkerTests
 {
     [Theory, AutoDomainData]
     public async Task Given_AStartupConnection_When_StartAsync_Then_ConnectionIsChecked(
-        Guid connectionId,
-        CancellationToken cancellationToken)
+        Guid connectionId)
     {
         // Given
         var orchestrator = new RecordingIngestionOrchestrator();
@@ -28,8 +27,9 @@ public sealed class Microsoft365IngestionWorkerTests
             NullLogger<Microsoft365IngestionWorker>.Instance);
 
         // When
-        await worker.StartAsync(cancellationToken);
-        await worker.StopAsync(cancellationToken);
+        await worker.StartAsync(CancellationToken.None);
+        await orchestrator.WaitUntilScheduledAsync().WaitAsync(TimeSpan.FromSeconds(1));
+        await worker.StopAsync(CancellationToken.None);
 
         // Then
         Assert.Equal(connectionId, orchestrator.ConnectionId);
@@ -37,13 +37,19 @@ public sealed class Microsoft365IngestionWorkerTests
 
     private sealed class RecordingIngestionOrchestrator : IMicrosoft365IngestionOrchestrator
     {
+        private readonly TaskCompletionSource scheduled = new(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+
         public Guid? ConnectionId { get; private set; }
+
+        public Task WaitUntilScheduledAsync() => scheduled.Task;
 
         public Task ScheduleInitialSynchronizationAsync(
             Guid connectionId,
             CancellationToken cancellationToken = default)
         {
             ConnectionId = connectionId;
+            scheduled.SetResult();
             return Task.CompletedTask;
         }
     }

@@ -11,8 +11,7 @@ public sealed class Microsoft365IngestionOrchestratorTests
 {
     [Theory, AutoDomainData]
     public async Task Given_AnActiveConnection_When_ScheduleInitialSynchronizationAsync_Then_ConnectionIsAccepted(
-        Guid connectionId,
-        CancellationToken cancellationToken)
+        Guid connectionId)
     {
         // Given
         await using var dbContext = CreateDbContext();
@@ -21,23 +20,22 @@ public sealed class Microsoft365IngestionOrchestratorTests
             Id = connectionId,
             Status = Microsoft365ConnectionStatus.Active
         });
-        await dbContext.SaveChangesAsync(cancellationToken);
+        await dbContext.SaveChangesAsync(CancellationToken.None);
         var orchestrator = new Microsoft365IngestionOrchestrator(
             new Microsoft365ConnectionRepository(dbContext));
 
         // When
-        await orchestrator.ScheduleInitialSynchronizationAsync(connectionId, cancellationToken);
+        await orchestrator.ScheduleInitialSynchronizationAsync(connectionId, CancellationToken.None);
 
         // Then
         var storedConnection = await dbContext.Microsoft365Connections
-            .SingleAsync(connection => connection.Id == connectionId, cancellationToken);
+            .SingleAsync(connection => connection.Id == connectionId, CancellationToken.None);
         Assert.Equal(Microsoft365ConnectionStatus.Active, storedConnection.Status);
     }
 
     [Theory, AutoDomainData]
     public async Task Given_ARevokedConnection_When_ScheduleInitialSynchronizationAsync_Then_ConnectionIsRejected(
-        Guid connectionId,
-        CancellationToken cancellationToken)
+        Guid connectionId)
     {
         // Given
         await using var dbContext = CreateDbContext();
@@ -46,14 +44,14 @@ public sealed class Microsoft365IngestionOrchestratorTests
             Id = connectionId,
             Status = Microsoft365ConnectionStatus.Revoked
         });
-        await dbContext.SaveChangesAsync(cancellationToken);
+        await dbContext.SaveChangesAsync(CancellationToken.None);
         var orchestrator = new Microsoft365IngestionOrchestrator(
             new Microsoft365ConnectionRepository(dbContext));
 
         // When
         var action = () => orchestrator.ScheduleInitialSynchronizationAsync(
             connectionId,
-            cancellationToken);
+            CancellationToken.None);
 
         // Then
         await Assert.ThrowsAsync<InvalidOperationException>(action);

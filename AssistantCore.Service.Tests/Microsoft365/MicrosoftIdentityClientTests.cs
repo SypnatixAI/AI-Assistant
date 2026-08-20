@@ -32,8 +32,7 @@ public sealed class MicrosoftIdentityClientTests
 
     [Theory, AutoDomainData]
     public async Task Given_AuthorizationCode_When_ExchangeAuthorizationCodeAsync_Then_ReturnsTokenWithoutLoggingIt(
-        string accessToken,
-        CancellationToken cancellationToken)
+        string accessToken)
     {
         // Given
         HttpRequestMessage? receivedRequest = null;
@@ -54,7 +53,7 @@ public sealed class MicrosoftIdentityClientTests
             "client-secret",
             "https://localhost/callback",
             "authorization-code",
-            cancellationToken);
+            CancellationToken.None);
 
         // Then
         Assert.Equal(accessToken, result.AccessToken);
