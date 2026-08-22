@@ -61,6 +61,91 @@
   },
   "item": [
     {
+      "name": "Organizations",
+      "item": [
+        {
+          "name": "Create Organization",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const requiredVariables = [",
+                  "    'organization_name',",
+                  "    'organization_identity_provider',",
+                  "    'organization_external_tenant_id'",
+                  "];",
+                  "",
+                  "requiredVariables.forEach(function (variableName) {",
+                  "    const value = pm.environment.get(variableName);",
+                  "    if (!value || value.startsWith('YOUR_')) {",
+                  "        throw new Error(variableName + ' must be configured before creating an organization.');",
+                  "    }",
+                  "});"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 201', function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "",
+                  "pm.test('Response contains the created organization', function () {",
+                  "    const response = pm.response.json();",
+                  "    pm.expect(response.id).to.be.a('string').and.not.empty;",
+                  "    pm.expect(response.name).to.eql(pm.environment.get('organization_name'));",
+                  "    pm.expect(response.identityProvider).to.eql(pm.environment.get('organization_identity_provider'));",
+                  "    pm.expect(response.externalTenantId).to.eql(pm.environment.get('organization_external_tenant_id'));",
+                  "    pm.expect(response.status).to.eql('Active');",
+                  "});",
+                  "",
+                  "if (pm.response.code === 201) {",
+                  "    const response = pm.response.json();",
+                  "    pm.environment.set('organization_id', response.id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"{{organization_name}}\",\n  \"identityProvider\": \"{{organization_identity_provider}}\",\n  \"externalTenantId\": \"{{organization_external_tenant_id}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/organizations",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "organizations"
+              ]
+            },
+            "description": "Crée une organisation active avant l'authentification de ses membres et enregistre son identifiant dans organization_id."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
       "name": "Authentification",
       "item": [
         {

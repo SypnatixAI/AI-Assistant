@@ -168,6 +168,30 @@ public sealed class LayerDependencyTests
         Assert.Empty(violations);
     }
 
+    [Fact]
+    public void Given_Microsoft365SiteSourcesClient_When_ValidateMicrosoftExternalCallChain_Then_UsesAdapterAndExternalClient()
+    {
+        // Given
+        var applicationClientType = typeof(IMicrosoft365SiteSourcesClient);
+        var adapterType = typeof(Microsoft365SiteSourcesClientAdapter);
+        var externalClientType = typeof(MicrosoftGraphSiteSourcesClient);
+
+        // When
+        var violations = new List<string>();
+        if (!applicationClientType.IsAssignableFrom(adapterType))
+        {
+            violations.Add($"{adapterType.FullName} must implement {applicationClientType.FullName}.");
+        }
+
+        if (!HasConstructorParameter(adapterType, externalClientType))
+        {
+            violations.Add($"{adapterType.FullName} must depend on {externalClientType.FullName}.");
+        }
+
+        // Then
+        Assert.Empty(violations);
+    }
+
     private static IReadOnlyCollection<string> ValidateApplicationServiceDependencies(
         System.Reflection.Assembly serviceAssembly)
     {

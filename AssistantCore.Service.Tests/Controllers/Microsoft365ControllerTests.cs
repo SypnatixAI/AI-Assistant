@@ -4,6 +4,11 @@ using AssistantCore.Service.Application.Commands.StartMicrosoft365Consent;
 using AssistantCore.Service.Application.Commands.StartMicrosoft365Consent.Models;
 using AssistantCore.Service.Application.Commands.RevokeMicrosoft365Connection;
 using AssistantCore.Service.Application.Commands.RevokeMicrosoft365Connection.Models;
+using AssistantCore.Service.Application.Commands.GetMicrosoft365SiteLists;
+using AssistantCore.Service.Application.Commands.GetMicrosoft365SiteLists.Models;
+using AssistantCore.Service.Application.Commands.EnableMicrosoft365List;
+using AssistantCore.Service.Application.Commands.EnableMicrosoft365List.Models;
+using AssistantCore.Service.Application.Models.Microsoft365;
 using AssistantCore.Service.Controllers;
 using Microsoft.AspNetCore.Mvc;
 
@@ -79,6 +84,61 @@ public sealed class Microsoft365ControllerTests
         Assert.Same(response, okResult.Value);
         var command = Assert.IsType<RevokeMicrosoft365ConnectionCommand>(dispatcher.ReceivedRequest);
         Assert.Equal(connectionId, command.ConnectionId);
+        Assert.Equal(cancellationToken, dispatcher.ReceivedCancellationToken);
+    }
+
+    [Theory, AutoDomainData]
+    public async Task Given_ASiteId_When_GetSiteLists_Then_DispatchesCommandAndReturnsOk(
+        string siteId,
+        CancellationToken cancellationToken)
+    {
+        // Given
+        var response = new GetMicrosoft365SiteListsResponse([]);
+        var dispatcher = new RecordingDispatcher { Response = response };
+        var controller = new Microsoft365Controller(dispatcher);
+
+        // When
+        var actionResult = await controller.GetSiteLists(siteId, cancellationToken);
+
+        // Then
+        var okResult = Assert.IsType<OkObjectResult>(actionResult.Result);
+        Assert.Same(response, okResult.Value);
+        var command = Assert.IsType<GetMicrosoft365SiteListsCommand>(dispatcher.ReceivedRequest);
+        Assert.Equal(siteId, command.SiteId);
+        Assert.Equal(cancellationToken, dispatcher.ReceivedCancellationToken);
+    }
+
+    [Theory, AutoDomainData]
+    public async Task Given_AListActivation_When_EnableList_Then_DispatchesCommandAndReturnsOk(
+        string siteId,
+        string listId,
+        CancellationToken cancellationToken)
+    {
+        // Given
+        var response = new Microsoft365ListResponse(
+            siteId,
+            listId,
+            "Requests",
+            null,
+            "Enabled",
+            true);
+        var dispatcher = new RecordingDispatcher { Response = response };
+        var controller = new Microsoft365Controller(dispatcher);
+
+        // When
+        var actionResult = await controller.EnableList(
+            siteId,
+            listId,
+            new EnableMicrosoft365ListRequest(true),
+            cancellationToken);
+
+        // Then
+        var okResult = Assert.IsType<OkObjectResult>(actionResult.Result);
+        Assert.Same(response, okResult.Value);
+        var command = Assert.IsType<EnableMicrosoft365ListCommand>(dispatcher.ReceivedRequest);
+        Assert.Equal(siteId, command.SiteId);
+        Assert.Equal(listId, command.ListId);
+        Assert.True(command.IsIndexed);
         Assert.Equal(cancellationToken, dispatcher.ReceivedCancellationToken);
     }
 }

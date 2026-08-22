@@ -10,6 +10,7 @@ using AssistantCore.Service.Application.Services.Messages.Responses;
 using AssistantCore.Service.Application.Services.Messages.Tools;
 using AssistantCore.Service.Application.Services.Messages.Validation;
 using AssistantCore.Service.Application.Services.Microsoft365;
+using AssistantCore.Service.Application.Services.Organizations;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -44,6 +45,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IMessageUserContextService, MessageUserContextService>();
         services.AddScoped<IAuthenticateUserService, AuthenticateUserService>();
         services.AddScoped<IMemberManagementService, MemberManagementService>();
+        services.AddScoped<IOrganizationManagementService, OrganizationManagementService>();
         services.AddMicrosoft365Application();
         services.AddScoped<IMessageProcessingLifecycleService, MessageProcessingLifecycleService>();
         services.AddScoped<IMessageToolOrchestrator, MessageToolOrchestrator>();
@@ -69,6 +71,9 @@ public static class ServiceCollectionExtensions
     {
         services.AddScoped<IMicrosoft365ConnectionService, Microsoft365ConnectionService>();
         services.AddScoped<IMicrosoft365IngestionOrchestrator, Microsoft365IngestionOrchestrator>();
+        services.AddScoped<IMicrosoft365ListActivationService, Microsoft365ListActivationService>();
+        services.AddScoped<IMicrosoft365ListConsultationService, Microsoft365ListConsultationService>();
+        services.AddScoped<IMicrosoft365SiteSourcesDiscoveryService, Microsoft365SiteSourcesDiscoveryService>();
         services.AddSingleton<TimeProvider>(TimeProvider.System);
         return services;
     }

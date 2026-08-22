@@ -27,7 +27,9 @@ public static class Microsoft365ServiceCollectionExtensions
         services.AddMemoryCache();
         services.AddHttpClient<MicrosoftIdentityClient>();
         services.AddHttpClient<MicrosoftGraphClient>();
+        services.AddHttpClient<MicrosoftGraphSiteSourcesClient>();
         services.AddScoped<IMicrosoft365ConsentClient, Microsoft365ConsentClientAdapter>();
+        services.AddScoped<IMicrosoft365SiteSourcesClient, Microsoft365SiteSourcesClientAdapter>();
         services.AddSingleton<IMicrosoft365ConsentStateProtector, Microsoft365ConsentStateProtectorAdapter>();
         services.AddSingleton<IMicrosoft365TechnicalTokenStore, Microsoft365TechnicalTokenStoreAdapter>();
 
