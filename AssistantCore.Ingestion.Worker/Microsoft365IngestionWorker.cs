@@ -13,24 +13,40 @@ public sealed class Microsoft365IngestionWorker(
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        var connectionId = options.Value.StartupConnectionId;
-        if (!options.Value.RunStartupConnectionCheck || connectionId is null)
+        if (options.Value.RunStartupConnectionCheck
+            && options.Value.StartupConnectionId is { } connectionId)
         {
+            await using var startupScope = scopeFactory.CreateAsyncScope();
+            var orchestrator = startupScope.ServiceProvider
+                .GetRequiredService<IMicrosoft365IngestionOrchestrator>();
+            await orchestrator.ScheduleInitialSynchronizationAsync(connectionId, stoppingToken);
             logger.LogInformation(
-                "Microsoft 365 ingestion worker started and is waiting for a configured work source.");
-            return;
+                "Microsoft 365 ingestion startup check accepted connection {ConnectionId}.",
+                connectionId);
         }
 
-        await using var scope = scopeFactory.CreateAsyncScope();
-        var orchestrator = scope.ServiceProvider
-            .GetRequiredService<IMicrosoft365IngestionOrchestrator>();
-
-        await orchestrator.ScheduleInitialSynchronizationAsync(
-            connectionId.Value,
-            stoppingToken);
-
         logger.LogInformation(
-            "Microsoft 365 ingestion startup check accepted connection {ConnectionId}.",
-            connectionId);
+            "Microsoft 365 ingestion worker started subscription maintenance.");
+        using var timer = new PeriodicTimer(
+            TimeSpan.FromSeconds(options.Value.MaintenanceIntervalSeconds));
+        do
+        {
+            try
+            {
+                await using var scope = scopeFactory.CreateAsyncScope();
+                var maintenanceService = scope.ServiceProvider
+                    .GetRequiredService<IMicrosoft365SubscriptionMaintenanceService>();
+                await maintenanceService.RunMaintenanceAsync(stoppingToken);
+            }
+            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+            {
+                break;
+            }
+            catch (Exception exception)
+            {
+                logger.LogError(exception, "Microsoft 365 subscription maintenance cycle failed.");
+            }
+        }
+        while (await timer.WaitForNextTickAsync(stoppingToken));
     }
 }

@@ -7,4 +7,6 @@ public sealed class Microsoft365WorkerOptions
     public bool RunStartupConnectionCheck { get; init; }
 
     public Guid? StartupConnectionId { get; init; }
+
+    public int MaintenanceIntervalSeconds { get; init; } = 300;
 }

@@ -74,6 +74,8 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IMicrosoft365ListActivationService, Microsoft365ListActivationService>();
         services.AddScoped<IMicrosoft365ListConsultationService, Microsoft365ListConsultationService>();
         services.AddScoped<IMicrosoft365SiteSourcesDiscoveryService, Microsoft365SiteSourcesDiscoveryService>();
+        services.AddScoped<IMicrosoft365SubscriptionMaintenanceService, Microsoft365SubscriptionMaintenanceService>();
+        services.AddScoped<IMicrosoftGraphNotificationService, MicrosoftGraphNotificationService>();
         services.AddSingleton<TimeProvider>(TimeProvider.System);
         return services;
     }
