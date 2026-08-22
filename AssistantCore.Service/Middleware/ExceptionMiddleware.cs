@@ -54,6 +54,19 @@ public sealed class ExceptionMiddleware(
 
             await context.Response.WriteAsync(JsonSerializer.Serialize(response));
         }
+        catch (ConflictException exception)
+        {
+            logger.LogWarning(exception, "A conflicting resource prevented the request from completing.");
+
+            context.Response.StatusCode = StatusCodes.Status409Conflict;
+            context.Response.ContentType = "application/json";
+
+            var response = new ExceptionResponse(
+                exception.Message,
+                environment.IsDevelopment() ? exception.Message : null);
+
+            await context.Response.WriteAsync(JsonSerializer.Serialize(response));
+        }
         catch (NotFoundException exception)
         {
             logger.LogWarning(exception, "Requested resource was not found.");

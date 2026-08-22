@@ -5,6 +5,7 @@ public enum Microsoft365SubscriptionStatus
     Pending,
     Active,
     RenewalRequired,
+    RevocationRequired,
     Error,
     Revoked,
     Expired

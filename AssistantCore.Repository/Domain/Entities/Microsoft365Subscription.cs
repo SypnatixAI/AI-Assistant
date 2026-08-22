@@ -8,11 +8,15 @@ public sealed class Microsoft365Subscription
 
     public Guid Microsoft365SourceId { get; set; }
 
-    public string MicrosoftSubscriptionId { get; set; } = string.Empty;
+    public Guid OrganizationId { get; set; }
 
-    public string ProtectedClientState { get; set; } = string.Empty;
+    public string Resource { get; set; } = string.Empty;
 
-    public DateTimeOffset ExpiresAt { get; set; }
+    public string? MicrosoftSubscriptionId { get; set; }
+
+    public string? ProtectedClientState { get; set; }
+
+    public DateTimeOffset? ExpiresAt { get; set; }
 
     public DateTimeOffset? LastRenewedAt { get; set; }
 
@@ -23,6 +27,8 @@ public sealed class Microsoft365Subscription
     public DateTimeOffset CreatedAt { get; set; }
 
     public DateTimeOffset UpdatedAt { get; set; }
+
+    public Organization Organization { get; set; } = null!;
 
     public Microsoft365Source Microsoft365Source { get; set; } = null!;
 }

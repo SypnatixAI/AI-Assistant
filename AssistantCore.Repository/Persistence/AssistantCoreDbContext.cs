@@ -17,6 +17,12 @@ public sealed class AssistantCoreDbContext(DbContextOptions<AssistantCoreDbConte
 
     public DbSet<Microsoft365Source> Microsoft365Sources => Set<Microsoft365Source>();
 
+    public DbSet<Microsoft365Site> Microsoft365Sites => Set<Microsoft365Site>();
+
+    public DbSet<Microsoft365Drive> Microsoft365Drives => Set<Microsoft365Drive>();
+
+    public DbSet<Microsoft365List> Microsoft365Lists => Set<Microsoft365List>();
+
     public DbSet<Microsoft365Subscription> Microsoft365Subscriptions => Set<Microsoft365Subscription>();
 
     public DbSet<Microsoft365Synchronization> Microsoft365Synchronizations => Set<Microsoft365Synchronization>();

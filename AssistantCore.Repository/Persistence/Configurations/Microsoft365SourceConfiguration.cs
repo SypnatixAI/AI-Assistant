@@ -8,6 +8,7 @@ public sealed class Microsoft365SourceConfiguration : IEntityTypeConfiguration<M
 {
     public void Configure(EntityTypeBuilder<Microsoft365Source> builder)
     {
+        builder.UseTptMappingStrategy();
         builder.ToTable("Microsoft365Source");
         builder.HasKey(source => source.Id);
 
@@ -18,6 +19,7 @@ public sealed class Microsoft365SourceConfiguration : IEntityTypeConfiguration<M
         builder.Property(source => source.DisplayName).HasMaxLength(300).IsRequired();
         builder.Property(source => source.WebUrl).HasMaxLength(2048);
         builder.Property(source => source.Status).HasConversion<string>().HasMaxLength(30).IsRequired();
+        builder.Property(source => source.StatusBeforeUnavailable).HasConversion<string>().HasMaxLength(30);
         builder.Property(source => source.DeltaLink).HasMaxLength(4000);
         builder.Property(source => source.LastErrorCode).HasMaxLength(100);
 

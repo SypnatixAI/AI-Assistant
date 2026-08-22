@@ -5,5 +5,6 @@ public enum Microsoft365SourceStatus
     Discovered,
     Enabled,
     Disabled,
-    Error
+    Error,
+    Unavailable
 }

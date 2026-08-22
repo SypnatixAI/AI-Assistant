@@ -13,6 +13,7 @@ public sealed class ExceptionMiddlewareTests
     [InlineData("unauthorized", StatusCodes.Status401Unauthorized)]
     [InlineData("forbidden", StatusCodes.Status403Forbidden)]
     [InlineData("bad-request", StatusCodes.Status400BadRequest)]
+    [InlineData("conflict", StatusCodes.Status409Conflict)]
     [InlineData("not-found", StatusCodes.Status404NotFound)]
     public async Task Given_AKnownException_When_InvokingMiddleware_Then_ReturnsExpectedJsonError(
         string exceptionType,
@@ -190,6 +191,7 @@ public sealed class ExceptionMiddlewareTests
             "unauthorized" => new UnauthorizedAccessException(message),
             "forbidden" => new ForbiddenException(message),
             "bad-request" => new BadRequestException(message),
+            "conflict" => new ConflictException(message),
             "not-found" => new NotFoundException(message),
             _ => throw new ArgumentOutOfRangeException(nameof(exceptionType), exceptionType, null)
         };

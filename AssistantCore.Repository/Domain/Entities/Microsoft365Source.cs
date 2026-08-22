@@ -2,7 +2,7 @@ using AssistantCore.Repository.Domain.Enums;
 
 namespace AssistantCore.Repository.Domain.Entities;
 
-public sealed class Microsoft365Source
+public class Microsoft365Source
 {
     public Guid Id { get; set; }
 
@@ -19,6 +19,8 @@ public sealed class Microsoft365Source
     public string? WebUrl { get; set; }
 
     public Microsoft365SourceStatus Status { get; set; }
+
+    public Microsoft365SourceStatus? StatusBeforeUnavailable { get; set; }
 
     public bool IsIndexed { get; set; }
 
@@ -39,4 +41,61 @@ public sealed class Microsoft365Source
     public ICollection<Microsoft365Subscription> Subscriptions { get; set; } = [];
 
     public ICollection<Microsoft365Synchronization> Synchronizations { get; set; } = [];
+
+    public bool EnableIndexing(DateTimeOffset enabledAt)
+    {
+        if (IsIndexed)
+        {
+            return false;
+        }
+
+        IsIndexed = true;
+        Status = Microsoft365SourceStatus.Enabled;
+        EnabledAt = enabledAt;
+        LastErrorCode = null;
+        return true;
+    }
+
+    public bool DisableIndexing()
+    {
+        if (!IsIndexed && Status == Microsoft365SourceStatus.Disabled)
+        {
+            return false;
+        }
+
+        IsIndexed = false;
+        Status = Microsoft365SourceStatus.Disabled;
+        NextSynchronizationAt = null;
+        LastErrorCode = null;
+        return true;
+    }
+
+    public void RefreshDiscovery(string displayName, string? webUrl)
+    {
+        DisplayName = displayName;
+        WebUrl = webUrl;
+        RestoreAvailability();
+    }
+
+    public void MarkUnavailable()
+    {
+        if (Status == Microsoft365SourceStatus.Unavailable)
+        {
+            return;
+        }
+
+        StatusBeforeUnavailable = Status;
+        Status = Microsoft365SourceStatus.Unavailable;
+    }
+
+    private void RestoreAvailability()
+    {
+        if (Status != Microsoft365SourceStatus.Unavailable)
+        {
+            return;
+        }
+
+        Status = StatusBeforeUnavailable ?? Microsoft365SourceStatus.Discovered;
+        StatusBeforeUnavailable = null;
+    }
 }
