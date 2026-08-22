@@ -2,6 +2,7 @@ using AssistantCore.ExternalServices.Services.Microsoft;
 using AssistantCore.ExternalServices.Services.Azure;
 using AssistantCore.Service.Application.Configuration;
 using AssistantCore.Service.Application.Services.Microsoft365;
+using Microsoft.Extensions.Options;
 
 namespace AssistantCore.Service.Infrastructure.Microsoft365;
 
