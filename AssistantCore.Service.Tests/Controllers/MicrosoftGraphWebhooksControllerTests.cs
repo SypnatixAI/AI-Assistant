@@ -59,6 +59,8 @@ public sealed class MicrosoftGraphWebhooksControllerTests
         // Then
         Assert.IsType<AcceptedResult>(result);
         var command = Assert.IsType<ReceiveMicrosoftGraphWebhookCommand>(dispatcher.ReceivedRequest);
-        Assert.Same(notifications, command.Notifications);
+        Assert.NotNull(command.Notifications);
+        var receivedNotification = Assert.Single(command.Notifications.Value!);
+        Assert.Equal(notification, receivedNotification);
     }
 }
