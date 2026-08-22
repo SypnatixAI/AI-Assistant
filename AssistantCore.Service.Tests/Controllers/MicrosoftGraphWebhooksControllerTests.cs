@@ -11,8 +11,7 @@ public sealed class MicrosoftGraphWebhooksControllerTests
 {
     [Theory, AutoDomainData]
     public async Task Given_AValidationToken_When_ReceiveAsync_Then_ReturnsExactPlainText(
-        string validationToken,
-        CancellationToken cancellationToken)
+        string validationToken)
     {
         // Given
         var dispatcher = new RecordingDispatcher
@@ -24,7 +23,7 @@ public sealed class MicrosoftGraphWebhooksControllerTests
         // When
         var result = await controller.ReceiveAsync(
             validationToken,
-            cancellationToken);
+            CancellationToken.None);
 
         // Then
         var content = Assert.IsType<ContentResult>(result);
@@ -37,8 +36,7 @@ public sealed class MicrosoftGraphWebhooksControllerTests
 
     [Theory, AutoDomainData]
     public async Task Given_NormalNotification_When_ReceiveAsync_Then_ReturnsAccepted(
-        MicrosoftGraphNotification notification,
-        CancellationToken cancellationToken)
+        MicrosoftGraphNotification notification)
     {
         // Given
         var notifications = new MicrosoftGraphNotificationCollection([notification]);
@@ -56,7 +54,7 @@ public sealed class MicrosoftGraphWebhooksControllerTests
         // When
         var result = await controller.ReceiveAsync(
             validationToken: null,
-            cancellationToken: cancellationToken);
+            cancellationToken: CancellationToken.None);
 
         // Then
         Assert.IsType<AcceptedResult>(result);

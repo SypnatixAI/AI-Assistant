@@ -38,7 +38,8 @@ public sealed class Microsoft365IngestionWorkerTests
     }
 
     [Theory, AutoDomainData]
-    public async Task Given_TheWorkerStarts_When_RunMaintenanceAsync_Then_SubscriptionsAreProcessed()
+    public async Task Given_TheWorkerStarts_When_RunMaintenanceAsync_Then_SubscriptionsAreProcessed(
+        bool _)
     {
         // Given
         var maintenanceService = new RecordingSubscriptionMaintenanceService();

@@ -5,13 +5,14 @@ namespace AssistantCore.ExternalServices.Services.Azure;
 
 public class AzureServiceBusPublisherClient : IAsyncDisposable
 {
-    private readonly ServiceBusClient client;
+    private readonly Lazy<ServiceBusClient> client;
     private readonly Dictionary<string, ServiceBusSender> senders = new(StringComparer.Ordinal);
     private readonly object senderLock = new();
 
     public AzureServiceBusPublisherClient(string fullyQualifiedNamespace)
     {
-        client = new ServiceBusClient(fullyQualifiedNamespace, new DefaultAzureCredential());
+        client = new Lazy<ServiceBusClient>(() =>
+            new ServiceBusClient(fullyQualifiedNamespace, new DefaultAzureCredential()));
     }
 
     public virtual Task PublishAsync(
@@ -37,7 +38,10 @@ public class AzureServiceBusPublisherClient : IAsyncDisposable
             await sender.DisposeAsync();
         }
 
-        await client.DisposeAsync();
+        if (client.IsValueCreated)
+        {
+            await client.Value.DisposeAsync();
+        }
     }
 
     private ServiceBusSender GetSender(string queueName)
@@ -46,7 +50,7 @@ public class AzureServiceBusPublisherClient : IAsyncDisposable
         {
             if (!senders.TryGetValue(queueName, out var sender))
             {
-                sender = client.CreateSender(queueName);
+                sender = client.Value.CreateSender(queueName);
                 senders.Add(queueName, sender);
             }
 
