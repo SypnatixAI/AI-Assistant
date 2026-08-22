@@ -25,6 +25,9 @@ public static class WorkerProgram
             .Validate(
                 options => !options.RunStartupConnectionCheck || options.StartupConnectionId is not null,
                 $"{Microsoft365WorkerOptions.SectionName}:StartupConnectionId is required when the startup connection check is enabled.")
+            .Validate(
+                options => options.MaintenanceIntervalSeconds > 0,
+                $"{Microsoft365WorkerOptions.SectionName}:MaintenanceIntervalSeconds must be greater than zero.")
             .ValidateOnStart();
 
         builder.Services.AddMicrosoft365Application();

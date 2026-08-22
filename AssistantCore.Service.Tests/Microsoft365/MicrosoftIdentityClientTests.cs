@@ -6,6 +6,43 @@ namespace AssistantCore.Service.Tests.Microsoft365;
 public sealed class MicrosoftIdentityClientTests
 {
     [Theory, AutoDomainData]
+    public async Task Given_ATenantAndClientCredentials_When_AcquireApplicationTokenAsync_Then_UsesClientCredentialsGrant(
+        string tenantId,
+        string clientId,
+        string clientSecret,
+        string accessToken)
+    {
+        // Given
+        Uri? requestUri = null;
+        string? body = null;
+        using var httpClient = new HttpClient(new StubHttpMessageHandler(request =>
+        {
+            requestUri = request.RequestUri;
+            body = request.Content!.ReadAsStringAsync().GetAwaiter().GetResult();
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(
+                    $$"""{"access_token":"{{accessToken}}","expires_in":3600}""")
+            };
+        }));
+        var client = new MicrosoftIdentityClient(httpClient);
+
+        // When
+        var result = await client.AcquireApplicationTokenAsync(
+            "https://login.microsoftonline.com",
+            tenantId,
+            clientId,
+            clientSecret,
+            CancellationToken.None);
+
+        // Then
+        Assert.Contains(Uri.EscapeDataString(tenantId), requestUri?.AbsolutePath, StringComparison.Ordinal);
+        Assert.Contains("grant_type=client_credentials", body, StringComparison.Ordinal);
+        Assert.Contains($"client_id={Uri.EscapeDataString(clientId)}", body, StringComparison.Ordinal);
+        Assert.Equal(accessToken, result.AccessToken);
+    }
+
+    [Theory, AutoDomainData]
     public void Given_ConsentState_When_CreateAuthorizationUri_Then_UsesMultitenantAuthorizationCodeFlow(
         string clientId,
         string state)

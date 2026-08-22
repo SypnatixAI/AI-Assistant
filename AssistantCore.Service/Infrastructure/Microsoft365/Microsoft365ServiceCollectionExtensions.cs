@@ -1,6 +1,8 @@
 using AssistantCore.ExternalServices.Services.Microsoft;
+using AssistantCore.ExternalServices.Services.Azure;
 using AssistantCore.Service.Application.Configuration;
 using AssistantCore.Service.Application.Services.Microsoft365;
+using Microsoft.Extensions.Options;
 
 namespace AssistantCore.Service.Infrastructure.Microsoft365;
 
@@ -19,8 +21,21 @@ public static class Microsoft365ServiceCollectionExtensions
                     && clientId != Guid.Empty
                     && !string.IsNullOrWhiteSpace(options.ClientSecret)
                     && IsHttpsUrl(options.ConsentCallbackUrl)
-                    && options.ConsentStateLifetimeMinutes is > 0 and <= 60,
-                "Microsoft365 requires HTTPS URLs, a non-empty ClientId and ClientSecret, and a consent state lifetime between 1 and 60 minutes.")
+                    && IsHttpsUrl(options.WebhookBaseUrl)
+                    && options.ConsentStateLifetimeMinutes is > 0 and <= 60
+                    && options.SubscriptionLifetimeHours is > 1 and <= 48
+                    && options.SubscriptionRenewalLeadTimeHours > 0
+                    && options.SubscriptionRenewalLeadTimeHours < options.SubscriptionLifetimeHours,
+                "Microsoft365 requires HTTPS URLs, credentials, a valid consent lifetime, and valid subscription renewal settings.")
+            .ValidateOnStart();
+
+        services.AddOptions<ServiceBusOptions>()
+            .Bind(configuration.GetSection(ServiceBusOptions.SectionName))
+            .Validate(options =>
+                    !string.IsNullOrWhiteSpace(options.FullyQualifiedNamespace)
+                    && !string.IsNullOrWhiteSpace(options.DriveSyncQueue)
+                    && !string.IsNullOrWhiteSpace(options.ListSyncQueue),
+                "ServiceBus namespace and synchronization queue names are required.")
             .ValidateOnStart();
 
         services.AddDataProtection();
@@ -28,8 +43,17 @@ public static class Microsoft365ServiceCollectionExtensions
         services.AddHttpClient<MicrosoftIdentityClient>();
         services.AddHttpClient<MicrosoftGraphClient>();
         services.AddHttpClient<MicrosoftGraphSiteSourcesClient>();
+        services.AddHttpClient<MicrosoftGraphSubscriptionClient>();
         services.AddScoped<IMicrosoft365ConsentClient, Microsoft365ConsentClientAdapter>();
         services.AddScoped<IMicrosoft365SiteSourcesClient, Microsoft365SiteSourcesClientAdapter>();
+        services.AddScoped<IMicrosoft365SubscriptionClient, Microsoft365SubscriptionClientAdapter>();
+        services.AddSingleton<IMicrosoft365ClientStateProtector, Microsoft365ClientStateProtectorAdapter>();
+        services.AddSingleton(serviceProvider =>
+        {
+            var serviceBusOptions = serviceProvider.GetRequiredService<IOptions<ServiceBusOptions>>().Value;
+            return new AzureServiceBusPublisherClient(serviceBusOptions.FullyQualifiedNamespace);
+        });
+        services.AddSingleton<IMicrosoft365SynchronizationPublisher, Microsoft365SynchronizationPublisherAdapter>();
         services.AddSingleton<IMicrosoft365ConsentStateProtector, Microsoft365ConsentStateProtectorAdapter>();
         services.AddSingleton<IMicrosoft365TechnicalTokenStore, Microsoft365TechnicalTokenStoreAdapter>();
 

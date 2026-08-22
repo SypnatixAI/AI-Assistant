@@ -1,6 +1,7 @@
 using AssistantCore.ExternalServices;
 using AssistantCore.ExternalServices.Services.OpenAI;
 using AssistantCore.ExternalServices.Services.Microsoft;
+using AssistantCore.ExternalServices.Services.Azure;
 using AssistantCore.Repository.Domain.Entities;
 using AssistantCore.Service.Application.Services.Messages.AiModels.Providers.OpenAI;
 using AssistantCore.Service.Controllers;
@@ -192,6 +193,60 @@ public sealed class LayerDependencyTests
         Assert.Empty(violations);
     }
 
+    [Fact]
+    public void Given_Microsoft365SubscriptionService_When_ValidateMicrosoftExternalCallChain_Then_UsesAdapterAndExternalClients()
+    {
+        // Given
+        var serviceType = typeof(Microsoft365SubscriptionMaintenanceService);
+        var applicationClientType = typeof(IMicrosoft365SubscriptionClient);
+        var adapterType = typeof(Microsoft365SubscriptionClientAdapter);
+
+        // When
+        var violations = new List<string>();
+        if (!HasConstructorParameter(serviceType, applicationClientType))
+        {
+            violations.Add($"{serviceType.FullName} must depend on {applicationClientType.FullName}.");
+        }
+
+        if (!applicationClientType.IsAssignableFrom(adapterType))
+        {
+            violations.Add($"{adapterType.FullName} must implement {applicationClientType.FullName}.");
+        }
+
+        if (!HasConstructorParameter(adapterType, typeof(MicrosoftIdentityClient))
+            || !HasConstructorParameter(adapterType, typeof(MicrosoftGraphSubscriptionClient)))
+        {
+            violations.Add($"{adapterType.FullName} must depend on both Microsoft external clients.");
+        }
+
+        // Then
+        Assert.Empty(violations);
+    }
+
+    [Fact]
+    public void Given_Microsoft365SynchronizationPublisher_When_ValidateAzureExternalCallChain_Then_UsesAdapterAndExternalClient()
+    {
+        // Given
+        var applicationClientType = typeof(IMicrosoft365SynchronizationPublisher);
+        var adapterType = typeof(Microsoft365SynchronizationPublisherAdapter);
+        var externalClientType = typeof(AzureServiceBusPublisherClient);
+
+        // When
+        var violations = new List<string>();
+        if (!applicationClientType.IsAssignableFrom(adapterType))
+        {
+            violations.Add($"{adapterType.FullName} must implement {applicationClientType.FullName}.");
+        }
+
+        if (!HasConstructorParameter(adapterType, externalClientType))
+        {
+            violations.Add($"{adapterType.FullName} must depend on {externalClientType.FullName}.");
+        }
+
+        // Then
+        Assert.Empty(violations);
+    }
+
     private static IReadOnlyCollection<string> ValidateApplicationServiceDependencies(
         System.Reflection.Assembly serviceAssembly)
     {
@@ -271,6 +326,8 @@ public sealed class LayerDependencyTests
             .ShouldNot()
             .HaveDependencyOnAny(
                 "AssistantCore.ExternalServices",
+                "Azure.Identity",
+                "Azure.Messaging.ServiceBus",
                 "OpenAI.Responses",
                 "System.ClientModel")
             .GetResult();
@@ -300,6 +357,8 @@ public sealed class LayerDependencyTests
             .ShouldNot()
             .HaveDependencyOnAny(
                 "AssistantCore.ExternalServices.Services",
+                "Azure.Identity",
+                "Azure.Messaging.ServiceBus",
                 "OpenAI.Responses",
                 "System.ClientModel")
             .GetResult();
@@ -313,6 +372,8 @@ public sealed class LayerDependencyTests
         var result = Types.InAssembly(externalServicesAssembly)
             .That()
             .HaveDependencyOnAny(
+                "Azure.Identity",
+                "Azure.Messaging.ServiceBus",
                 "OpenAI.Responses",
                 "System.ClientModel")
             .Should()

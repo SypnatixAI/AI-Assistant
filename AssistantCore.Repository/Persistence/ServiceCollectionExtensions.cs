@@ -23,6 +23,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IConversationRepository, ConversationRepository>();
         services.AddScoped<IMicrosoft365ConnectionRepository, Microsoft365ConnectionRepository>();
         services.AddScoped<IMicrosoft365SourceDiscoveryRepository, Microsoft365SourceDiscoveryRepository>();
+        services.AddScoped<IMicrosoft365SubscriptionRepository, Microsoft365SubscriptionRepository>();
 
         return services;
     }

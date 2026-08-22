@@ -80,6 +80,13 @@ public sealed class Microsoft365PersistenceConfigurationTests
         Assert.NotNull(subscriptionType.FindProperty(nameof(Microsoft365Subscription.Resource)));
         Assert.Contains(subscriptionType.GetIndexes(), index =>
             index.IsUnique && HasProperties(index, nameof(Microsoft365Subscription.MicrosoftSubscriptionId)));
+        Assert.Contains(subscriptionType.GetIndexes(), index =>
+            index.IsUnique
+            && HasProperties(index, nameof(Microsoft365Subscription.Microsoft365SourceId))
+            && string.Equals(
+                index.GetFilter(),
+                "[Status] = 'Active'",
+                StringComparison.Ordinal));
 
         Assert.NotNull(synchronizationType);
         Assert.Contains(synchronizationType.GetIndexes(), index =>

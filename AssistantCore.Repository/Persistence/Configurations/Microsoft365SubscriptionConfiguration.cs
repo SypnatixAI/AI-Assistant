@@ -1,4 +1,5 @@
 using AssistantCore.Repository.Domain.Entities;
+using AssistantCore.Repository.Domain.Enums;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
@@ -33,5 +34,9 @@ public sealed class Microsoft365SubscriptionConfiguration : IEntityTypeConfigura
             .IsUnique()
             .HasFilter("[MicrosoftSubscriptionId] IS NOT NULL");
         builder.HasIndex(subscription => new { subscription.Microsoft365SourceId, subscription.Status });
+        builder.HasIndex(subscription => subscription.Microsoft365SourceId)
+            .IsUnique()
+            .HasDatabaseName("IX_Microsoft365Subscription_OneActivePerSource")
+            .HasFilter($"[Status] = '{Microsoft365SubscriptionStatus.Active}'");
     }
 }

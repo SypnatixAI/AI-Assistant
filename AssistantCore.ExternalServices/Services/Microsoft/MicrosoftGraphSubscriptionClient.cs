@@ -1,0 +1,126 @@
+using System.Net.Http.Headers;
+using System.Net.Http.Json;
+using System.Text.Json.Serialization;
+using AssistantCore.ExternalServices.Entities.Microsoft;
+
+namespace AssistantCore.ExternalServices.Services.Microsoft;
+
+public sealed class MicrosoftGraphSubscriptionClient(HttpClient httpClient)
+{
+    public async Task<MicrosoftGraphSubscription> CreateAsync(
+        string graphBaseUrl,
+        string accessToken,
+        string resource,
+        string notificationUrl,
+        DateTimeOffset expiresAt,
+        string clientState,
+        CancellationToken cancellationToken = default)
+    {
+        using var request = CreateAuthorizedRequest(
+            HttpMethod.Post,
+            $"{graphBaseUrl.TrimEnd('/')}/v1.0/subscriptions",
+            accessToken);
+        request.Headers.TryAddWithoutValidation("Prefer", "includesecuritywebhooks");
+        request.Content = JsonContent.Create(new CreateSubscriptionRequest(
+            ChangeType: "updated",
+            NotificationUrl: notificationUrl,
+            Resource: resource,
+            ExpirationDateTime: expiresAt,
+            ClientState: clientState));
+
+        using var response = await httpClient.SendAsync(request, cancellationToken);
+        return await ReadSubscriptionAsync(response, "creation", cancellationToken);
+    }
+
+    public async Task<MicrosoftGraphSubscription> RenewAsync(
+        string graphBaseUrl,
+        string accessToken,
+        string subscriptionId,
+        DateTimeOffset expiresAt,
+        CancellationToken cancellationToken = default)
+    {
+        using var request = CreateAuthorizedRequest(
+            HttpMethod.Patch,
+            $"{graphBaseUrl.TrimEnd('/')}/v1.0/subscriptions/{Uri.EscapeDataString(subscriptionId)}",
+            accessToken);
+        request.Content = JsonContent.Create(new RenewSubscriptionRequest(expiresAt));
+
+        using var response = await httpClient.SendAsync(request, cancellationToken);
+        return await ReadSubscriptionAsync(response, "renewal", cancellationToken);
+    }
+
+    public async Task DeleteAsync(
+        string graphBaseUrl,
+        string accessToken,
+        string subscriptionId,
+        CancellationToken cancellationToken = default)
+    {
+        using var request = CreateAuthorizedRequest(
+            HttpMethod.Delete,
+            $"{graphBaseUrl.TrimEnd('/')}/v1.0/subscriptions/{Uri.EscapeDataString(subscriptionId)}",
+            accessToken);
+        using var response = await httpClient.SendAsync(request, cancellationToken);
+        if (response.IsSuccessStatusCode || response.StatusCode == System.Net.HttpStatusCode.NotFound)
+        {
+            return;
+        }
+
+        throw new MicrosoftExternalException(
+            $"Microsoft Graph subscription deletion failed with status {(int)response.StatusCode}.",
+            statusCode: response.StatusCode);
+    }
+
+    private static HttpRequestMessage CreateAuthorizedRequest(
+        HttpMethod method,
+        string requestUri,
+        string accessToken)
+    {
+        var request = new HttpRequestMessage(method, requestUri);
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+        return request;
+    }
+
+    private static async Task<MicrosoftGraphSubscription> ReadSubscriptionAsync(
+        HttpResponseMessage response,
+        string operation,
+        CancellationToken cancellationToken)
+    {
+        if (!response.IsSuccessStatusCode)
+        {
+            throw new MicrosoftExternalException(
+                $"Microsoft Graph subscription {operation} failed with status {(int)response.StatusCode}.",
+                statusCode: response.StatusCode);
+        }
+
+        var payload = await response.Content.ReadFromJsonAsync<SubscriptionResponse>(cancellationToken)
+            ?? throw new MicrosoftExternalException(
+                $"Microsoft Graph subscription {operation} response was empty.");
+        if (string.IsNullOrWhiteSpace(payload.Id)
+            || string.IsNullOrWhiteSpace(payload.Resource)
+            || payload.ExpirationDateTime == default)
+        {
+            throw new MicrosoftExternalException(
+                $"Microsoft Graph subscription {operation} response was invalid.");
+        }
+
+        return new MicrosoftGraphSubscription(
+            payload.Id,
+            payload.Resource,
+            payload.ExpirationDateTime);
+    }
+
+    private sealed record CreateSubscriptionRequest(
+        [property: JsonPropertyName("changeType")] string ChangeType,
+        [property: JsonPropertyName("notificationUrl")] string NotificationUrl,
+        [property: JsonPropertyName("resource")] string Resource,
+        [property: JsonPropertyName("expirationDateTime")] DateTimeOffset ExpirationDateTime,
+        [property: JsonPropertyName("clientState")] string ClientState);
+
+    private sealed record RenewSubscriptionRequest(
+        [property: JsonPropertyName("expirationDateTime")] DateTimeOffset ExpirationDateTime);
+
+    private sealed record SubscriptionResponse(
+        [property: JsonPropertyName("id")] string Id,
+        [property: JsonPropertyName("resource")] string Resource,
+        [property: JsonPropertyName("expirationDateTime")] DateTimeOffset ExpirationDateTime);
+}

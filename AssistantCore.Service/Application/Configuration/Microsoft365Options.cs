@@ -15,4 +15,10 @@ public sealed class Microsoft365Options
     public string ConsentCallbackUrl { get; init; } = string.Empty;
 
     public int ConsentStateLifetimeMinutes { get; init; } = 10;
+
+    public string WebhookBaseUrl { get; init; } = string.Empty;
+
+    public int SubscriptionLifetimeHours { get; init; } = 48;
+
+    public int SubscriptionRenewalLeadTimeHours { get; init; } = 24;
 }
