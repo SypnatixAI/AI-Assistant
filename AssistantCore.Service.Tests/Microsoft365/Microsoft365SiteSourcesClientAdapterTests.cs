@@ -76,14 +76,14 @@ public sealed class Microsoft365SiteSourcesClientAdapterTests
         Assert.Null(result.RetryAfterAt);
     }
 
-    [Theory, AutoDomainData]
+    [Theory, InlineAutoDomainData(0)]
     public async Task Given_GraphThrottlingWithDelay_When_GetSiteSourcesAsync_Then_ReturnsRetryDelay(
+        int retryAfterSeconds,
         string accessToken,
-        string siteId,
-        ushort retryAfterSeconds)
+        string siteId)
     {
         // Given
-        var retryAfter = TimeSpan.FromSeconds(retryAfterSeconds + 1);
+        var retryAfter = TimeSpan.FromSeconds(retryAfterSeconds);
         using var httpClient = new HttpClient(new StubHttpMessageHandler(_ =>
             CreateThrottledResponse(new RetryConditionHeaderValue(retryAfter))));
         var adapter = CreateAdapter(httpClient);
@@ -100,13 +100,14 @@ public sealed class Microsoft365SiteSourcesClientAdapterTests
         Assert.Null(result.RetryAfterAt);
     }
 
-    [Theory, AutoDomainData]
+    [Theory, InlineAutoDomainData(0)]
     public async Task Given_GraphThrottlingWithDate_When_GetSiteSourcesAsync_Then_ReturnsRetryDate(
+        int secondsAfterUnixEpoch,
         string accessToken,
-        string siteId,
-        DateTimeOffset retryAfterAt)
+        string siteId)
     {
         // Given
+        var retryAfterAt = DateTimeOffset.UnixEpoch.AddSeconds(secondsAfterUnixEpoch);
         using var httpClient = new HttpClient(new StubHttpMessageHandler(_ =>
             CreateThrottledResponse(new RetryConditionHeaderValue(retryAfterAt))));
         var adapter = CreateAdapter(httpClient);

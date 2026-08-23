@@ -26,7 +26,7 @@ public sealed class Microsoft365IngestionWorker(
         }
 
         logger.LogInformation(
-            "Microsoft 365 ingestion worker started subscription maintenance.");
+            "Microsoft 365 ingestion worker started subscription maintenance and reconciliation.");
         using var timer = new PeriodicTimer(
             TimeSpan.FromSeconds(options.Value.MaintenanceIntervalSeconds));
         do
@@ -45,6 +45,22 @@ public sealed class Microsoft365IngestionWorker(
             catch (Exception exception)
             {
                 logger.LogError(exception, "Microsoft 365 subscription maintenance cycle failed.");
+            }
+
+            try
+            {
+                await using var scope = scopeFactory.CreateAsyncScope();
+                var reconciliationService = scope.ServiceProvider
+                    .GetRequiredService<IMicrosoft365ReconciliationService>();
+                await reconciliationService.RunReconciliationAsync(stoppingToken);
+            }
+            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+            {
+                break;
+            }
+            catch (Exception exception)
+            {
+                logger.LogError(exception, "Microsoft 365 reconciliation cycle failed.");
             }
         }
         while (await timer.WaitForNextTickAsync(stoppingToken));

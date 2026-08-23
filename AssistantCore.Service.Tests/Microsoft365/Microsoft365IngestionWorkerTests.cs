@@ -15,9 +15,11 @@ public sealed class Microsoft365IngestionWorkerTests
         // Given
         var orchestrator = new RecordingIngestionOrchestrator();
         var maintenanceService = new RecordingSubscriptionMaintenanceService();
+        var reconciliationService = new RecordingReconciliationService();
         var services = new ServiceCollection()
             .AddSingleton<IMicrosoft365IngestionOrchestrator>(orchestrator)
             .AddSingleton<IMicrosoft365SubscriptionMaintenanceService>(maintenanceService)
+            .AddSingleton<IMicrosoft365ReconciliationService>(reconciliationService)
             .BuildServiceProvider();
         var worker = new Microsoft365IngestionWorker(
             services.GetRequiredService<IServiceScopeFactory>(),
@@ -43,8 +45,10 @@ public sealed class Microsoft365IngestionWorkerTests
     {
         // Given
         var maintenanceService = new RecordingSubscriptionMaintenanceService();
+        var reconciliationService = new RecordingReconciliationService();
         var services = new ServiceCollection()
             .AddSingleton<IMicrosoft365SubscriptionMaintenanceService>(maintenanceService)
+            .AddSingleton<IMicrosoft365ReconciliationService>(reconciliationService)
             .BuildServiceProvider();
         var worker = new Microsoft365IngestionWorker(
             services.GetRequiredService<IServiceScopeFactory>(),
@@ -62,6 +66,35 @@ public sealed class Microsoft365IngestionWorkerTests
 
         // Then
         Assert.Equal(1, maintenanceService.CallCount);
+    }
+
+    [Theory, AutoDomainData]
+    public async Task Given_TheWorkerStarts_When_RunReconciliationAsync_Then_DueSourcesAreProcessed(
+        bool _)
+    {
+        // Given
+        var maintenanceService = new RecordingSubscriptionMaintenanceService();
+        var reconciliationService = new RecordingReconciliationService();
+        var services = new ServiceCollection()
+            .AddSingleton<IMicrosoft365SubscriptionMaintenanceService>(maintenanceService)
+            .AddSingleton<IMicrosoft365ReconciliationService>(reconciliationService)
+            .BuildServiceProvider();
+        var worker = new Microsoft365IngestionWorker(
+            services.GetRequiredService<IServiceScopeFactory>(),
+            Options.Create(new Microsoft365WorkerOptions
+            {
+                RunStartupConnectionCheck = false,
+                MaintenanceIntervalSeconds = 300
+            }),
+            NullLogger<Microsoft365IngestionWorker>.Instance);
+
+        // When
+        await worker.StartAsync(CancellationToken.None);
+        await reconciliationService.WaitUntilRunAsync().WaitAsync(TimeSpan.FromSeconds(1));
+        await worker.StopAsync(CancellationToken.None);
+
+        // Then
+        Assert.Equal(1, reconciliationService.CallCount);
     }
 
     private sealed class RecordingIngestionOrchestrator : IMicrosoft365IngestionOrchestrator
@@ -94,6 +127,23 @@ public sealed class Microsoft365IngestionWorkerTests
         public Task WaitUntilRunAsync() => ran.Task;
 
         public Task RunMaintenanceAsync(CancellationToken cancellationToken = default)
+        {
+            CallCount++;
+            ran.TrySetResult();
+            return Task.CompletedTask;
+        }
+    }
+
+    private sealed class RecordingReconciliationService : IMicrosoft365ReconciliationService
+    {
+        private readonly TaskCompletionSource ran = new(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public int CallCount { get; private set; }
+
+        public Task WaitUntilRunAsync() => ran.Task;
+
+        public Task RunReconciliationAsync(CancellationToken cancellationToken = default)
         {
             CallCount++;
             ran.TrySetResult();

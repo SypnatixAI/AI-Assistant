@@ -27,6 +27,10 @@ public sealed class AssistantCoreDbContext(DbContextOptions<AssistantCoreDbConte
 
     public DbSet<Microsoft365Synchronization> Microsoft365Synchronizations => Set<Microsoft365Synchronization>();
 
+    public DbSet<Microsoft365ListItemWork> Microsoft365ListItemWorks => Set<Microsoft365ListItemWork>();
+
+    public DbSet<Microsoft365DocumentWork> Microsoft365DocumentWorks => Set<Microsoft365DocumentWork>();
+
     public DbSet<Conversation> Conversations => Set<Conversation>();
 
     public DbSet<Message> Messages => Set<Message>();

@@ -132,6 +132,62 @@ public sealed class ApplicationStartupTests
         Assert.Contains("Microsoft365", exception.Message, StringComparison.Ordinal);
     }
 
+    [Theory, InlineAutoDomainData(0)]
+    public void Given_AnInvalidSynchronizationLease_When_CreateClient_Then_Microsoft365StartupFails(
+        int synchronizationLeaseMinutes,
+        string openAiSecret)
+    {
+        // Given
+        using var factory = new WebApplicationFactory<Program>()
+            .WithWebHostBuilder(builder =>
+            {
+                builder.UseEnvironment(Environments.Development);
+                builder.ConfigureAppConfiguration(configuration =>
+                    configuration.AddInMemoryCollection(
+                        new Dictionary<string, string?>
+                        {
+                            ["AiModels:Providers:OpenAI:ApiKey"] = openAiSecret,
+                            ["Microsoft365:ClientSecret"] = "integration-test-secret",
+                            ["Microsoft365:SynchronizationLeaseMinutes"] = synchronizationLeaseMinutes.ToString()
+                        }));
+            });
+
+        // When
+        var exception = Assert.Throws<OptionsValidationException>(() =>
+            factory.CreateClient());
+
+        // Then
+        Assert.Contains("Microsoft365", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Theory, InlineAutoDomainData(0)]
+    public void Given_AnInvalidSynchronizationInterval_When_CreateClient_Then_Microsoft365StartupFails(
+        int synchronizationIntervalMinutes,
+        string openAiSecret)
+    {
+        // Given
+        using var factory = new WebApplicationFactory<Program>()
+            .WithWebHostBuilder(builder =>
+            {
+                builder.UseEnvironment(Environments.Development);
+                builder.ConfigureAppConfiguration(configuration =>
+                    configuration.AddInMemoryCollection(
+                        new Dictionary<string, string?>
+                        {
+                            ["AiModels:Providers:OpenAI:ApiKey"] = openAiSecret,
+                            ["Microsoft365:ClientSecret"] = "integration-test-secret",
+                            ["Microsoft365:SynchronizationIntervalMinutes"] = synchronizationIntervalMinutes.ToString()
+                        }));
+            });
+
+        // When
+        var exception = Assert.Throws<OptionsValidationException>(() =>
+            factory.CreateClient());
+
+        // Then
+        Assert.Contains("Microsoft365", exception.Message, StringComparison.Ordinal);
+    }
+
     [Fact]
     public async Task Given_ValidDevelopmentConfiguration_When_StartingApplication_Then_RootEndpointRespondsWithoutError()
     {

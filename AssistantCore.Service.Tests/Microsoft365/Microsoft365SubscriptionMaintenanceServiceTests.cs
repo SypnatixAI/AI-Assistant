@@ -246,6 +246,11 @@ public sealed class Microsoft365SubscriptionMaintenanceServiceTests
             CancellationToken cancellationToken = default) =>
             Task.FromResult<IReadOnlyCollection<Microsoft365Subscription>>([subscription]);
 
+        public Task<IReadOnlyCollection<Microsoft365Subscription>> GetReconciliationCandidatesAsync(
+            DateTimeOffset dueAt,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult<IReadOnlyCollection<Microsoft365Subscription>>([]);
+
         public Task<Microsoft365Subscription?> FindActiveForNotificationAsync(
             string microsoftSubscriptionId,
             CancellationToken cancellationToken = default) =>

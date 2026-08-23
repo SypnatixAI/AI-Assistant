@@ -6,5 +6,6 @@ public enum Microsoft365SourceStatus
     Enabled,
     Disabled,
     Error,
-    Unavailable
+    Unavailable,
+    FullResyncRequired
 }

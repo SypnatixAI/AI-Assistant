@@ -20,7 +20,7 @@ public sealed class Microsoft365SourceConfiguration : IEntityTypeConfiguration<M
         builder.Property(source => source.WebUrl).HasMaxLength(2048);
         builder.Property(source => source.Status).HasConversion<string>().HasMaxLength(30).IsRequired();
         builder.Property(source => source.StatusBeforeUnavailable).HasConversion<string>().HasMaxLength(30);
-        builder.Property(source => source.DeltaLink).HasMaxLength(4000);
+        builder.Property(source => source.DeltaLink);
         builder.Property(source => source.LastErrorCode).HasMaxLength(100);
 
         builder.HasOne(source => source.Microsoft365Connection)

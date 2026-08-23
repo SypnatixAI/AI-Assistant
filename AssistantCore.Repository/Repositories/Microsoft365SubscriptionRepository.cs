@@ -22,6 +22,26 @@ public sealed class Microsoft365SubscriptionRepository(AssistantCoreDbContext db
             .ThenBy(subscription => subscription.CreatedAt)
             .ToListAsync(cancellationToken);
 
+    public async Task<IReadOnlyCollection<Microsoft365Subscription>> GetReconciliationCandidatesAsync(
+        DateTimeOffset dueAt,
+        CancellationToken cancellationToken = default) =>
+        await SubscriptionQuery()
+            .Where(subscription =>
+                subscription.Status == Microsoft365SubscriptionStatus.Active
+                && subscription.ExpiresAt > dueAt
+                && subscription.Microsoft365Source.Status == Microsoft365SourceStatus.Enabled
+                && subscription.Microsoft365Source.IsIndexed
+                && subscription.Microsoft365Source.DeltaLink != null
+                && (subscription.Microsoft365Source.NextSynchronizationAt == null
+                    || subscription.Microsoft365Source.NextSynchronizationAt <= dueAt)
+                && subscription.Microsoft365Source.Microsoft365Connection.Status
+                    == Microsoft365ConnectionStatus.Active
+                && subscription.Microsoft365Source.Microsoft365Connection.OrganizationConnector.Status
+                    == RecordStatus.Active)
+            .OrderBy(subscription => subscription.Microsoft365Source.NextSynchronizationAt)
+            .ThenBy(subscription => subscription.Microsoft365SourceId)
+            .ToListAsync(cancellationToken);
+
     public Task<Microsoft365Subscription?> FindActiveForNotificationAsync(
         string microsoftSubscriptionId,
         CancellationToken cancellationToken = default) =>

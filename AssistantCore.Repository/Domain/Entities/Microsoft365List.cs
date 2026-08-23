@@ -10,6 +10,10 @@ public sealed class Microsoft365List : Microsoft365Source
 
     public string ListId { get; set; } = string.Empty;
 
+    public string? SchemaFingerprint { get; set; }
+
+    public bool RequiresItemReprocessing { get; set; }
+
     public Organization Organization { get; set; } = null!;
 
     public OrganizationConnector OrganizationConnector { get; set; } = null!;
