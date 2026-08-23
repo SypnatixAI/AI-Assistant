@@ -671,8 +671,12 @@ expirante revient dans le callback et ne peut être consommée qu’une fois.
 - état `Discovered`, `Enabled`, `Disabled` ou `Error`;
 - indicateur d’indexation;
 - empreinte du schéma de colonnes;
+- indicateur persistant demandant le retraitement des éléments lorsque cette
+  empreinte change après son initialisation;
 - `deltaLink` opaque retourné par Microsoft Graph;
 - dernière synchronisation réussie;
+- dernière tentative de synchronisation;
+- identifiant et expiration du lease de synchronisation en cours;
 - prochaine réconciliation prévue;
 - dernière erreur.
 
@@ -835,6 +839,13 @@ Lors de la première synchronisation d’une liste :
    `deleted`;
 7. enregistrer le `@odata.deltaLink` seulement lorsque toutes les pages et tous
    les travaux ont été enregistrés durablement.
+
+Une seule page est conservée en mémoire à la fois. Avant de demander la page
+suivante, le worker enregistre durablement les travaux de la page courante.
+Un travail normal conserve les identifiants, l’`eTag`, les dates, l’URL et les
+champs nécessaires; un travail de suppression conserve seulement les
+identifiants requis pour nettoyer l’index. Les champs ne sont jamais écrits
+dans les logs. Une clé déterministe empêche un rejeu de créer un doublon.
 
 Exemple : si la deuxième page Graph échoue, le nouveau `deltaLink` n’est pas
 enregistré. La prochaine exécution reprend depuis le dernier point confirmé et
@@ -1445,6 +1456,7 @@ Configuration non secrète attendue :
     "ConsentCallbackUrl": "https://<api>/api/microsoft365/consent/callback",
     "ConsentStateLifetimeMinutes": 10,
     "WebhookBaseUrl": "https://<url-publique>",
+    "SynchronizationLeaseMinutes": 15,
     "SynchronizationIntervalMinutes": 15,
     "PermissionReconciliationIntervalHours": 6,
     "MaximumFileSizeBytes": 20971520,

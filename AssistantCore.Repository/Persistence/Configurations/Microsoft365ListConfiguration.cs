@@ -14,6 +14,8 @@ public sealed class Microsoft365ListConfiguration : IEntityTypeConfiguration<Mic
         builder.Property(list => list.OrganizationConnectorId).IsRequired();
         builder.Property(list => list.SiteId).HasMaxLength(400).IsRequired();
         builder.Property(list => list.ListId).HasMaxLength(400).IsRequired();
+        builder.Property(list => list.SchemaFingerprint).HasMaxLength(64);
+        builder.Property(list => list.RequiresItemReprocessing).IsRequired();
 
         builder.HasOne(list => list.Organization)
             .WithMany()

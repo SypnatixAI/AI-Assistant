@@ -24,6 +24,8 @@ public sealed class Microsoft365PersistenceConfigurationTests
         var listType = dbContext.Model.FindEntityType(typeof(Microsoft365List));
         var subscriptionType = dbContext.Model.FindEntityType(typeof(Microsoft365Subscription));
         var synchronizationType = dbContext.Model.FindEntityType(typeof(Microsoft365Synchronization));
+        var listItemWorkType = dbContext.Model.FindEntityType(typeof(Microsoft365ListItemWork));
+        var documentWorkType = dbContext.Model.FindEntityType(typeof(Microsoft365DocumentWork));
 
         // Then
         Assert.NotNull(connectionType);
@@ -67,6 +69,10 @@ public sealed class Microsoft365PersistenceConfigurationTests
         Assert.NotNull(listType.FindProperty(nameof(Microsoft365List.WebUrl)));
         Assert.NotNull(listType.FindProperty(nameof(Microsoft365List.Status)));
         Assert.NotNull(listType.FindProperty(nameof(Microsoft365List.IsIndexed)));
+        Assert.Equal(
+            64,
+            listType.FindProperty(nameof(Microsoft365List.SchemaFingerprint))?.GetMaxLength());
+        Assert.NotNull(listType.FindProperty(nameof(Microsoft365List.RequiresItemReprocessing)));
         Assert.Contains(listType.GetIndexes(), index =>
             index.IsUnique && HasProperties(
                 index,
@@ -91,6 +97,16 @@ public sealed class Microsoft365PersistenceConfigurationTests
         Assert.NotNull(synchronizationType);
         Assert.Contains(synchronizationType.GetIndexes(), index =>
             index.IsUnique && HasProperties(index, nameof(Microsoft365Synchronization.Microsoft365SourceId)));
+
+        Assert.NotNull(listItemWorkType);
+        Assert.Contains(listItemWorkType.GetIndexes(), index =>
+            index.IsUnique
+            && HasProperties(index, nameof(Microsoft365ListItemWork.DeduplicationKey)));
+
+        Assert.NotNull(documentWorkType);
+        Assert.Contains(documentWorkType.GetIndexes(), index =>
+            index.IsUnique
+            && HasProperties(index, nameof(Microsoft365DocumentWork.DeduplicationKey)));
     }
 
     private static bool HasProperties(

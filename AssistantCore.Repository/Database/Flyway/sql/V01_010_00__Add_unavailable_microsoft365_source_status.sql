@@ -16,7 +16,14 @@ END;
 
 ALTER TABLE [dbo].[Microsoft365Source]
     ADD CONSTRAINT [CK_Microsoft365Source_Status]
-        CHECK ([Status] IN (N'Discovered', N'Enabled', N'Disabled', N'Error', N'Unavailable'));
+        CHECK ([Status] IN (
+            N'Discovered',
+            N'Enabled',
+            N'Disabled',
+            N'Error',
+            N'Unavailable',
+            N'FullResyncRequired'
+        ));
 
 ALTER TABLE [dbo].[Microsoft365Source]
     ADD CONSTRAINT [CK_Microsoft365Source_StatusBeforeUnavailable]

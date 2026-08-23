@@ -73,9 +73,16 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IMicrosoft365IngestionOrchestrator, Microsoft365IngestionOrchestrator>();
         services.AddScoped<IMicrosoft365ListActivationService, Microsoft365ListActivationService>();
         services.AddScoped<IMicrosoft365ListConsultationService, Microsoft365ListConsultationService>();
+        services.AddScoped<IMicrosoft365ListSynchronizationService, Microsoft365ListSynchronizationService>();
+        services.AddScoped<IMicrosoft365DriveSynchronizationService, Microsoft365DriveSynchronizationService>();
         services.AddScoped<IMicrosoft365SiteSourcesDiscoveryService, Microsoft365SiteSourcesDiscoveryService>();
         services.AddScoped<IMicrosoft365SubscriptionMaintenanceService, Microsoft365SubscriptionMaintenanceService>();
+        services.AddScoped<IMicrosoft365ReconciliationService, Microsoft365ReconciliationService>();
         services.AddScoped<IMicrosoftGraphNotificationService, MicrosoftGraphNotificationService>();
+        services.AddSingleton<IMicrosoft365ListSchemaFingerprintGenerator, Microsoft365ListSchemaFingerprintGenerator>();
+        services.AddSingleton<IMicrosoft365ListItemWorkFactory, Microsoft365ListItemWorkFactory>();
+        services.AddSingleton<IMicrosoft365DocumentSupportPolicy, Microsoft365DocumentSupportPolicy>();
+        services.AddSingleton<IMicrosoft365DocumentWorkFactory, Microsoft365DocumentWorkFactory>();
         services.AddSingleton<TimeProvider>(TimeProvider.System);
         return services;
     }

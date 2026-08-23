@@ -32,9 +32,15 @@ public class Microsoft365Source
 
     public DateTimeOffset? LastSuccessfulSynchronizationAt { get; set; }
 
+    public DateTimeOffset? LastSynchronizationAttemptAt { get; set; }
+
     public DateTimeOffset? NextSynchronizationAt { get; set; }
 
     public string? LastErrorCode { get; set; }
+
+    public Guid? SynchronizationLeaseId { get; set; }
+
+    public DateTimeOffset? SynchronizationLeaseExpiresAt { get; set; }
 
     public Microsoft365Connection Microsoft365Connection { get; set; } = null!;
 

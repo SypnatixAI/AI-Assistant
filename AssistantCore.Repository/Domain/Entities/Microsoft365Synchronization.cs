@@ -14,6 +14,16 @@ public sealed class Microsoft365Synchronization
 
     public int AttemptCount { get; set; }
 
+    public int CreatedCount { get; set; }
+
+    public int ModifiedCount { get; set; }
+
+    public int DeletedCount { get; set; }
+
+    public int IgnoredCount { get; set; }
+
+    public int FailedCount { get; set; }
+
     public DateTimeOffset RequestedAt { get; set; }
 
     public DateTimeOffset? StartedAt { get; set; }

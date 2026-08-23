@@ -8,6 +8,10 @@ public interface IMicrosoft365SubscriptionRepository
         DateTimeOffset renewBefore,
         CancellationToken cancellationToken = default);
 
+    Task<IReadOnlyCollection<Microsoft365Subscription>> GetReconciliationCandidatesAsync(
+        DateTimeOffset dueAt,
+        CancellationToken cancellationToken = default);
+
     Task<Microsoft365Subscription?> FindActiveForNotificationAsync(
         string microsoftSubscriptionId,
         CancellationToken cancellationToken = default);

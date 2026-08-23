@@ -25,8 +25,10 @@ public static class Microsoft365ServiceCollectionExtensions
                     && options.ConsentStateLifetimeMinutes is > 0 and <= 60
                     && options.SubscriptionLifetimeHours is > 1 and <= 48
                     && options.SubscriptionRenewalLeadTimeHours > 0
-                    && options.SubscriptionRenewalLeadTimeHours < options.SubscriptionLifetimeHours,
-                "Microsoft365 requires HTTPS URLs, credentials, a valid consent lifetime, and valid subscription renewal settings.")
+                    && options.SubscriptionRenewalLeadTimeHours < options.SubscriptionLifetimeHours
+                    && options.SynchronizationLeaseMinutes is > 0 and <= 60
+                    && options.SynchronizationIntervalMinutes > 0,
+                "Microsoft365 requires HTTPS URLs, credentials, valid lifetimes, and valid subscription renewal settings.")
             .ValidateOnStart();
 
         services.AddOptions<ServiceBusOptions>()
@@ -42,9 +44,15 @@ public static class Microsoft365ServiceCollectionExtensions
         services.AddMemoryCache();
         services.AddHttpClient<MicrosoftIdentityClient>();
         services.AddHttpClient<MicrosoftGraphClient>();
+        services.AddHttpClient<MicrosoftGraphListSchemaClient>();
+        services.AddHttpClient<MicrosoftGraphListItemDeltaClient>();
+        services.AddHttpClient<MicrosoftGraphDriveItemDeltaClient>();
         services.AddHttpClient<MicrosoftGraphSiteSourcesClient>();
         services.AddHttpClient<MicrosoftGraphSubscriptionClient>();
         services.AddScoped<IMicrosoft365ConsentClient, Microsoft365ConsentClientAdapter>();
+        services.AddScoped<IMicrosoft365ListItemDeltaClient, Microsoft365ListItemDeltaClientAdapter>();
+        services.AddScoped<IMicrosoft365DriveItemDeltaClient, Microsoft365DriveItemDeltaClientAdapter>();
+        services.AddScoped<IMicrosoft365ListSchemaClient, Microsoft365ListSchemaClientAdapter>();
         services.AddScoped<IMicrosoft365SiteSourcesClient, Microsoft365SiteSourcesClientAdapter>();
         services.AddScoped<IMicrosoft365SubscriptionClient, Microsoft365SubscriptionClientAdapter>();
         services.AddSingleton<IMicrosoft365ClientStateProtector, Microsoft365ClientStateProtectorAdapter>();

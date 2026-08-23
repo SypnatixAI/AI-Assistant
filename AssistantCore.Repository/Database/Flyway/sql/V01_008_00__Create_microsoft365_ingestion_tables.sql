@@ -104,6 +104,11 @@ BEGIN
         [Type] NVARCHAR(20) NOT NULL,
         [Status] NVARCHAR(30) NOT NULL,
         [AttemptCount] INT NOT NULL,
+        [CreatedCount] INT NOT NULL,
+        [ModifiedCount] INT NOT NULL,
+        [DeletedCount] INT NOT NULL,
+        [IgnoredCount] INT NOT NULL,
+        [FailedCount] INT NOT NULL,
         [RequestedAt] DATETIMEOFFSET NOT NULL,
         [StartedAt] DATETIMEOFFSET NULL,
         [CompletedAt] DATETIMEOFFSET NULL,
@@ -116,7 +121,15 @@ BEGIN
         CONSTRAINT [CK_Microsoft365Synchronization_Status]
             CHECK ([Status] IN (N'Pending', N'Running', N'Succeeded', N'TemporaryFailure', N'PermanentFailure', N'Cancelled')),
         CONSTRAINT [CK_Microsoft365Synchronization_AttemptCount]
-            CHECK ([AttemptCount] >= 0)
+            CHECK ([AttemptCount] >= 0),
+        CONSTRAINT [CK_Microsoft365Synchronization_Counters]
+            CHECK (
+                [CreatedCount] >= 0
+                AND [ModifiedCount] >= 0
+                AND [DeletedCount] >= 0
+                AND [IgnoredCount] >= 0
+                AND [FailedCount] >= 0
+            )
     );
 
     CREATE INDEX [IX_Microsoft365Synchronization_Source_Status]

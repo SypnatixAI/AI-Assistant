@@ -21,4 +21,8 @@ public sealed class Microsoft365Options
     public int SubscriptionLifetimeHours { get; init; } = 48;
 
     public int SubscriptionRenewalLeadTimeHours { get; init; } = 24;
+
+    public int SynchronizationLeaseMinutes { get; init; } = 15;
+
+    public int SynchronizationIntervalMinutes { get; init; } = 15;
 }

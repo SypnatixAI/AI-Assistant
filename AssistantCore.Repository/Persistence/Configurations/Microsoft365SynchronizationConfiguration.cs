@@ -16,6 +16,11 @@ public sealed class Microsoft365SynchronizationConfiguration : IEntityTypeConfig
         builder.Property(synchronization => synchronization.Type).HasConversion<string>().HasMaxLength(20).IsRequired();
         builder.Property(synchronization => synchronization.Status).HasConversion<string>().HasMaxLength(30).IsRequired();
         builder.Property(synchronization => synchronization.AttemptCount).IsRequired();
+        builder.Property(synchronization => synchronization.CreatedCount).IsRequired();
+        builder.Property(synchronization => synchronization.ModifiedCount).IsRequired();
+        builder.Property(synchronization => synchronization.DeletedCount).IsRequired();
+        builder.Property(synchronization => synchronization.IgnoredCount).IsRequired();
+        builder.Property(synchronization => synchronization.FailedCount).IsRequired();
         builder.Property(synchronization => synchronization.LastErrorCode).HasMaxLength(100);
 
         builder.HasOne(synchronization => synchronization.Microsoft365Source)
