@@ -44,7 +44,7 @@ public sealed class Microsoft365SearchRepositoryTests
                 }))
             };
         }));
-        var repository = new Microsoft365SearchRepository(
+        var repository = new Microsoft365SearchRepositoryAdapter(
             new AzureAiSearchPassageSearchClient(httpClient),
             Options.Create(new AzureAiSearchOptions
             {

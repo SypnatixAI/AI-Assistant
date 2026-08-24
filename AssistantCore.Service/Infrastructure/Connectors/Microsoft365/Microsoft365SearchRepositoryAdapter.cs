@@ -6,7 +6,7 @@ using Microsoft.Extensions.Options;
 
 namespace AssistantCore.Service.Infrastructure.Connectors.Microsoft365;
 
-public sealed class Microsoft365SearchRepository(
+public sealed class Microsoft365SearchRepositoryAdapter(
     AzureAiSearchPassageSearchClient client,
     IOptions<AzureAiSearchOptions> options) : IMicrosoft365SearchRepository
 {

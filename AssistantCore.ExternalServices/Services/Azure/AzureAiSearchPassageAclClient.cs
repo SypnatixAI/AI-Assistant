@@ -21,7 +21,7 @@ public sealed class AzureAiSearchPassageAclClient
     {
     }
 
-    public AzureAiSearchPassageAclClient(HttpClient httpClient, TokenCredential credential)
+    internal AzureAiSearchPassageAclClient(HttpClient httpClient, TokenCredential credential)
     {
         this.httpClient = httpClient;
         this.credential = credential;
