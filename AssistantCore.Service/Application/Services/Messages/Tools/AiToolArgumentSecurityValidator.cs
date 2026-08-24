@@ -22,7 +22,12 @@ public sealed class AiToolArgumentSecurityValidator : IAiToolArgumentSecurityVal
             "index",
             "indexName",
             "filter",
-            "odataFilter"
+            "odataFilter",
+            "allowedUserIds",
+            "allowedGroupIds",
+            "allowedSharePointGroupIds",
+            "hasAnonymousLink",
+            "aclFingerprint"
         ],
         StringComparer.OrdinalIgnoreCase);
 

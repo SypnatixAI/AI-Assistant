@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using AssistantCore.Ingestion.Worker;
 using AssistantCore.Service.Application.Services.Microsoft365;
 using Microsoft.Extensions.DependencyInjection;
@@ -14,10 +15,12 @@ public sealed class Microsoft365IngestionWorkerTests
     {
         // Given
         var orchestrator = new RecordingIngestionOrchestrator();
+        var aclReconciliationService = new RecordingAclReconciliationService();
         var maintenanceService = new RecordingSubscriptionMaintenanceService();
         var reconciliationService = new RecordingReconciliationService();
         var services = new ServiceCollection()
             .AddSingleton<IMicrosoft365IngestionOrchestrator>(orchestrator)
+            .AddSingleton<IMicrosoft365AclReconciliationService>(aclReconciliationService)
             .AddSingleton<IMicrosoft365SubscriptionMaintenanceService>(maintenanceService)
             .AddSingleton<IMicrosoft365ReconciliationService>(reconciliationService)
             .BuildServiceProvider();
@@ -46,7 +49,9 @@ public sealed class Microsoft365IngestionWorkerTests
         // Given
         var maintenanceService = new RecordingSubscriptionMaintenanceService();
         var reconciliationService = new RecordingReconciliationService();
+        var aclReconciliationService = new RecordingAclReconciliationService();
         var services = new ServiceCollection()
+            .AddSingleton<IMicrosoft365AclReconciliationService>(aclReconciliationService)
             .AddSingleton<IMicrosoft365SubscriptionMaintenanceService>(maintenanceService)
             .AddSingleton<IMicrosoft365ReconciliationService>(reconciliationService)
             .BuildServiceProvider();
@@ -66,6 +71,7 @@ public sealed class Microsoft365IngestionWorkerTests
 
         // Then
         Assert.Equal(1, maintenanceService.CallCount);
+        Assert.True(aclReconciliationService.CompletedBefore(maintenanceService.FirstRunAt));
     }
 
     [Theory, AutoDomainData]
@@ -75,7 +81,9 @@ public sealed class Microsoft365IngestionWorkerTests
         // Given
         var maintenanceService = new RecordingSubscriptionMaintenanceService();
         var reconciliationService = new RecordingReconciliationService();
+        var aclReconciliationService = new RecordingAclReconciliationService();
         var services = new ServiceCollection()
+            .AddSingleton<IMicrosoft365AclReconciliationService>(aclReconciliationService)
             .AddSingleton<IMicrosoft365SubscriptionMaintenanceService>(maintenanceService)
             .AddSingleton<IMicrosoft365ReconciliationService>(reconciliationService)
             .BuildServiceProvider();
@@ -95,6 +103,7 @@ public sealed class Microsoft365IngestionWorkerTests
 
         // Then
         Assert.Equal(1, reconciliationService.CallCount);
+        Assert.True(aclReconciliationService.CompletedBefore(reconciliationService.FirstRunAt));
     }
 
     private sealed class RecordingIngestionOrchestrator : IMicrosoft365IngestionOrchestrator
@@ -124,10 +133,13 @@ public sealed class Microsoft365IngestionWorkerTests
 
         public int CallCount { get; private set; }
 
+        public long? FirstRunAt { get; private set; }
+
         public Task WaitUntilRunAsync() => ran.Task;
 
         public Task RunMaintenanceAsync(CancellationToken cancellationToken = default)
         {
+            FirstRunAt ??= Stopwatch.GetTimestamp();
             CallCount++;
             ran.TrySetResult();
             return Task.CompletedTask;
@@ -141,13 +153,32 @@ public sealed class Microsoft365IngestionWorkerTests
 
         public int CallCount { get; private set; }
 
+        public long? FirstRunAt { get; private set; }
+
         public Task WaitUntilRunAsync() => ran.Task;
 
         public Task RunReconciliationAsync(CancellationToken cancellationToken = default)
         {
+            FirstRunAt ??= Stopwatch.GetTimestamp();
             CallCount++;
             ran.TrySetResult();
             return Task.CompletedTask;
         }
+    }
+
+    private sealed class RecordingAclReconciliationService : IMicrosoft365AclReconciliationService
+    {
+        private long? completedAt;
+
+        public Task RunAsync(CancellationToken cancellationToken = default)
+        {
+            completedAt = Stopwatch.GetTimestamp();
+            return Task.CompletedTask;
+        }
+
+        public bool CompletedBefore(long? otherOperationAt) =>
+            completedAt is not null
+            && otherOperationAt is not null
+            && completedAt <= otherOperationAt;
     }
 }

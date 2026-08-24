@@ -1,11 +1,11 @@
 using AssistantCore.Repository.Persistence;
 using AssistantCore.Service.Application.Models.Messages.Connectors.InternalData;
-using AssistantCore.Service.Application.Models.Messages.Tools;
 using AssistantCore.Service.Application.Services.Messages.Connectors;
 using AssistantCore.Service.Application.Services.Messages.Connectors.InternalData;
 using AssistantCore.Service.Application.Services.Messages.Evidence;
 using AssistantCore.Service.Application.Services.Messages.Tools;
 using AssistantCore.Service.Infrastructure.Connectors;
+using AssistantCore.Service.Infrastructure.Connectors.InternalData;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -45,7 +45,9 @@ public sealed class ConnectorServiceCollectionExtensionsTests
         Assert.NotNull(scope.ServiceProvider.GetRequiredService<IInternalDataSearchRepository>());
         Assert.NotNull(scope.ServiceProvider.GetRequiredService<IInternalDataConnector>());
         Assert.Contains(
-            scope.ServiceProvider.GetServices<IAiToolExecutionHandler>(),
-            handler => handler.ToolName == AiToolNames.SearchInternalData);
+            services,
+            descriptor =>
+                descriptor.ServiceType == typeof(IAiToolExecutionHandler)
+                && descriptor.ImplementationType == typeof(InternalDataToolExecutionHandler));
     }
 }

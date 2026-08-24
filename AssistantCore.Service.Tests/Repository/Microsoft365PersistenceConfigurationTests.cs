@@ -26,6 +26,8 @@ public sealed class Microsoft365PersistenceConfigurationTests
         var synchronizationType = dbContext.Model.FindEntityType(typeof(Microsoft365Synchronization));
         var listItemWorkType = dbContext.Model.FindEntityType(typeof(Microsoft365ListItemWork));
         var documentWorkType = dbContext.Model.FindEntityType(typeof(Microsoft365DocumentWork));
+        var indexedContentType = dbContext.Model.FindEntityType(typeof(Microsoft365IndexedContent));
+        var indexedPassageType = dbContext.Model.FindEntityType(typeof(Microsoft365IndexedPassage));
 
         // Then
         Assert.NotNull(connectionType);
@@ -107,6 +109,24 @@ public sealed class Microsoft365PersistenceConfigurationTests
         Assert.Contains(documentWorkType.GetIndexes(), index =>
             index.IsUnique
             && HasProperties(index, nameof(Microsoft365DocumentWork.DeduplicationKey)));
+
+        Assert.NotNull(indexedContentType);
+        Assert.Equal(64, indexedContentType.FindProperty(nameof(Microsoft365IndexedContent.AclFingerprint))?.GetMaxLength());
+        Assert.Equal(2048, indexedContentType.FindProperty(nameof(Microsoft365IndexedContent.SiteUrl))?.GetMaxLength());
+        Assert.Contains(indexedContentType.GetIndexes(), index =>
+            HasProperties(index, nameof(Microsoft365IndexedContent.NextAclReconciliationAt)));
+        Assert.Contains(indexedContentType.GetIndexes(), index =>
+            index.IsUnique
+            && HasProperties(
+                index,
+                nameof(Microsoft365IndexedContent.OrganizationId),
+                nameof(Microsoft365IndexedContent.Microsoft365SourceId),
+                nameof(Microsoft365IndexedContent.ExternalContentId)));
+
+        Assert.NotNull(indexedPassageType);
+        Assert.Contains(indexedPassageType.GetIndexes(), index =>
+            index.IsUnique
+            && HasProperties(index, nameof(Microsoft365IndexedPassage.ChunkId)));
     }
 
     private static bool HasProperties(

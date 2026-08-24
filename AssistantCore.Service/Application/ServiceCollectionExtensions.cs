@@ -78,11 +78,24 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IMicrosoft365SiteSourcesDiscoveryService, Microsoft365SiteSourcesDiscoveryService>();
         services.AddScoped<IMicrosoft365SubscriptionMaintenanceService, Microsoft365SubscriptionMaintenanceService>();
         services.AddScoped<IMicrosoft365ReconciliationService, Microsoft365ReconciliationService>();
+        services.AddScoped<
+            IMicrosoft365AclReconciliationService,
+            Microsoft365AclReconciliationService>();
         services.AddScoped<IMicrosoftGraphNotificationService, MicrosoftGraphNotificationService>();
         services.AddSingleton<IMicrosoft365ListSchemaFingerprintGenerator, Microsoft365ListSchemaFingerprintGenerator>();
         services.AddSingleton<IMicrosoft365ListItemWorkFactory, Microsoft365ListItemWorkFactory>();
         services.AddSingleton<IMicrosoft365DocumentSupportPolicy, Microsoft365DocumentSupportPolicy>();
         services.AddSingleton<IMicrosoft365DocumentWorkFactory, Microsoft365DocumentWorkFactory>();
+        services.AddScoped<
+            IMicrosoft365ContentAclSynchronizationService,
+            Microsoft365ContentAclSynchronizationService>();
+        services.AddScoped<IMicrosoft365PassageIndexingService, Microsoft365PassageIndexingService>();
+        services.AddSingleton<
+            IMicrosoft365SecurityIdentityNormalizer,
+            Microsoft365SecurityIdentityNormalizer>();
+        services.AddSingleton<
+            IMicrosoft365PermissionRoleEvaluator,
+            Microsoft365PermissionRoleEvaluator>();
         services.AddSingleton<TimeProvider>(TimeProvider.System);
         return services;
     }

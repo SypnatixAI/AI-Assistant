@@ -1,0 +1,174 @@
+using System.Net;
+using System.Text.Json;
+using AssistantCore.ExternalServices.Entities.Azure;
+using AssistantCore.ExternalServices.Services.Azure;
+
+namespace AssistantCore.Service.Tests.Microsoft365;
+
+public sealed class AzureAiSearchPassageAclClientTests
+{
+    [Theory, AutoDomainData]
+    public async Task Given_APassageWithResolvedAcl_When_MergeOrUploadAsync_Then_WritesEverySecurityField(
+        string apiKey,
+        string chunkId,
+        Guid organizationId,
+        string title,
+        string content,
+        string userId,
+        string groupId,
+        string sharePointGroupId,
+        string fingerprint)
+    {
+        // Given
+        string? payload = null;
+        using var httpClient = new HttpClient(new StubHttpMessageHandler(request =>
+        {
+            payload = request.Content!.ReadAsStringAsync().GetAwaiter().GetResult();
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent("{\"value\":[{\"key\":\"chunk\",\"status\":true,\"statusCode\":201}]}")
+            };
+        }));
+        var client = new AzureAiSearchPassageAclClient(httpClient);
+        var passage = new AzureAiSearchPassageDocument(
+            chunkId,
+            organizationId.ToString("D"),
+            title,
+            content,
+            [userId],
+            [groupId],
+            [sharePointGroupId],
+            true,
+            fingerprint,
+            false);
+
+        // When
+        await client.MergeOrUploadAsync(
+            "https://search.example",
+            "content-index",
+            apiKey,
+            [passage]);
+
+        // Then
+        using var document = JsonDocument.Parse(payload!);
+        var action = document.RootElement.GetProperty("value").EnumerateArray().Single();
+        Assert.Equal("mergeOrUpload", action.GetProperty("@search.action").GetString());
+        Assert.Equal(organizationId.ToString("D"), action.GetProperty("organizationId").GetString());
+        Assert.Equal(userId, action.GetProperty("allowedUserIds").EnumerateArray().Single().GetString());
+        Assert.Equal(groupId, action.GetProperty("allowedGroupIds").EnumerateArray().Single().GetString());
+        Assert.Equal(
+            sharePointGroupId,
+            action.GetProperty("allowedSharePointGroupIds").EnumerateArray().Single().GetString());
+        Assert.True(action.GetProperty("hasAnonymousLink").GetBoolean());
+        Assert.False(action.GetProperty("isAvailable").GetBoolean());
+    }
+
+    [Theory, AutoDomainData]
+    public void Given_TheMicrosoft365IndexDefinition_When_CreateFields_Then_AclFieldsAreFilterableAndNotRetrievable(
+        string unusedValue)
+    {
+        // Given
+        var securityFieldNames = new[]
+        {
+            "organizationId",
+            "allowedUserIds",
+            "allowedGroupIds",
+            "allowedSharePointGroupIds",
+            "hasAnonymousLink"
+        };
+
+        // When
+        var fields = AzureAiSearchMicrosoft365IndexDefinition.CreateFields();
+
+        // Then
+        Assert.False(string.IsNullOrWhiteSpace(unusedValue));
+        Assert.All(
+            fields.Where(field => securityFieldNames.Contains(field.Name, StringComparer.Ordinal)),
+            field =>
+            {
+                Assert.True(field.Filterable);
+                Assert.False(field.Retrievable);
+            });
+        Assert.Equal(
+            securityFieldNames.OrderBy(name => name, StringComparer.Ordinal),
+            fields
+                .Where(field => securityFieldNames.Contains(field.Name, StringComparer.Ordinal))
+                .Select(field => field.Name)
+                .OrderBy(name => name, StringComparer.Ordinal));
+    }
+
+    [Theory, AutoDomainData]
+    public async Task Given_AResolvedAcl_When_UpdateAclAsync_Then_MergesSecurityFieldsWhileKeepingPassageUnavailable(
+        string apiKey,
+        string chunkId,
+        string userId,
+        string groupId,
+        string sharePointGroupId,
+        string fingerprint)
+    {
+        // Given
+        HttpRequestMessage? receivedRequest = null;
+        string? payload = null;
+        using var httpClient = new HttpClient(new StubHttpMessageHandler(request =>
+        {
+            receivedRequest = request;
+            payload = request.Content!.ReadAsStringAsync().GetAwaiter().GetResult();
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent("{\"value\":[{\"key\":\"chunk\",\"status\":true,\"statusCode\":200}]}" )
+            };
+        }));
+        var client = new AzureAiSearchPassageAclClient(httpClient);
+        var update = new AzureAiSearchPassageAclUpdate(
+            chunkId,
+            [userId],
+            [groupId],
+            [sharePointGroupId],
+            false,
+            fingerprint);
+
+        // When
+        await client.UpdateAclAsync(
+            "https://search.example",
+            "content-index",
+            apiKey,
+            [update]);
+
+        // Then
+        Assert.Equal(HttpMethod.Post, receivedRequest?.Method);
+        Assert.Contains("api-version=2025-09-01", receivedRequest?.RequestUri?.Query, StringComparison.Ordinal);
+        Assert.Equal(apiKey, Assert.Single(receivedRequest!.Headers.GetValues("api-key")));
+        using var document = JsonDocument.Parse(payload!);
+        var action = document.RootElement.GetProperty("value").EnumerateArray().Single();
+        Assert.Equal("merge", action.GetProperty("@search.action").GetString());
+        Assert.Equal(chunkId, action.GetProperty("chunkId").GetString());
+        Assert.Equal(fingerprint, action.GetProperty("aclFingerprint").GetString());
+        Assert.False(action.GetProperty("isAvailable").GetBoolean());
+        Assert.Equal(userId, action.GetProperty("allowedUserIds").EnumerateArray().Single().GetString());
+    }
+
+    [Theory, AutoDomainData]
+    public async Task Given_ARejectedPassageUpdate_When_SetAvailabilityAsync_Then_ThrowsExternalException(
+        string apiKey,
+        string chunkId)
+    {
+        // Given
+        using var httpClient = new HttpClient(new StubHttpMessageHandler(_ =>
+            new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent("{\"value\":[{\"key\":\"chunk\",\"status\":false,\"statusCode\":400}]}" )
+            }));
+        var client = new AzureAiSearchPassageAclClient(httpClient);
+
+        // When
+        var action = () => client.SetAvailabilityAsync(
+            "https://search.example",
+            "content-index",
+            apiKey,
+            [chunkId],
+            false);
+
+        // Then
+        await Assert.ThrowsAsync<AzureAiSearchExternalException>(action);
+    }
+}

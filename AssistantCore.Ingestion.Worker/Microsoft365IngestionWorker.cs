@@ -34,6 +34,23 @@ public sealed class Microsoft365IngestionWorker(
             try
             {
                 await using var scope = scopeFactory.CreateAsyncScope();
+                var aclReconciliationService = scope.ServiceProvider
+                    .GetRequiredService<IMicrosoft365AclReconciliationService>();
+                await aclReconciliationService.RunAsync(stoppingToken);
+            }
+            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+            {
+                break;
+            }
+            catch (Exception exception)
+            {
+                logger.LogError(exception, "Microsoft 365 ACL reconciliation cycle failed.");
+                continue;
+            }
+
+            try
+            {
+                await using var scope = scopeFactory.CreateAsyncScope();
                 var maintenanceService = scope.ServiceProvider
                     .GetRequiredService<IMicrosoft365SubscriptionMaintenanceService>();
                 await maintenanceService.RunMaintenanceAsync(stoppingToken);

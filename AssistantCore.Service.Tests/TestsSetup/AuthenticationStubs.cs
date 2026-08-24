@@ -30,6 +30,14 @@ internal sealed class StubOrganizationQueries : IOrganizationQueries
     public CancellationToken ReceivedCancellationToken { get; private set; }
 
     public Task<Organization?> FindOrganization(
+        Guid organizationId,
+        CancellationToken cancellationToken = default)
+    {
+        ReceivedCancellationToken = cancellationToken;
+        return Task.FromResult(Result?.Id == organizationId ? Result : null);
+    }
+
+    public Task<Organization?> FindOrganization(
         IdentityProvider identityProvider,
         string externalTenantId,
         CancellationToken cancellationToken = default)
