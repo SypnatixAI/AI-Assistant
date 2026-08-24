@@ -6,15 +6,14 @@ namespace AssistantCore.Service.Application.Services.Microsoft365;
 
 public sealed class MicrosoftGraphNotificationService(
     IMicrosoft365SubscriptionRepository subscriptionRepository,
+    IMicrosoft365IndexedContentRepository indexedContentRepository,
     IMicrosoft365ClientStateProtector clientStateProtector,
-    IMicrosoft365SynchronizationPublisher synchronizationPublisher,
     TimeProvider timeProvider) : IMicrosoftGraphNotificationService
 {
     public async Task HandleNotificationsAsync(
         IReadOnlyCollection<MicrosoftGraphNotification> notifications,
         CancellationToken cancellationToken = default)
     {
-        var publishedWorkIds = new HashSet<Guid>();
         foreach (var notification in notifications)
         {
             if (string.IsNullOrWhiteSpace(notification.SubscriptionId)
@@ -53,15 +52,15 @@ public sealed class MicrosoftGraphNotificationService(
                 continue;
             }
 
-            var synchronization = subscriptionRepository.GetOrCreateDeltaSynchronization(
+            await indexedContentRepository.RequestAclReconciliationAsync(
+                source.Id,
+                now,
+                cancellationToken);
+            subscriptionRepository.GetOrCreateDeltaSynchronization(
                 subscription,
                 now);
+            source.NextSynchronizationAt = now;
             await subscriptionRepository.SaveChangesAsync(cancellationToken);
-            var work = Microsoft365SynchronizationWorkFactory.Create(subscription, synchronization);
-            if (work is not null && publishedWorkIds.Add(work.WorkId))
-            {
-                await synchronizationPublisher.PublishAsync(work, cancellationToken);
-            }
         }
     }
 }

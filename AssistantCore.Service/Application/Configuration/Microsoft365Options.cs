@@ -25,4 +25,10 @@ public sealed class Microsoft365Options
     public int SynchronizationLeaseMinutes { get; init; } = 15;
 
     public int SynchronizationIntervalMinutes { get; init; } = 15;
+
+    public int AclReconciliationIntervalMinutes { get; init; } = 1440;
+
+    public int AclReconciliationRetryMinutes { get; init; } = 15;
+
+    public int AclReconciliationBatchSize { get; init; } = 100;
 }

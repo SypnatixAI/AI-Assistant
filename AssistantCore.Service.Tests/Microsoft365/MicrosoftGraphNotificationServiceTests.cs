@@ -9,7 +9,7 @@ namespace AssistantCore.Service.Tests.Microsoft365;
 public sealed class MicrosoftGraphNotificationServiceTests
 {
     [Theory, AutoDomainData]
-    public async Task Given_ListNotification_When_HandleNotificationsAsync_Then_SynchronizeListMessageIsPublished(
+    public async Task Given_ListNotification_When_HandleNotificationsAsync_Then_AclAndContentReconciliationAreScheduled(
         Guid organizationId,
         string subscriptionId,
         string tenantId,
@@ -24,8 +24,8 @@ public sealed class MicrosoftGraphNotificationServiceTests
             siteId,
             listId);
         var repository = new SubscriptionRepositoryFake(subscription);
-        var publisher = new SynchronizationPublisherFake();
-        var service = CreateService(repository, publisher);
+        var indexedContentRepository = new IndexedContentRepositoryFake();
+        var service = CreateService(repository, indexedContentRepository);
 
         // When
         await service.HandleNotificationsAsync(
@@ -33,17 +33,16 @@ public sealed class MicrosoftGraphNotificationServiceTests
             CancellationToken.None);
 
         // Then
-        var work = Assert.Single(publisher.Published);
-        Assert.Equal("SynchronizeList", work.WorkType);
-        Assert.Equal(subscriptionId, work.SubscriptionId);
-        Assert.Equal(siteId, work.SiteId);
-        Assert.Equal(listId, work.ListId);
-        Assert.Null(work.DriveId);
         Assert.Equal(organizationId, subscription.OrganizationId);
+        Assert.Equal(subscription.Microsoft365SourceId, indexedContentRepository.RequestedSourceId);
+        Assert.Equal(
+            DateTimeOffset.Parse("2026-08-21T12:00:00Z"),
+            subscription.Microsoft365Source.NextSynchronizationAt);
+        Assert.Single(subscription.Microsoft365Source.Synchronizations);
     }
 
     [Theory, AutoDomainData]
-    public async Task Given_DriveNotification_When_HandleNotificationsAsync_Then_SynchronizeDriveMessageIsPublished(
+    public async Task Given_DriveNotification_When_HandleNotificationsAsync_Then_AclReconciliationPrecedesContentWake(
         Guid organizationId,
         string subscriptionId,
         string tenantId,
@@ -57,8 +56,10 @@ public sealed class MicrosoftGraphNotificationServiceTests
             tenantId,
             siteId,
             driveId);
-        var publisher = new SynchronizationPublisherFake();
-        var service = CreateService(new SubscriptionRepositoryFake(subscription), publisher);
+        var indexedContentRepository = new IndexedContentRepositoryFake();
+        var service = CreateService(
+            new SubscriptionRepositoryFake(subscription),
+            indexedContentRepository);
 
         // When
         await service.HandleNotificationsAsync(
@@ -66,14 +67,13 @@ public sealed class MicrosoftGraphNotificationServiceTests
             CancellationToken.None);
 
         // Then
-        var work = Assert.Single(publisher.Published);
-        Assert.Equal("SynchronizeDrive", work.WorkType);
-        Assert.Equal(driveId, work.DriveId);
-        Assert.Null(work.ListId);
+        Assert.Equal(subscription.Microsoft365SourceId, indexedContentRepository.RequestedSourceId);
+        Assert.NotNull(subscription.Microsoft365Source.NextSynchronizationAt);
+        Assert.Single(subscription.Microsoft365Source.Synchronizations);
     }
 
     [Theory, AutoDomainData]
-    public async Task Given_InvalidClientState_When_HandleNotificationsAsync_Then_NoMessageIsPublished(
+    public async Task Given_InvalidClientState_When_HandleNotificationsAsync_Then_NoReconciliationIsScheduled(
         Guid organizationId,
         string subscriptionId,
         string tenantId,
@@ -87,8 +87,10 @@ public sealed class MicrosoftGraphNotificationServiceTests
             tenantId,
             siteId,
             listId);
-        var publisher = new SynchronizationPublisherFake();
-        var service = CreateService(new SubscriptionRepositoryFake(subscription), publisher);
+        var indexedContentRepository = new IndexedContentRepositoryFake();
+        var service = CreateService(
+            new SubscriptionRepositoryFake(subscription),
+            indexedContentRepository);
 
         // When
         await service.HandleNotificationsAsync(
@@ -96,11 +98,12 @@ public sealed class MicrosoftGraphNotificationServiceTests
             CancellationToken.None);
 
         // Then
-        Assert.Empty(publisher.Published);
+        Assert.Null(indexedContentRepository.RequestedSourceId);
+        Assert.Empty(subscription.Microsoft365Source.Synchronizations);
     }
 
     [Theory, AutoDomainData]
-    public async Task Given_DisabledSource_When_HandleNotificationsAsync_Then_NoMessageIsPublished(
+    public async Task Given_DisabledSource_When_HandleNotificationsAsync_Then_NoReconciliationIsScheduled(
         Guid organizationId,
         string subscriptionId,
         string tenantId,
@@ -116,8 +119,10 @@ public sealed class MicrosoftGraphNotificationServiceTests
             listId);
         subscription.Microsoft365Source.Status = Microsoft365SourceStatus.Disabled;
         subscription.Microsoft365Source.IsIndexed = false;
-        var publisher = new SynchronizationPublisherFake();
-        var service = CreateService(new SubscriptionRepositoryFake(subscription), publisher);
+        var indexedContentRepository = new IndexedContentRepositoryFake();
+        var service = CreateService(
+            new SubscriptionRepositoryFake(subscription),
+            indexedContentRepository);
 
         // When
         await service.HandleNotificationsAsync(
@@ -125,11 +130,12 @@ public sealed class MicrosoftGraphNotificationServiceTests
             CancellationToken.None);
 
         // Then
-        Assert.Empty(publisher.Published);
+        Assert.Null(indexedContentRepository.RequestedSourceId);
+        Assert.Empty(subscription.Microsoft365Source.Synchronizations);
     }
 
     [Theory, AutoDomainData]
-    public async Task Given_TwoIdenticalNotifications_When_HandleNotificationsAsync_Then_OneUsefulWakeIsPublished(
+    public async Task Given_TwoIdenticalNotifications_When_HandleNotificationsAsync_Then_OneContentWakeIsScheduled(
         Guid organizationId,
         string subscriptionId,
         string tenantId,
@@ -143,8 +149,9 @@ public sealed class MicrosoftGraphNotificationServiceTests
             tenantId,
             siteId,
             listId);
-        var publisher = new SynchronizationPublisherFake();
-        var service = CreateService(new SubscriptionRepositoryFake(subscription), publisher);
+        var service = CreateService(
+            new SubscriptionRepositoryFake(subscription),
+            new IndexedContentRepositoryFake());
         var notification = CreateNotification(subscriptionId, tenantId, "valid-client-state");
 
         // When
@@ -153,17 +160,47 @@ public sealed class MicrosoftGraphNotificationServiceTests
             CancellationToken.None);
 
         // Then
-        Assert.Single(publisher.Published);
+        Assert.Single(subscription.Microsoft365Source.Synchronizations);
     }
 
     private static MicrosoftGraphNotificationService CreateService(
         SubscriptionRepositoryFake repository,
-        SynchronizationPublisherFake publisher) =>
+        IndexedContentRepositoryFake indexedContentRepository) =>
         new(
             repository,
+            indexedContentRepository,
             new ClientStateProtectorFake(),
-            publisher,
             new FixedTimeProvider(DateTimeOffset.Parse("2026-08-21T12:00:00Z")));
+
+    private sealed class IndexedContentRepositoryFake : IMicrosoft365IndexedContentRepository
+    {
+        public Guid? RequestedSourceId { get; private set; }
+
+        public Task<Microsoft365IndexedContent?> FindAsync(
+            Guid organizationId,
+            Guid sourceId,
+            string externalContentId,
+            CancellationToken cancellationToken = default) => Task.FromResult<Microsoft365IndexedContent?>(null);
+
+        public Task<IReadOnlyCollection<Microsoft365IndexedContent>> GetAclReconciliationCandidatesAsync(
+            DateTimeOffset dueAt,
+            int maximumResults,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult<IReadOnlyCollection<Microsoft365IndexedContent>>([]);
+
+        public Task RequestAclReconciliationAsync(
+            Guid sourceId,
+            DateTimeOffset dueAt,
+            CancellationToken cancellationToken = default)
+        {
+            RequestedSourceId = sourceId;
+            return Task.CompletedTask;
+        }
+
+        public Task SaveAsync(
+            Microsoft365IndexedContent content,
+            CancellationToken cancellationToken = default) => Task.CompletedTask;
+    }
 
     private static MicrosoftGraphNotification CreateNotification(
         string subscriptionId,
@@ -263,19 +300,6 @@ public sealed class MicrosoftGraphNotificationServiceTests
         public bool Matches(string clientState, string protectedClientState) =>
             clientState == "valid-client-state"
             && protectedClientState == "protected-client-state";
-    }
-
-    private sealed class SynchronizationPublisherFake : IMicrosoft365SynchronizationPublisher
-    {
-        public List<Microsoft365SynchronizationWork> Published { get; } = [];
-
-        public Task PublishAsync(
-            Microsoft365SynchronizationWork work,
-            CancellationToken cancellationToken = default)
-        {
-            Published.Add(work);
-            return Task.CompletedTask;
-        }
     }
 
     private sealed class SubscriptionRepositoryFake(Microsoft365Subscription subscription)

@@ -1,9 +1,12 @@
 using AssistantCore.Service.Application.Models.Messages.Connectors.InternalData;
+using AssistantCore.Service.Application.Models.Messages.Connectors.Microsoft365;
 using AssistantCore.Service.Application.Services.Messages.Connectors;
 using AssistantCore.Service.Application.Services.Messages.Connectors.InternalData;
+using AssistantCore.Service.Application.Services.Messages.Connectors.Microsoft365;
 using AssistantCore.Service.Application.Services.Messages.Evidence;
 using AssistantCore.Service.Application.Services.Messages.Tools;
 using AssistantCore.Service.Infrastructure.Connectors.InternalData;
+using AssistantCore.Service.Infrastructure.Connectors.Microsoft365;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -12,6 +15,7 @@ namespace AssistantCore.Service.Infrastructure.Connectors;
 public static class ConnectorServiceCollectionExtensions
 {
     private const string InternalDataSectionName = "Connectors:InternalData";
+    private const string Microsoft365SectionName = "Connectors:Microsoft365";
     private const int MaximumAllowedResults = 100;
 
     public static IServiceCollection AddConnectorInfrastructure(
@@ -19,14 +23,45 @@ public static class ConnectorServiceCollectionExtensions
         IConfiguration configuration)
     {
         var options = CreateInternalDataOptions(configuration);
+        var microsoft365Options = CreateMicrosoft365Options(configuration);
 
         services.AddSingleton(options);
+        services.AddSingleton(microsoft365Options);
         services.AddSingleton<IEvidenceNormalizer, EvidenceNormalizer>();
         services.AddScoped<IInternalDataSearchRepository, InternalDataSearchRepository>();
         services.AddScoped<IInternalDataConnector, InternalDataConnector>();
         services.AddScoped<IAiToolExecutionHandler, InternalDataToolExecutionHandler>();
+        services.AddScoped<IMicrosoft365SearchRepository, Microsoft365SearchRepository>();
+        services.AddScoped<IMicrosoft365Connector, Microsoft365Connector>();
+        services.AddScoped<IAiToolExecutionHandler, Microsoft365SearchToolExecutionHandler>();
 
         return services;
+    }
+
+    private static Microsoft365ConnectorOptions CreateMicrosoft365Options(
+        IConfiguration configuration)
+    {
+        var section = configuration.GetSection(Microsoft365SectionName);
+        var maximumResults = section.GetValue<int?>(
+            nameof(Microsoft365ConnectorOptions.MaximumResults)) ?? 10;
+        var maximumContentLength = section.GetValue<int?>(
+            nameof(Microsoft365ConnectorOptions.MaximumContentLength)) ?? 4000;
+
+        if (maximumResults is <= 0 or > MaximumAllowedResults)
+        {
+            throw new InvalidOperationException(
+                $"Invalid configuration '{Microsoft365SectionName}': "
+                + $"{nameof(Microsoft365ConnectorOptions.MaximumResults)} must be between 1 and {MaximumAllowedResults}.");
+        }
+
+        if (maximumContentLength <= 0)
+        {
+            throw new InvalidOperationException(
+                $"Invalid configuration '{Microsoft365SectionName}': "
+                + $"{nameof(Microsoft365ConnectorOptions.MaximumContentLength)} must be greater than zero.");
+        }
+
+        return new Microsoft365ConnectorOptions(maximumResults, maximumContentLength);
     }
 
     private static InternalDataConnectorOptions CreateInternalDataOptions(

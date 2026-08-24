@@ -68,19 +68,43 @@ public sealed class MicrosoftIdentityClient(HttpClient httpClient)
         return new MicrosoftAuthorizationCodeToken(payload.AccessToken, payload.ExpiresIn);
     }
 
-    public async Task<MicrosoftAuthorizationCodeToken> AcquireApplicationTokenAsync(
+    public Task<MicrosoftAuthorizationCodeToken> AcquireApplicationTokenAsync(
         string authorityBaseUrl,
         string tenantId,
         string clientId,
         string clientSecret,
+        CancellationToken cancellationToken = default) =>
+        AcquireApplicationTokenForScopeAsync(
+            authorityBaseUrl,
+            tenantId,
+            clientId,
+            clientSecret,
+            GraphDefaultScope,
+            cancellationToken);
+
+    public async Task<MicrosoftAuthorizationCodeToken> AcquireApplicationTokenForScopeAsync(
+        string authorityBaseUrl,
+        string tenantId,
+        string clientId,
+        string clientSecret,
+        string scope,
         CancellationToken cancellationToken = default)
     {
+        if (!Uri.TryCreate(scope, UriKind.Absolute, out var scopeUri)
+            || scopeUri.Scheme != Uri.UriSchemeHttps
+            || !scope.EndsWith("/.default", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new ArgumentException(
+                "Microsoft application token scope must be an HTTPS .default scope.",
+                nameof(scope));
+        }
+
         using var content = new FormUrlEncodedContent(new Dictionary<string, string>
         {
             ["client_id"] = clientId,
             ["client_secret"] = clientSecret,
             ["grant_type"] = "client_credentials",
-            ["scope"] = GraphDefaultScope
+            ["scope"] = scope
         });
         using var response = await httpClient.PostAsync(
             $"{authorityBaseUrl.TrimEnd('/')}/{Uri.EscapeDataString(tenantId)}/oauth2/v2.0/token",

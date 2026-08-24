@@ -1248,14 +1248,20 @@ Champs proposés :
 | `allowedGroupIds` | groupes Entra autorisés |
 | `allowedSharePointGroupIds` | groupes SharePoint autorisés |
 | `hasAnonymousLink` | présence d’un lien anonyme |
+| `aclFingerprint` | empreinte canonique des permissions |
+| `isAvailable` | passage entièrement publié et consultable |
 | `contentVector` | embedding du passage |
 
 `title` et `content` sont recherchables.
 
 `organizationId`, `sourceType`, `siteId`, `driveId`, `documentId`,
-`allowedUserIds` et `allowedGroupIds` sont filtrables.
+`allowedUserIds`, `allowedGroupIds`, `allowedSharePointGroupIds`,
+`hasAnonymousLink` et `isAvailable` sont filtrables.
 
-Les champs de permissions ne sont pas retournés dans les résultats normaux.
+`organizationId`, `allowedUserIds`, `allowedGroupIds`,
+`allowedSharePointGroupIds` et `hasAnonymousLink` ne sont pas récupérables dans
+Azure AI Search et ne sont donc pas retournés dans les résultats normaux.
+Chaque recherche impose également `isAvailable = true`.
 
 `contentVector` utilise un profil vectoriel compatible avec le modèle
 d’embeddings.
@@ -1281,11 +1287,70 @@ base.
 
 ### Changement de permissions
 
-Mettre à jour les champs de permissions de tous les passages. Une révocation
-d’accès doit être traitée en priorité.
+L’empreinte de l’ACL est persistée avec l’état du contenu indexé. Lorsque
+l’empreinte calculée est identique à l’empreinte persistée, les passages ne
+sont pas réécrits.
+
+Lorsqu’elle change, tous les passages du contenu sont d’abord rendus
+indisponibles. Leurs champs de permissions sont ensuite mis à jour. La nouvelle
+empreinte est persistée et les passages redeviennent disponibles uniquement
+après la réussite complète de l’opération. Un échec partiel laisse le contenu
+indisponible afin qu’aucune ancienne ACL ne puisse autoriser une recherche.
+
+Une révocation d’accès doit être traitée en priorité.
 
 <a id="m365-sharepoint-document-security"></a>
 ## Respect des permissions
+
+### Normalisation des identités
+
+Les clés de sécurité sont construites uniquement à partir d’identifiants
+stables fournis par Microsoft :
+
+- pour un utilisateur Microsoft Entra, conserver son Object ID `oid`;
+- pour un groupe Microsoft Entra, conserver l’Object ID du groupe;
+- pour un groupe SharePoint, produire
+  `spg:<siteId>:<sharePointGroupId>`.
+
+Le nom affiché et l’adresse courriel sont des données de profil. Ils ne
+doivent jamais servir de clé de sécurité.
+
+Les comportements spécialisés des invités, des liens anonymes et des groupes
+SharePoint sont complétés par leurs fonctionnalités dédiées sans modifier ce
+contrat de normalisation.
+
+### Évaluation des rôles
+
+Seuls les principaux possédant au moins une permission permettant de lire le
+contenu sont conservés dans l’ACL.
+
+Le rôle SharePoint `Limited Access`, représenté par `RoleTypeKind = 1`, ne
+donne pas accès au contenu lorsqu’il est présent seul.
+
+Un rôle vide, personnalisé ou inconnu qui ne peut pas être évalué de manière
+fiable produit `Unresolved`. Le contenu reste alors invisible.
+
+Les identifiants sont dédupliqués et triés avant le calcul de l’empreinte afin
+qu’une ACL équivalente produise toujours la même valeur.
+
+### Adapter de résolution des permissions
+
+L’adapter Infrastructure choisit la source de permissions selon le contenu :
+
+- pour un fichier, il lit les permissions avec Microsoft Graph v1.0;
+- pour un élément de liste, il utilise l’API REST SharePoint et l’URL exacte
+  du site.
+
+L’adapter transforme les réponses externes en `Microsoft365Acl`. Pour un
+utilisateur ou un groupe Entra provenant de SharePoint REST, il utilise
+uniquement `AadObjectId`. Un principal qui ne fournit pas d’identifiant stable
+et une permission qui ne peut pas être représentée produisent `Unresolved`.
+
+Les appels Graph utilisent un token Graph. Les appels REST SharePoint utilisent
+un token limité à l’origine du tenant SharePoint concerné. Les clients HTTP
+n’utilisent pas de cookies et masquent les en-têtes `Authorization`, `Cookie`
+et `Set-Cookie` dans les logs. Les tokens, URL de contenu, réponses détaillées
+et exceptions externes complètes ne sont jamais journalisés.
 
 Chaque recherche combine obligatoirement :
 
@@ -1500,6 +1565,7 @@ Le secret de l’App Registration Microsoft 365 est configuré sans être ajout�
 
 ```bash
 dotnet user-secrets --project AssistantCore.Service set "Microsoft365:ClientSecret" "<secret>"
+dotnet user-secrets --project AssistantCore.Service set "AzureSearch:ApiKey" "<clé>"
 ```
 
 Dans Azure :

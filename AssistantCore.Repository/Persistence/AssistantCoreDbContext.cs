@@ -31,6 +31,10 @@ public sealed class AssistantCoreDbContext(DbContextOptions<AssistantCoreDbConte
 
     public DbSet<Microsoft365DocumentWork> Microsoft365DocumentWorks => Set<Microsoft365DocumentWork>();
 
+    public DbSet<Microsoft365IndexedContent> Microsoft365IndexedContents => Set<Microsoft365IndexedContent>();
+
+    public DbSet<Microsoft365IndexedPassage> Microsoft365IndexedPassages => Set<Microsoft365IndexedPassage>();
+
     public DbSet<Conversation> Conversations => Set<Conversation>();
 
     public DbSet<Message> Messages => Set<Message>();

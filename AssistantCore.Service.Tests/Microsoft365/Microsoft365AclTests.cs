@@ -1,0 +1,69 @@
+using AssistantCore.Service.Application.Models.Microsoft365.Permissions;
+
+namespace AssistantCore.Service.Tests.Microsoft365;
+
+public sealed class Microsoft365AclTests
+{
+    [Theory, AutoDomainData]
+    public void Given_DuplicatedUnorderedIdentifiers_When_Microsoft365Acl_Then_DeduplicatesAndSortsBeforeFingerprint(
+        string firstUserId,
+        string secondUserId,
+        string groupId,
+        string sharePointGroupId,
+        Microsoft365AclInheritance inheritance)
+    {
+        // Given
+        var firstAcl = new Microsoft365Acl(
+            [secondUserId, firstUserId, secondUserId],
+            [groupId, groupId],
+            [sharePointGroupId, sharePointGroupId],
+            false,
+            inheritance);
+        var equivalentAcl = new Microsoft365Acl(
+            [firstUserId, secondUserId],
+            [groupId],
+            [sharePointGroupId],
+            false,
+            inheritance);
+
+        // When
+        var fingerprint = firstAcl.Fingerprint;
+
+        // Then
+        Assert.Equal(
+            new[] { firstUserId, secondUserId }.OrderBy(value => value, StringComparer.Ordinal),
+            firstAcl.AllowedEntraUserIds);
+        Assert.Single(firstAcl.AllowedEntraGroupIds);
+        Assert.Single(firstAcl.AllowedSharePointGroupIds);
+        Assert.Equal(equivalentAcl.Fingerprint, fingerprint);
+        Assert.Equal(64, fingerprint.Length);
+    }
+
+    [Theory, AutoDomainData]
+    public void Given_AChangedIdentifier_When_Microsoft365Acl_Then_ChangesFingerprint(
+        string firstUserId,
+        string secondUserId,
+        Microsoft365AclInheritance inheritance)
+    {
+        // Given
+        var original = new Microsoft365Acl(
+            [firstUserId],
+            [],
+            [],
+            false,
+            inheritance);
+        var changed = new Microsoft365Acl(
+            [secondUserId],
+            [],
+            [],
+            false,
+            inheritance);
+
+        // When
+        var originalFingerprint = original.Fingerprint;
+        var changedFingerprint = changed.Fingerprint;
+
+        // Then
+        Assert.NotEqual(originalFingerprint, changedFingerprint);
+    }
+}
