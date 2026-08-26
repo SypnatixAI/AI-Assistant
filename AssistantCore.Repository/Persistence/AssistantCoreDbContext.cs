@@ -3,7 +3,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace AssistantCore.Repository.Persistence;
 
-public sealed class AssistantCoreDbContext(DbContextOptions<AssistantCoreDbContext> options) : DbContext(options)
+public class AssistantCoreDbContext(DbContextOptions<AssistantCoreDbContext> options) : DbContext(options)
 {
     public DbSet<Organization> Organizations => Set<Organization>();
 

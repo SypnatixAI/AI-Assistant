@@ -54,8 +54,38 @@ public sealed class OrganizationMemberQueries(AssistantCoreDbContext dbContext) 
         CancellationToken cancellationToken = default)
     {
         dbContext.OrganizationMembers.Add(member);
-        await dbContext.SaveChangesAsync(cancellationToken);
-        return member;
+
+        try
+        {
+            await dbContext.SaveChangesAsync(cancellationToken);
+            return member;
+        }
+        catch (DbUpdateException exception) when (IsMemberIdentityConflict(exception))
+        {
+            dbContext.Entry(member).State = EntityState.Detached;
+
+            var competingMember = await FindMember(
+                member.OrganizationId,
+                member.IdentityProvider,
+                member.ExternalUserId,
+                cancellationToken);
+
+            return competingMember
+                ?? throw new InvalidOperationException(
+                    "The member created by the competing request could not be reloaded.");
+        }
+    }
+
+    private static bool IsMemberIdentityConflict(DbUpdateException exception)
+    {
+        var message = exception.InnerException?.Message ?? exception.Message;
+
+        return message.Contains(
+                   "IX_OrganizationMember_OrganizationId_IdentityProvider_ExternalUserId",
+                   StringComparison.OrdinalIgnoreCase)
+               || (message.Contains(nameof(OrganizationMember.OrganizationId), StringComparison.OrdinalIgnoreCase)
+                   && message.Contains(nameof(OrganizationMember.IdentityProvider), StringComparison.OrdinalIgnoreCase)
+                   && message.Contains(nameof(OrganizationMember.ExternalUserId), StringComparison.OrdinalIgnoreCase));
     }
 
     public async Task<OrganizationMember> UpdateRole(
