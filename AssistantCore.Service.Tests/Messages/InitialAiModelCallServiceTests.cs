@@ -63,7 +63,8 @@ public sealed class AiModelTurnServiceTests
         Assert.Equal(state.AllowedTools, request.AllowedTools);
         Assert.Empty(request.RequestedToolCalls);
         Assert.Empty(request.ToolResults);
-        Assert.Contains("answer or cannotAnswer", request.Instructions, StringComparison.Ordinal);
+        Assert.Contains("decision \"cannotAnswer\"", request.Instructions, StringComparison.Ordinal);
+        Assert.Contains("answer to null", request.Instructions, StringComparison.Ordinal);
     }
 
     [Theory, AutoDomainData]

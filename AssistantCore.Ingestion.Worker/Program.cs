@@ -28,9 +28,13 @@ public static class WorkerProgram
             .Validate(
                 options => options.MaintenanceIntervalSeconds > 0,
                 $"{Microsoft365WorkerOptions.SectionName}:MaintenanceIntervalSeconds must be greater than zero.")
+            .Validate(
+                options => options.MaximumSynchronizationsPerCycle > 0
+                    && options.MaximumDocumentsPerCycle > 0,
+                $"{Microsoft365WorkerOptions.SectionName} batch sizes must be greater than zero.")
             .ValidateOnStart();
 
-        builder.Services.AddMicrosoft365Application();
+        builder.Services.AddMicrosoft365WorkerApplication();
         builder.Services.AddMicrosoft365Infrastructure(builder.Configuration);
         builder.Services.AddPersistence(builder.Configuration);
         builder.Services.AddHostedService<Microsoft365IngestionWorker>();

@@ -308,6 +308,218 @@
           "response": []
         }
       ]
+    },
+    {
+      "name": "Microsoft 365",
+      "item": [
+        {
+          "name": "Start Consent",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "if (pm.response.code === 200) {",
+                  "    const response = pm.response.json();",
+                  "    pm.expect(response.authorizationUrl).to.be.a('string').and.not.empty;",
+                  "    pm.environment.set('authorization_url', response.authorizationUrl);",
+                  "    console.log('Open this URL to complete Microsoft 365 consent: ' + response.authorizationUrl);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/microsoft365/consent",
+              "host": ["{{base_url}}"],
+              "path": ["api", "microsoft365", "consent"]
+            },
+            "description": "Retourne l'URL de consentement administrateur et l'enregistre dans authorization_url. Ouvre ensuite cette variable dans le navigateur."
+          },
+          "response": []
+        },
+        {
+          "name": "Register Site",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const siteId = pm.environment.get('site_id');",
+                  "if (!siteId || siteId.startsWith('YOUR_')) {",
+                  "    throw new Error('site_id must contain the Microsoft Graph site identifier.');",
+                  "}"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/microsoft365/sites/{{site_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "microsoft365", "sites", "{{site_id}}"]
+            },
+            "description": "Enregistre le site SharePoint identifié par site_id."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Drives",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "if (pm.response.code === 200) {",
+                  "    const drives = pm.response.json();",
+                  "    const expectedName = pm.environment.get('drive_name');",
+                  "    const drive = drives.find(function (candidate) {",
+                  "        return candidate.displayName === expectedName;",
+                  "    });",
+                  "    pm.test('Configured drive was found', function () {",
+                  "        pm.expect(drive, 'Drive named ' + expectedName).to.exist;",
+                  "    });",
+                  "    if (drive) {",
+                  "        pm.environment.set('drive_id', drive.driveId);",
+                  "    }",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/microsoft365/sites/{{site_id}}/drives",
+              "host": ["{{base_url}}"],
+              "path": ["api", "microsoft365", "sites", "{{site_id}}", "drives"]
+            },
+            "description": "Découvre les bibliothèques du site et enregistre le drive_id correspondant à drive_name."
+          },
+          "response": []
+        },
+        {
+          "name": "Enable Drive",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (!pm.environment.get('drive_id')) {",
+                  "    throw new Error('drive_id is missing. Run Get Drives first.');",
+                  "}"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test('Drive indexing is enabled', function () {",
+                  "    pm.expect(pm.response.json().isIndexed).to.eql(true);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {"key": "Content-Type", "value": "application/json"}
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"isIndexed\": true\n}",
+              "options": {"raw": {"language": "json"}}
+            },
+            "url": {
+              "raw": "{{base_url}}/api/microsoft365/sites/{{site_id}}/drives/{{drive_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "microsoft365", "sites", "{{site_id}}", "drives", "{{drive_id}}"]
+            },
+            "description": "Active l'indexation de la bibliothèque et crée la synchronisation initiale traitée par le Worker local."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Messages",
+      "item": [
+        {
+          "name": "Send Message",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "if (pm.response.code === 200) {",
+                  "    const response = pm.response.json();",
+                  "    pm.expect(response.answer).to.be.a('string').and.not.empty;",
+                  "    pm.environment.set('conversation_id', response.conversationId);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key": "Content-Type", "value": "application/json"}
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"conversationId\": null,\n  \"message\": \"{{question}}\",\n  \"model\": \"{{model}}\"\n}",
+              "options": {"raw": {"language": "json"}}
+            },
+            "url": {
+              "raw": "{{base_url}}/api/messages",
+              "host": ["{{base_url}}"],
+              "path": ["api", "messages"]
+            },
+            "description": "Pose question à l'assistant. Une valeur model vide utilise le modèle par défaut."
+          },
+          "response": []
+        }
+      ]
     }
   ],
   "variable": [

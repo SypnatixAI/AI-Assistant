@@ -10,4 +10,9 @@ public interface IMicrosoft365PassageIndexWriter
         IReadOnlyCollection<Microsoft365SearchPassage> passages,
         Microsoft365Acl acl,
         CancellationToken cancellationToken = default);
+
+    Task DeleteAsync(
+        IReadOnlyCollection<string> chunkIds,
+        CancellationToken cancellationToken = default) =>
+        Task.FromException(new NotSupportedException("Passage deletion is not implemented."));
 }

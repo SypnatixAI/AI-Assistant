@@ -85,6 +85,76 @@ Swagger est disponible sur :
 https://localhost:7292/swagger
 ```
 
+## Tester un DOCX localement
+
+Le parcours de test démarre l'API et le Worker Microsoft 365 dans le même
+terminal. Le DOCX reste téléversé dans une bibliothèque SharePoint; il n'est
+pas envoyé directement à l'API.
+
+### Configuration unique
+
+Configurer les secrets nécessaires à l'API et au Worker. Les deux projets
+partagent le même magasin `user-secrets` :
+
+```bash
+dotnet user-secrets --project AssistantCore.Service set "Microsoft365:ClientId" "<client-id>"
+dotnet user-secrets --project AssistantCore.Service set "Microsoft365:ClientSecret" "<secret>"
+dotnet user-secrets --project AssistantCore.Service set "Microsoft365:EmbeddingApiKey" "<openai-api-key>"
+dotnet user-secrets --project AssistantCore.Service set "AzureSearch:Endpoint" "https://<service>.search.windows.net"
+dotnet user-secrets --project AssistantCore.Service set "AzureSearch:IndexName" "microsoft-content-dev"
+dotnet user-secrets --project AssistantCore.Service set "AzureSearch:ApiKey" "<azure-search-api-key>"
+dotnet user-secrets --project AssistantCore.Service set "AiModels:Providers:OpenAI:ApiKey" "<openai-api-key>"
+```
+
+La connexion SQL n'a pas besoin d'être ajoutée aux `user-secrets`. Le script
+lit `SQL_SERVER_PASSWORD` dans `.env.database`, construit la chaîne de
+connexion en mémoire et la transmet à l'API et au Worker par variable
+d'environnement.
+
+Azure Service Bus reste désactivé en développement local. Les demandes de
+synchronisation sont persistées dans SQL, puis réclamées directement par le
+Worker. En environnement Azure, activer `ServiceBus:Enabled` uniquement
+lorsque le namespace, les files et leurs consommateurs sont déployés.
+
+Le modèle défini par `AiModels:DefaultModel` doit être réellement accessible
+avec la clé configurée. L'App Registration Microsoft 365 doit aussi accepter
+exactement ce callback `Web` :
+
+```text
+https://localhost:7292/api/microsoft365/consent/callback
+```
+
+### Démarrage
+
+Créer `.env.database` comme indiqué plus haut, puis exécuter :
+
+```bash
+bash scripts/start-local-e2e.sh
+```
+
+Le script démarre SQL Server, applique les migrations, compile la solution,
+configure les valeurs locales non sensibles, puis démarre l'API et le Worker.
+Utiliser `Ctrl+C` pour arrêter les deux processus.
+
+### Parcours Postman
+
+Importer de nouveau la collection et l'environnement Postman du dépôt, puis :
+
+1. exécuter `AuthenticateUser` avec un membre AssistantCore `Admin`;
+2. exécuter `Start Consent` et ouvrir `authorization_url` dans un navigateur;
+3. renseigner `site_id`, puis exécuter `Register Site`;
+4. exécuter `Get Drives`; la bibliothèque nommée par `drive_name` est placée
+   automatiquement dans `drive_id`;
+5. téléverser le DOCX dans cette bibliothèque SharePoint;
+6. exécuter `Enable Drive` et attendre quelques secondes pendant
+   l'indexation;
+7. renseigner `question`, puis exécuter `Send Message`.
+
+La réponse doit contenir le texte généré et le DOCX dans `sources`. Pour une
+première synchronisation, le Worker interroge directement les tâches SQL; un
+tunnel HTTPS et les webhooks ne sont nécessaires que pour recevoir ensuite les
+modifications SharePoint automatiquement.
+
 ## Architecture Entra ID de developpement
 
 ### Qu'est-ce que Microsoft Entra ID?

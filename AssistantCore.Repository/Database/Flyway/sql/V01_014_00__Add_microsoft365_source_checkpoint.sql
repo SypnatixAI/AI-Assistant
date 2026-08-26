@@ -18,6 +18,8 @@ BEGIN
         ADD [SynchronizationLeaseExpiresAt] DATETIMEOFFSET NULL;
 END;
 
+GO
+
 ALTER TABLE [dbo].[Microsoft365Source]
     ALTER COLUMN [DeltaLink] NVARCHAR(MAX) NULL;
 

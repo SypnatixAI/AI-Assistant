@@ -28,6 +28,7 @@ public static class ConnectorServiceCollectionExtensions
         services.AddSingleton(options);
         services.AddSingleton(microsoft365Options);
         services.AddSingleton<IEvidenceNormalizer, EvidenceNormalizer>();
+        services.AddScoped<IToolExecutionRouter, ScopedToolExecutionRouter>();
         services.AddScoped<IInternalDataSearchRepository, InternalDataSearchRepository>();
         services.AddScoped<IInternalDataConnector, InternalDataConnector>();
         services.AddScoped<IAiToolExecutionHandler, InternalDataToolExecutionHandler>();

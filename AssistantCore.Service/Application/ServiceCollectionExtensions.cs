@@ -62,20 +62,27 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IAiToolArgumentSecurityValidator, AiToolArgumentSecurityValidator>();
         services.AddScoped<IAiToolDateRangeValidator, AiToolDateRangeValidator>();
         services.AddScoped<IAiToolCallValidator, AiToolCallValidator>();
-        services.AddScoped<IToolExecutionRouter, ToolExecutionRouter>();
 
         return services;
     }
 
     public static IServiceCollection AddMicrosoft365Application(this IServiceCollection services)
     {
+        services.AddMicrosoft365WorkerApplication();
         services.AddScoped<IMicrosoft365ConnectionService, Microsoft365ConnectionService>();
-        services.AddScoped<IMicrosoft365IngestionOrchestrator, Microsoft365IngestionOrchestrator>();
         services.AddScoped<IMicrosoft365ListActivationService, Microsoft365ListActivationService>();
         services.AddScoped<IMicrosoft365ListConsultationService, Microsoft365ListConsultationService>();
+        services.AddScoped<IMicrosoft365SiteSourcesDiscoveryService, Microsoft365SiteSourcesDiscoveryService>();
+        services.AddScoped<IMicrosoft365DriveAdministrationService, Microsoft365DriveAdministrationService>();
+
+        return services;
+    }
+
+    public static IServiceCollection AddMicrosoft365WorkerApplication(this IServiceCollection services)
+    {
+        services.AddScoped<IMicrosoft365IngestionOrchestrator, Microsoft365IngestionOrchestrator>();
         services.AddScoped<IMicrosoft365ListSynchronizationService, Microsoft365ListSynchronizationService>();
         services.AddScoped<IMicrosoft365DriveSynchronizationService, Microsoft365DriveSynchronizationService>();
-        services.AddScoped<IMicrosoft365SiteSourcesDiscoveryService, Microsoft365SiteSourcesDiscoveryService>();
         services.AddScoped<IMicrosoft365SubscriptionMaintenanceService, Microsoft365SubscriptionMaintenanceService>();
         services.AddScoped<IMicrosoft365ReconciliationService, Microsoft365ReconciliationService>();
         services.AddScoped<
@@ -86,6 +93,14 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IMicrosoft365ListItemWorkFactory, Microsoft365ListItemWorkFactory>();
         services.AddSingleton<IMicrosoft365DocumentSupportPolicy, Microsoft365DocumentSupportPolicy>();
         services.AddSingleton<IMicrosoft365DocumentWorkFactory, Microsoft365DocumentWorkFactory>();
+        services.AddScoped<
+            IMicrosoft365ContentExtractionService,
+            Microsoft365ContentExtractionService>();
+        services.AddSingleton<IMicrosoft365DocumentChunkingService, Microsoft365DocumentChunkingService>();
+        services.AddScoped<IMicrosoft365DocumentProcessingService, Microsoft365DocumentProcessingService>();
+        services.AddScoped<
+            IMicrosoft365PendingSynchronizationService,
+            Microsoft365PendingSynchronizationService>();
         services.AddScoped<
             IMicrosoft365ContentAclSynchronizationService,
             Microsoft365ContentAclSynchronizationService>();

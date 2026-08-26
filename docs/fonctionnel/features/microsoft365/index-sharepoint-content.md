@@ -311,9 +311,10 @@ Admin connecté
 
 Admin chez Microsoft
   -> accepte les permissions
-  -> GET /api/microsoft365/consent/callback?code=...&state=...
+  -> GET /api/microsoft365/consent/callback?tenant=...&admin_consent=True&state=...
   -> Controller -> Dispatcher -> Handler -> Service
-  -> validation du state et identification du tenant
+  -> validation du state, du consentement et du tenant
+  -> obtention d'un token applicatif et vérification du tenant auprès de Graph
   -> connexion Active
   -> Worker autorisé à obtenir un token Graph et à lire les sources activées
 ```
@@ -347,8 +348,10 @@ TenantId: inconnu
 Consentement: pas encore accordé
 ```
 
-Le client Microsoft construit ensuite l'URL multitenant et l'endpoint la
-retourne au frontend :
+Le client Microsoft construit ensuite une URL vers l'endpoint multitenant de
+consentement administrateur. La permission statique `/.default` demande les
+permissions applicatives Microsoft Graph configurées sur l'inscription. Le
+controller retourne cette URL au frontend :
 
 ```json
 {
@@ -364,12 +367,17 @@ opération, aucune source Microsoft 365 ne peut encore être lue.
 Après la décision de l'administrateur, Microsoft rappelle AssistantCore :
 
 ```http
-GET /api/microsoft365/consent/callback?code=<code>&state=<state>
+GET /api/microsoft365/consent/callback?tenant=<tenant-id>&admin_consent=True&state=<state>
 ```
 
 Le service valide la signature, l'expiration, l'organisation et l'usage unique
-du `state`. Il échange ensuite le code auprès de Microsoft, identifie le tenant
-consenti et refuse ce tenant s'il est déjà associé à une autre organisation.
+du `state`. Il vérifie ensuite que Microsoft indique explicitement
+`admin_consent=True` et que le tenant retourné est un identifiant valide. La
+valeur `tenant` du callback n'est jamais considérée comme une preuve à elle
+seule : l'adapter Infrastructure demande un token applicatif à ce tenant avec
+le flow `client_credentials`, appelle Microsoft Graph avec ce token et vérifie
+que Graph retourne le même tenant. Le service refuse aussi ce tenant s'il est
+déjà associé à une autre organisation.
 
 Après un retour valide, la connexion devient :
 
@@ -449,6 +457,8 @@ applicatives documentées pour les webhooks et les requêtes delta :
 
 - `Files.Read.All`;
 - `Sites.Read.All`;
+- `Organization.Read.All`, pour vérifier que le token applicatif correspond
+  bien au tenant revenu du consentement;
 - la permission minimale nécessaire pour lire les groupes du membre lors
   d’une recherche.
 
@@ -527,9 +537,31 @@ Exemple de source découverte :
 Ces endpoints sont réservés aux administrateurs de l’organisation connectée :
 
 ```http
+POST /api/microsoft365/sites/{siteId}
+GET /api/microsoft365/sites/{siteId}/drives
+PATCH /api/microsoft365/sites/{siteId}/drives/{driveId}
 GET /api/microsoft365/sites/{siteId}/lists
 PATCH /api/microsoft365/sites/{siteId}/lists/{listId}
 ```
+
+Le premier endpoint valide le site auprès de Microsoft Graph et l'enregistre
+comme site autorisé. Le `GET` des bibliothèques actualise les drives Graph sans
+les activer. Le `PATCH` d'une bibliothèque avec `{ "isIndexed": true }` crée
+une synchronisation initiale. Le Worker prend ensuite le travail en charge :
+
+```text
+bibliothèque activée
+  -> delta Graph
+  -> téléchargement du DOCX
+  -> résolution de l'ACL
+  -> extraction et passages déterministes
+  -> embeddings
+  -> mergeOrUpload Azure AI Search
+  -> isAvailable = true après confirmation
+```
+
+Le DOCX brut n'est pas conservé dans Azure AI Search. Chaque passage contient
+le texte, le vecteur, la version, l'URL SharePoint et les champs d'autorisation.
 
 Le `GET` retourne les listes découvertes avec leur état. Le `PATCH` accepte
 uniquement l’activation ou la désactivation de l’indexation :
@@ -1531,6 +1563,7 @@ Configuration non secrète attendue :
     "MaximumListItemsPerRun": 5000
   },
   "ServiceBus": {
+    "Enabled": false,
     "FullyQualifiedNamespace": "<namespace>.servicebus.windows.net",
     "DriveSyncQueue": "sharepoint-drive-sync",
     "DocumentProcessQueue": "sharepoint-document-process",
@@ -1584,21 +1617,23 @@ Le développeur a besoin :
 - d’un site SharePoint de test;
 - du service Azure AI Search de développement;
 - du fournisseur d’embeddings configuré;
-- d’Azure Service Bus ou de son émulateur;
 - de ngrok ou d’un tunnel HTTPS équivalent.
+
+En mode local, Service Bus reste désactivé : les synchronisations persistées
+dans SQL sont réclamées directement par le Worker. Le transport Service Bus est
+réservé à un environnement où les files et leurs consommateurs sont déployés.
 
 Ordre de démarrage :
 
 1. démarrer SQL Server;
-2. démarrer Service Bus ou son émulateur;
-3. démarrer AssistantCore.Service;
-4. démarrer l’hôte de webhooks;
-5. démarrer le worker;
-6. ouvrir le tunnel HTTPS vers le port du webhook;
-7. configurer l’URL publique;
-8. créer ou recréer les souscriptions;
-9. vérifier la validation Microsoft;
-10. ajouter un fichier de test.
+2. démarrer AssistantCore.Service;
+3. démarrer l’hôte de webhooks;
+4. démarrer le worker;
+5. ouvrir le tunnel HTTPS vers le port du webhook;
+6. configurer l’URL publique;
+7. créer ou recréer les souscriptions;
+8. vérifier la validation Microsoft;
+9. ajouter un fichier de test.
 
 Une URL de tunnel modifiée demande de mettre à jour ou recréer les
 souscriptions concernées.
@@ -1882,6 +1917,9 @@ La fonctionnalité est terminée seulement si :
 <a id="m365-sharepoint-references"></a>
 ## Références
 
+- [Consentement administrateur Microsoft Identity](https://learn.microsoft.com/en-us/entra/identity-platform/v2-admin-consent)
+- [Flow OAuth 2.0 avec informations d'identification du client](https://learn.microsoft.com/en-us/entra/identity-platform/v2-oauth2-client-creds-grant-flow)
+- [Lire l'organisation avec Microsoft Graph](https://learn.microsoft.com/en-us/graph/api/organization-list)
 - [Notifications Microsoft Graph](https://learn.microsoft.com/en-us/graph/change-notifications-overview)
 - [Recevoir les notifications par webhook](https://learn.microsoft.com/en-us/graph/change-notifications-delivery-webhooks)
 - [Créer une souscription](https://learn.microsoft.com/en-us/graph/api/subscription-post-subscriptions)

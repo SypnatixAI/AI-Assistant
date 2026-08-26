@@ -1,6 +1,7 @@
 using AssistantCore.ExternalServices.Services.Azure;
 using AssistantCore.Service.Application.Configuration;
 using AssistantCore.Service.Application.Models.Messages.Connectors.Microsoft365;
+using AssistantCore.Service.Application.Services.Microsoft365;
 using AssistantCore.Service.Application.Services.Messages.Connectors.Microsoft365;
 using Microsoft.Extensions.Options;
 
@@ -8,7 +9,8 @@ namespace AssistantCore.Service.Infrastructure.Connectors.Microsoft365;
 
 public sealed class Microsoft365SearchRepositoryAdapter(
     AzureAiSearchPassageSearchClient client,
-    IOptions<AzureAiSearchOptions> options) : IMicrosoft365SearchRepository
+    IOptions<AzureAiSearchOptions> options,
+    IMicrosoft365EmbeddingGenerator? embeddingGenerator = null) : IMicrosoft365SearchRepository
 {
     private static readonly IReadOnlySet<string> SupportedSourceTypes =
         new HashSet<string>(["sharepoint", "onedrive"], StringComparer.OrdinalIgnoreCase);
@@ -29,6 +31,18 @@ public sealed class Microsoft365SearchRepositoryAdapter(
         }
 
         var filter = BuildSecurityFilter(parameters.SecurityContext);
+        IReadOnlyList<float>? queryVector = null;
+        if (embeddingGenerator is not null)
+        {
+            var queryVectors = await embeddingGenerator.CreateAsync(
+                [parameters.Query],
+                cancellationToken);
+            queryVector = queryVectors.Count == 1
+                ? queryVectors[0]
+                : throw new InvalidOperationException(
+                    "The embedding provider did not return exactly one query vector.");
+        }
+
         var results = await client.SearchAsync(
             configuration.Endpoint,
             configuration.IndexName,
@@ -36,6 +50,7 @@ public sealed class Microsoft365SearchRepositoryAdapter(
             parameters.Query,
             filter,
             parameters.MaximumResults,
+            queryVector,
             cancellationToken);
 
         return results.Select(result => new Microsoft365SearchRecord(
@@ -43,8 +58,8 @@ public sealed class Microsoft365SearchRepositoryAdapter(
                 result.Title,
                 result.Content,
                 result.ChunkId,
-                Url: null,
-                ModifiedAt: null,
+                result.Url,
+                result.ModifiedAt,
                 result.Score))
             .ToArray();
     }

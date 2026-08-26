@@ -7,6 +7,33 @@ namespace AssistantCore.ExternalServices.Services.OpenAI;
 #pragma warning disable OPENAI001
 public sealed class OpenAiResponsesClient
 {
+    private const string DecisionOutputSchema =
+        """
+        {
+          "type": "object",
+          "properties": {
+            "decision": {
+              "type": "string",
+              "enum": ["answer", "cannotAnswer"]
+            },
+            "reason": {
+              "type": "string"
+            },
+            "answer": {
+              "type": ["string", "null"]
+            },
+            "evidenceIds": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "required": ["decision", "reason", "answer", "evidenceIds"],
+          "additionalProperties": false
+        }
+        """;
+
     private readonly ResponsesClient _client;
 
     public OpenAiResponsesClient(OpenAiClientSettings settings)
@@ -63,7 +90,15 @@ public sealed class OpenAiResponsesClient
             Instructions = request.Instructions,
             ParallelToolCallsEnabled = true,
             StoredOutputEnabled = true,
-            PreviousResponseId = request.PreviousResponseId
+            PreviousResponseId = request.PreviousResponseId,
+            TextOptions = new ResponseTextOptions
+            {
+                TextFormat = ResponseTextFormat.CreateJsonSchemaFormat(
+                    "assistant_decision",
+                    BinaryData.FromString(DecisionOutputSchema),
+                    "The assistant's final answerability decision.",
+                    true)
+            }
         };
 
         if (request.PreviousResponseId is null)

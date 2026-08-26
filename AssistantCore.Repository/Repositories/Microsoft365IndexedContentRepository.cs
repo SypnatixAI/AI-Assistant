@@ -44,6 +44,17 @@ public sealed class Microsoft365IndexedContentRepository(AssistantCoreDbContext 
             .ToArrayAsync(cancellationToken);
     }
 
+    public async Task<IReadOnlyCollection<Microsoft365IndexedContent>> GetBySourceAsync(
+        Guid organizationId,
+        Guid sourceId,
+        CancellationToken cancellationToken = default) =>
+        await dbContext.Microsoft365IndexedContents
+            .Include(content => content.Passages)
+            .Where(content =>
+                content.OrganizationId == organizationId
+                && content.Microsoft365SourceId == sourceId)
+            .ToArrayAsync(cancellationToken);
+
     public async Task RequestAclReconciliationAsync(
         Guid sourceId,
         DateTimeOffset dueAt,
@@ -76,6 +87,14 @@ public sealed class Microsoft365IndexedContentRepository(AssistantCoreDbContext 
             dbContext.Microsoft365IndexedContents.Add(content);
         }
 
+        await dbContext.SaveChangesAsync(cancellationToken);
+    }
+
+    public async Task DeleteAsync(
+        Microsoft365IndexedContent content,
+        CancellationToken cancellationToken = default)
+    {
+        dbContext.Microsoft365IndexedContents.Remove(content);
         await dbContext.SaveChangesAsync(cancellationToken);
     }
 }

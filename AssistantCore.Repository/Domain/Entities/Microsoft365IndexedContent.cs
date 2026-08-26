@@ -7,6 +7,10 @@ public sealed class Microsoft365IndexedContent
     public Guid Microsoft365SourceId { get; set; }
     public string ExternalContentId { get; set; } = string.Empty;
     public string? SiteUrl { get; set; }
+    public string? DocumentVersion { get; set; }
+    public string? Title { get; set; }
+    public string? WebUrl { get; set; }
+    public DateTimeOffset? LastModifiedAt { get; set; }
     public string? AclFingerprint { get; set; }
     public bool IsAvailable { get; set; }
     public DateTimeOffset? NextAclReconciliationAt { get; set; }

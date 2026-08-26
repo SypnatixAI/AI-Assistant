@@ -67,16 +67,25 @@ public sealed class AiToolRegistryTests
 
         var microsoft365Tool = tools.Single(
             tool => tool.Name == AiToolNames.SearchMicrosoft365);
-        var allowedSourceTypes = microsoft365Tool.InputSchema
+        var sourceTypesSchema = microsoft365Tool.InputSchema
             .GetProperty("properties")
             .GetProperty("sourceTypes")
-            .GetProperty("anyOf")[0]
+            .GetProperty("anyOf")[0];
+        var allowedSourceTypes = sourceTypesSchema
             .GetProperty("items")
             .GetProperty("enum")
             .EnumerateArray()
             .Select(item => item.GetString()!)
             .ToArray();
         Assert.Equal(["onedrive", "sharepoint"], allowedSourceTypes);
+        Assert.False(sourceTypesSchema.TryGetProperty("uniqueItems", out _));
+
+        var crmTool = tools.Single(tool => tool.Name == AiToolNames.QueryCrm);
+        var entityTypesSchema = crmTool.InputSchema
+            .GetProperty("properties")
+            .GetProperty("entityTypes")
+            .GetProperty("anyOf")[0];
+        Assert.False(entityTypesSchema.TryGetProperty("uniqueItems", out _));
     }
 
     [Theory, AutoDomainData]

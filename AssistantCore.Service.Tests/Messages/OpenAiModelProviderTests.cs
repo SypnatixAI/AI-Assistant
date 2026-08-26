@@ -113,19 +113,20 @@ public sealed class OpenAiModelProviderTests
         Assert.Equal(2, result.Usage.ToolCallCount);
     }
 
-    [Fact]
-    public async Task Given_ACannotAnswerDecision_When_GetNextActionAsync_Then_ReturnsTheFinalInsufficientInformationAnswer()
+    [Theory, AutoDomainData]
+    public async Task Given_ACannotAnswerDecisionWithoutAnswer_When_GetNextActionAsync_Then_ReturnsInsufficientInformation(
+        string responseId)
     {
         // Given
         var client = new StubOpenAiResponsesClient
         {
             Handler = (_, _) => Task.FromResult(new OpenAiResponsesResult(
-                "response-004",
+                responseId,
                 """
                 {
                   "decision": "cannotAnswer",
                   "reason": "No available source contains the requested information.",
-                  "answer": "I could not find enough information to answer.",
+                  "answer": null,
                   "evidenceIds": []
                 }
                 """,
@@ -140,9 +141,7 @@ public sealed class OpenAiModelProviderTests
 
         // Then
         Assert.Equal(AiModelDecisionType.InsufficientInformation, result.Decision.Type);
-        Assert.Equal(
-            "I could not find enough information to answer.",
-            result.Decision.Answer);
+        Assert.Null(result.Decision.Answer);
         Assert.Empty(result.Decision.CitedEvidenceIds);
     }
 
@@ -247,6 +246,7 @@ public sealed class OpenAiModelProviderTests
 
         // Then
         Assert.Equal("AI_PROVIDER_UNAVAILABLE", exception.TechnicalCode);
+        Assert.Equal(statusCode, exception.ProviderStatusCode);
     }
 
     private static StubOpenAiResponsesClient CreateFailingClient(int statusCode) =>

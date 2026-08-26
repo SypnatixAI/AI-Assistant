@@ -4,9 +4,9 @@ namespace AssistantCore.Service.Application.Services.Microsoft365;
 
 public interface IMicrosoft365ConsentClient
 {
-    Uri CreateAuthorizationUri(string state);
+    Uri CreateAdminConsentUri(string state);
 
-    Task<Microsoft365ConsentExchange> ExchangeCodeAsync(
-        string code,
+    Task<Microsoft365ConsentExchange> CompleteAdminConsentAsync(
+        string tenantId,
         CancellationToken cancellationToken = default);
 }

@@ -17,7 +17,7 @@ public sealed class Microsoft365ConnectionServiceTests
     public async Task Given_ValidConsentCallback_When_CompleteConsentAsync_Then_OneActiveConnectorIsCreated(
         Guid organizationId,
         Guid connectionId,
-        string tenantId,
+        Guid tenantId,
         string accessToken,
         CancellationToken cancellationToken)
     {
@@ -28,7 +28,10 @@ public sealed class Microsoft365ConnectionServiceTests
         var repository = new StubConnectionRepository { Connection = connection };
         var consentClient = new StubConsentClient
         {
-            Exchange = new Microsoft365ConsentExchange(tenantId, accessToken, now.AddHours(1))
+            Exchange = new Microsoft365ConsentExchange(
+                tenantId.ToString("D"),
+                accessToken,
+                now.AddHours(1))
         };
         var tokenStore = new RecordingTokenStore();
         var service = CreateService(
@@ -40,18 +43,56 @@ public sealed class Microsoft365ConnectionServiceTests
 
         // When
         var result = await service.CompleteConsentAsync(
-            "authorization-code",
+            tenantId.ToString("D"),
+            true,
             "protected-state",
             null,
             cancellationToken);
 
         // Then
         Assert.Equal(connectionId, result.ConnectionId);
-        Assert.Equal(tenantId, result.TenantId);
+        Assert.Equal(tenantId.ToString("D"), result.TenantId);
         Assert.Equal(Microsoft365ConnectionStatus.Active, result.Status);
         Assert.Equal(1, repository.CompleteConsentCallCount);
         Assert.Equal(connectionId, tokenStore.ConnectionId);
         Assert.Equal(accessToken, tokenStore.AccessToken);
+        Assert.Equal(tenantId.ToString("D"), consentClient.ReceivedTenantId);
+    }
+
+    [Theory, AutoDomainData]
+    public async Task Given_AdminConsentWasNotGranted_When_CompleteConsentAsync_Then_RequestIsRejected(
+        Guid organizationId,
+        Guid tenantId,
+        CancellationToken cancellationToken)
+    {
+        // Given
+        var now = new DateTimeOffset(2026, 8, 18, 12, 0, 0, TimeSpan.Zero);
+        var connection = CreatePendingConnection(Guid.NewGuid(), organizationId, now.AddMinutes(10));
+        var consentClient = new StubConsentClient();
+        var service = CreateService(
+            new StubConnectionRepository { Connection = connection },
+            consentClient,
+            new StubStateProtector
+            {
+                UnprotectedState = new Microsoft365ConsentState(
+                    organizationId,
+                    Guid.NewGuid(),
+                    now.AddMinutes(10))
+            },
+            new RecordingTokenStore(),
+            now);
+
+        // When
+        var action = () => service.CompleteConsentAsync(
+            tenantId.ToString("D"),
+            false,
+            "protected-state",
+            null,
+            cancellationToken);
+
+        // Then
+        await Assert.ThrowsAsync<BadRequestException>(action);
+        Assert.Null(consentClient.ReceivedTenantId);
     }
 
     [Theory, AutoDomainData]
@@ -74,7 +115,8 @@ public sealed class Microsoft365ConnectionServiceTests
 
         // When
         var action = () => service.CompleteConsentAsync(
-            "authorization-code",
+            Guid.NewGuid().ToString("D"),
+            true,
             "protected-state",
             null,
             cancellationToken);
@@ -104,7 +146,8 @@ public sealed class Microsoft365ConnectionServiceTests
 
         // When
         var action = () => service.CompleteConsentAsync(
-            "authorization-code",
+            Guid.NewGuid().ToString("D"),
+            true,
             "protected-state",
             null,
             cancellationToken);
@@ -131,7 +174,8 @@ public sealed class Microsoft365ConnectionServiceTests
 
         // When
         var action = () => service.CompleteConsentAsync(
-            "authorization-code",
+            Guid.NewGuid().ToString("D"),
+            true,
             "modified-state",
             null,
             cancellationToken);
@@ -143,7 +187,7 @@ public sealed class Microsoft365ConnectionServiceTests
     [Theory, AutoDomainData]
     public async Task Given_TenantConnectedToAnotherOrganization_When_CompleteConsentAsync_Then_RequestIsRejected(
         Guid organizationId,
-        string tenantId,
+        Guid tenantId,
         CancellationToken cancellationToken)
     {
         // Given
@@ -155,7 +199,10 @@ public sealed class Microsoft365ConnectionServiceTests
         };
         var consentClient = new StubConsentClient
         {
-            Exchange = new Microsoft365ConsentExchange(tenantId, "access-token", now.AddHours(1))
+            Exchange = new Microsoft365ConsentExchange(
+                tenantId.ToString("D"),
+                "access-token",
+                now.AddHours(1))
         };
         var service = CreateService(
             repository,
@@ -169,7 +216,8 @@ public sealed class Microsoft365ConnectionServiceTests
 
         // When
         var action = () => service.CompleteConsentAsync(
-            "authorization-code",
+            tenantId.ToString("D"),
+            true,
             "protected-state",
             null,
             cancellationToken);
@@ -333,12 +381,19 @@ public sealed class Microsoft365ConnectionServiceTests
     private sealed class StubConsentClient : IMicrosoft365ConsentClient
     {
         public Microsoft365ConsentExchange Exchange { get; init; } =
-            new("tenant-id", "access-token", DateTimeOffset.UtcNow.AddHours(1));
+            new(Guid.NewGuid().ToString("D"), "access-token", DateTimeOffset.UtcNow.AddHours(1));
+        public string? ReceivedTenantId { get; private set; }
 
-        public Uri CreateAuthorizationUri(string state) => new("https://login.microsoftonline.com/authorize");
+        public Uri CreateAdminConsentUri(string state) =>
+            new("https://login.microsoftonline.com/organizations/v2.0/adminconsent");
 
-        public Task<Microsoft365ConsentExchange> ExchangeCodeAsync(string code, CancellationToken cancellationToken = default) =>
-            Task.FromResult(Exchange);
+        public Task<Microsoft365ConsentExchange> CompleteAdminConsentAsync(
+            string tenantId,
+            CancellationToken cancellationToken = default)
+        {
+            ReceivedTenantId = tenantId;
+            return Task.FromResult(Exchange);
+        }
     }
 
     private sealed class StubStateProtector : IMicrosoft365ConsentStateProtector

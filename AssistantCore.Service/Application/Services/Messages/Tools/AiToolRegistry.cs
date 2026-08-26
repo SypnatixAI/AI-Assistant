@@ -85,7 +85,6 @@ public sealed class AiToolRegistry(
                     {
                         type = "array",
                         items = new { type = "string", @enum = allowedSourceTypes },
-                        uniqueItems = true,
                         description = "Sources a limiter, ou null pour toutes les sources autorisees."
                     }),
                     ["dateFrom"] = NullableDateProperty("Date minimale des contenus."),
@@ -124,7 +123,6 @@ public sealed class AiToolRegistry(
                         type = "string",
                         @enum = new[] { "customers", "contacts", "opportunities" }
                     },
-                    uniqueItems = true,
                     description = "Types d'entites a limiter, ou null pour tous les types autorises."
                 })
             }));

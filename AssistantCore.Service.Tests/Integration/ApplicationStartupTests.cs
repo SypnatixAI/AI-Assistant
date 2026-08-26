@@ -1,7 +1,10 @@
 using System.Net;
+using AssistantCore.Service.Application.Services.Microsoft365;
+using AssistantCore.Service.Infrastructure.Microsoft365;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 
 namespace AssistantCore.Service.Tests.Integration;
@@ -218,5 +221,60 @@ public sealed class ApplicationStartupTests
         // Then
         Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
         Assert.Equal("/swagger", response.Headers.Location?.OriginalString);
+    }
+
+    [Theory, AutoDomainData]
+    public void Given_LocalServiceBusDisabled_When_CreateClient_Then_LocalPublisherIsRegistered(
+        bool _)
+    {
+        // Given
+        using var factory = new WebApplicationFactory<Program>()
+            .WithWebHostBuilder(builder =>
+            {
+                builder.UseEnvironment(Environments.Development);
+                builder.ConfigureAppConfiguration(configuration =>
+                    configuration.AddInMemoryCollection(
+                        new Dictionary<string, string?>
+                        {
+                            ["AiModels:Providers:OpenAI:ApiKey"] = "integration-test-secret",
+                            ["Microsoft365:ClientSecret"] = "integration-test-secret",
+                            ["ServiceBus:Enabled"] = "false"
+                        }));
+            });
+        using var client = factory.CreateClient();
+
+        // When
+        var publisher = factory.Services.GetRequiredService<IMicrosoft365SynchronizationPublisher>();
+
+        // Then
+        Assert.IsType<Microsoft365LocalSynchronizationPublisherAdapter>(publisher);
+    }
+
+    [Theory, AutoDomainData]
+    public void Given_AzureServiceBusEnabled_When_CreateClient_Then_AzurePublisherIsRegistered(
+        bool _)
+    {
+        // Given
+        using var factory = new WebApplicationFactory<Program>()
+            .WithWebHostBuilder(builder =>
+            {
+                builder.UseEnvironment(Environments.Development);
+                builder.ConfigureAppConfiguration(configuration =>
+                    configuration.AddInMemoryCollection(
+                        new Dictionary<string, string?>
+                        {
+                            ["AiModels:Providers:OpenAI:ApiKey"] = "integration-test-secret",
+                            ["Microsoft365:ClientSecret"] = "integration-test-secret",
+                            ["ServiceBus:Enabled"] = "true",
+                            ["ServiceBus:FullyQualifiedNamespace"] = "assistant-test.servicebus.windows.net"
+                        }));
+            });
+        using var client = factory.CreateClient();
+
+        // When
+        var publisher = factory.Services.GetRequiredService<IMicrosoft365SynchronizationPublisher>();
+
+        // Then
+        Assert.IsType<Microsoft365SynchronizationPublisherAdapter>(publisher);
     }
 }

@@ -3,6 +3,7 @@ using System.Text.Json;
 using AssistantCore.ExternalServices.Services.Azure;
 using AssistantCore.Service.Application.Configuration;
 using AssistantCore.Service.Application.Models.Messages.Connectors.Microsoft365;
+using AssistantCore.Service.Application.Services.Microsoft365;
 using AssistantCore.Service.Infrastructure.Connectors.Microsoft365;
 using Microsoft.Extensions.Options;
 
@@ -20,7 +21,8 @@ public sealed class Microsoft365SearchRepositoryTests
         string query,
         string chunkId,
         string title,
-        string content)
+        string content,
+        float[] queryVector)
     {
         // Given
         string? payload = null;
@@ -51,7 +53,8 @@ public sealed class Microsoft365SearchRepositoryTests
                 Endpoint = "https://search.example",
                 IndexName = "content-index",
                 ApiKey = apiKey
-            }));
+            }),
+            new StubEmbeddingGenerator(queryVector));
         var parameters = new Microsoft365SearchParameters(
             query,
             ["sharepoint"],
@@ -76,8 +79,20 @@ public sealed class Microsoft365SearchRepositoryTests
         Assert.Contains(firstGroupId.ToString("D"), filter, StringComparison.Ordinal);
         Assert.Contains(secondGroupId.ToString("D"), filter, StringComparison.Ordinal);
         Assert.Equal(
-            "chunkId,title,content",
+            "chunkId,title,content,url,modifiedAt",
             document.RootElement.GetProperty("select").GetString());
         Assert.DoesNotContain("allowedUserIds", document.RootElement.GetProperty("select").GetString());
+        var vectorQuery = document.RootElement.GetProperty("vectorQueries")[0];
+        Assert.Equal("contentVector", vectorQuery.GetProperty("fields").GetString());
+        Assert.Equal(queryVector, vectorQuery.GetProperty("vector").EnumerateArray().Select(value => value.GetSingle()));
+    }
+
+    private sealed class StubEmbeddingGenerator(IReadOnlyList<float> vector)
+        : IMicrosoft365EmbeddingGenerator
+    {
+        public Task<IReadOnlyList<IReadOnlyList<float>>> CreateAsync(
+            IReadOnlyCollection<string> contents,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult<IReadOnlyList<IReadOnlyList<float>>>([vector]);
     }
 }
