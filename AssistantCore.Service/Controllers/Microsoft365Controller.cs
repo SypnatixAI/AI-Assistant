@@ -10,6 +10,10 @@ using AssistantCore.Service.Application.Commands.GetMicrosoft365SiteLists.Models
 using AssistantCore.Service.Application.Commands.EnableMicrosoft365List;
 using AssistantCore.Service.Application.Commands.EnableMicrosoft365List.Models;
 using AssistantCore.Service.Application.Models.Microsoft365;
+using AssistantCore.Service.Application.Commands.RegisterMicrosoft365Site;
+using AssistantCore.Service.Application.Commands.GetMicrosoft365SiteDrives;
+using AssistantCore.Service.Application.Commands.EnableMicrosoft365Drive;
+using AssistantCore.Service.Application.Commands.EnableMicrosoft365Drive.Models;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Swashbuckle.AspNetCore.Annotations;
@@ -21,6 +25,41 @@ namespace AssistantCore.Service.Controllers;
 [Authorize]
 public sealed class Microsoft365Controller(IDispatcher dispatcher) : ControllerBase
 {
+    [HttpPost("sites/{siteId}")]
+    public async Task<ActionResult<Microsoft365SiteResponse>> RegisterSite(
+        string siteId,
+        CancellationToken cancellationToken)
+    {
+        var response = await dispatcher.SendAsync(
+            new RegisterMicrosoft365SiteCommand(siteId),
+            cancellationToken);
+        return Ok(response);
+    }
+
+    [HttpGet("sites/{siteId}/drives")]
+    public async Task<ActionResult<IReadOnlyCollection<Microsoft365DriveResponse>>> GetSiteDrives(
+        string siteId,
+        CancellationToken cancellationToken)
+    {
+        var response = await dispatcher.SendAsync(
+            new GetMicrosoft365SiteDrivesCommand(siteId),
+            cancellationToken);
+        return Ok(response);
+    }
+
+    [HttpPatch("sites/{siteId}/drives/{driveId}")]
+    public async Task<ActionResult<Microsoft365DriveResponse>> EnableDrive(
+        string siteId,
+        string driveId,
+        [FromBody] EnableMicrosoft365DriveRequest request,
+        CancellationToken cancellationToken)
+    {
+        var response = await dispatcher.SendAsync(
+            new EnableMicrosoft365DriveCommand(siteId, driveId, request.IsIndexed),
+            cancellationToken);
+        return Ok(response);
+    }
+
     [HttpPost("consent")]
     [SwaggerOperation(Summary = "Démarrer le consentement administrateur Microsoft 365")]
     [SwaggerResponse(StatusCodes.Status200OK, "Consent URL created.", typeof(StartMicrosoft365ConsentResponse))]
@@ -40,14 +79,16 @@ public sealed class Microsoft365Controller(IDispatcher dispatcher) : ControllerB
     [SwaggerResponse(StatusCodes.Status200OK, "Microsoft 365 tenant connected.", typeof(CompleteMicrosoft365ConsentResponse))]
     [SwaggerResponse(StatusCodes.Status400BadRequest, "Consent callback is invalid.")]
     public async Task<ActionResult<CompleteMicrosoft365ConsentResponse>> CompleteConsent(
-        [FromQuery] string? code,
+        [FromQuery] string? tenant,
+        [FromQuery(Name = "admin_consent")] bool? adminConsent,
         [FromQuery] string? state,
         [FromQuery(Name = "error")] string? microsoftError,
         CancellationToken cancellationToken)
     {
         var response = await dispatcher.SendAsync(
             new CompleteMicrosoft365ConsentCommand(
-                code ?? string.Empty,
+                tenant ?? string.Empty,
+                adminConsent is true,
                 state ?? string.Empty,
                 microsoftError),
             cancellationToken);

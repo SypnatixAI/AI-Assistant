@@ -114,10 +114,15 @@ public sealed class ExceptionMiddleware(
         }
         catch (AiProviderException exception)
         {
+            var providerStatusCode = exception is AiProviderUnavailableException unavailable
+                ? unavailable.ProviderStatusCode
+                : null;
+
             logger.LogWarning(
-                "AI provider request failed. Provider: {ProviderName}; code: {TechnicalCode}.",
+                "AI provider request failed. Provider: {ProviderName}; code: {TechnicalCode}; provider status: {ProviderStatusCode}.",
                 exception.ProviderName,
-                exception.TechnicalCode);
+                exception.TechnicalCode,
+                providerStatusCode);
 
             context.Response.StatusCode = exception switch
             {

@@ -262,7 +262,7 @@ public sealed class Microsoft365AclResolverAdapter(
                 accumulator.EntraGroupIds);
         }
 
-        var sharePointGroup = identity.SharePointGroup ?? identity.SiteGroup;
+        var sharePointGroup = identity.SiteGroup ?? identity.SharePointGroup;
         if (sharePointGroup is not null)
         {
             return TryNormalize(

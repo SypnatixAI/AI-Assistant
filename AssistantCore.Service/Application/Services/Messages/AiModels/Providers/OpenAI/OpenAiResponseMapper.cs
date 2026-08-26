@@ -72,8 +72,7 @@ public sealed class OpenAiResponseMapper
             SerializerOptions)
             ?? throw CreateInvalidResponseException();
 
-        if (string.IsNullOrWhiteSpace(decision.Reason)
-            || string.IsNullOrWhiteSpace(decision.Answer))
+        if (string.IsNullOrWhiteSpace(decision.Reason))
         {
             throw CreateInvalidResponseException();
         }
@@ -84,6 +83,12 @@ public sealed class OpenAiResponseMapper
             "cannotanswer" => AiModelDecisionType.InsufficientInformation,
             _ => throw CreateInvalidResponseException()
         };
+
+        if (action == AiModelDecisionType.Answer
+            && string.IsNullOrWhiteSpace(decision.Answer))
+        {
+            throw CreateInvalidResponseException();
+        }
 
         return new AiModelDecision(
             action,

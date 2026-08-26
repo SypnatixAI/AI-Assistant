@@ -22,6 +22,8 @@ public sealed class Microsoft365DocumentWorkConfiguration
         builder.Property(work => work.WebUrl).HasMaxLength(2048);
         builder.Property(work => work.MimeType).HasMaxLength(300);
         builder.Property(work => work.DeduplicationKey).HasMaxLength(64).IsRequired();
+        builder.Property(work => work.Status).HasConversion<string>().HasMaxLength(30).IsRequired();
+        builder.Property(work => work.LastErrorCode).HasMaxLength(200);
 
         builder.HasOne(work => work.Organization)
             .WithMany()
@@ -38,5 +40,6 @@ public sealed class Microsoft365DocumentWorkConfiguration
 
         builder.HasIndex(work => work.DeduplicationKey).IsUnique();
         builder.HasIndex(work => new { work.Microsoft365SourceId, work.CreatedAt });
+        builder.HasIndex(work => new { work.Status, work.NextAttemptAt, work.CreatedAt });
     }
 }

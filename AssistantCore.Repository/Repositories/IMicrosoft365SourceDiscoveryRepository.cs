@@ -14,6 +14,40 @@ public interface IMicrosoft365SourceDiscoveryRepository
         string siteId,
         CancellationToken cancellationToken = default);
 
+    Task<Microsoft365Site> SaveSiteAsync(
+        Microsoft365Connection connection,
+        string siteId,
+        string displayName,
+        string webUrl,
+        DateTimeOffset discoveredAt,
+        CancellationToken cancellationToken = default) =>
+        Task.FromException<Microsoft365Site>(new NotSupportedException());
+
+    Task<IReadOnlyCollection<Microsoft365Drive>> GetDrivesAsync(
+        Guid organizationId,
+        string siteId,
+        CancellationToken cancellationToken = default) =>
+        Task.FromResult<IReadOnlyCollection<Microsoft365Drive>>([]);
+
+    Task<Microsoft365Drive?> FindDriveAsync(
+        Guid organizationId,
+        string siteId,
+        string driveId,
+        CancellationToken cancellationToken = default) =>
+        Task.FromResult<Microsoft365Drive?>(null);
+
+    Task SaveDriveActivationAsync(
+        Microsoft365Drive drive,
+        DateTimeOffset requestedAt,
+        CancellationToken cancellationToken = default) =>
+        Task.FromException(new NotSupportedException());
+
+    Task SaveDriveDeactivationAsync(
+        Microsoft365Drive drive,
+        DateTimeOffset requestedAt,
+        CancellationToken cancellationToken = default) =>
+        Task.FromException(new NotSupportedException());
+
     Task<Microsoft365List?> FindListAsync(
         Guid organizationId,
         string siteId,

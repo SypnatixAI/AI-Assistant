@@ -35,6 +35,27 @@ public sealed class AzureAiSearchPassageSearchClient
         int maximumResults,
         CancellationToken cancellationToken = default)
     {
+        return await SearchAsync(
+            endpoint,
+            indexName,
+            apiKey,
+            query,
+            filter,
+            maximumResults,
+            null,
+            cancellationToken);
+    }
+
+    public async Task<IReadOnlyCollection<AzureAiSearchPassageSearchResult>> SearchAsync(
+        string endpoint,
+        string indexName,
+        string? apiKey,
+        string query,
+        string filter,
+        int maximumResults,
+        IReadOnlyList<float>? queryVector,
+        CancellationToken cancellationToken = default)
+    {
         ArgumentException.ThrowIfNullOrWhiteSpace(query);
         ArgumentException.ThrowIfNullOrWhiteSpace(filter);
         if (maximumResults <= 0)
@@ -42,17 +63,32 @@ public sealed class AzureAiSearchPassageSearchClient
             throw new ArgumentOutOfRangeException(nameof(maximumResults));
         }
 
+        var payload = new Dictionary<string, object?>
+        {
+            ["search"] = query,
+            ["filter"] = filter,
+            ["select"] = "chunkId,title,content,url,modifiedAt",
+            ["top"] = maximumResults
+        };
+        if (queryVector is { Count: > 0 })
+        {
+            payload["vectorQueries"] = new[]
+            {
+                new
+                {
+                    kind = "vector",
+                    vector = queryVector,
+                    fields = "contentVector",
+                    k = maximumResults
+                }
+            };
+        }
+
         using var request = new HttpRequestMessage(
             HttpMethod.Post,
             CreateRequestUri(endpoint, indexName))
         {
-            Content = JsonContent.Create(new
-            {
-                search = query,
-                filter,
-                select = "chunkId,title,content",
-                top = maximumResults
-            })
+            Content = JsonContent.Create(payload)
         };
         if (string.IsNullOrWhiteSpace(apiKey))
         {
@@ -108,7 +144,9 @@ public sealed class AzureAiSearchPassageSearchClient
             document.ChunkId,
             document.Title,
             document.Content,
-            document.Score);
+            document.Score,
+            document.Url,
+            document.ModifiedAt);
     }
 
     private static Uri CreateRequestUri(string endpoint, string indexName)
@@ -132,5 +170,7 @@ public sealed class AzureAiSearchPassageSearchClient
         [property: JsonPropertyName("chunkId")] string? ChunkId,
         [property: JsonPropertyName("title")] string? Title,
         [property: JsonPropertyName("content")] string? Content,
+        [property: JsonPropertyName("url")] string? Url,
+        [property: JsonPropertyName("modifiedAt")] DateTimeOffset? ModifiedAt,
         [property: JsonPropertyName("@search.score")] double? Score);
 }

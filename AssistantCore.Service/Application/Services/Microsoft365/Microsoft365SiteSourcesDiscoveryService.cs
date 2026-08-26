@@ -12,7 +12,8 @@ public sealed class Microsoft365SiteSourcesDiscoveryService(
     IMicrosoft365SourceDiscoveryRepository sourceDiscoveryRepository,
     IMicrosoft365SiteSourcesClient siteSourcesClient,
     IMicrosoft365TechnicalTokenStore tokenStore,
-    TimeProvider timeProvider) : IMicrosoft365SiteSourcesDiscoveryService
+    TimeProvider timeProvider,
+    IMicrosoft365ApplicationTokenClient? applicationTokenClient = null) : IMicrosoft365SiteSourcesDiscoveryService
 {
     public async Task<Microsoft365SiteSourcesDiscoveryResult> DiscoverAsync(
         string siteId,
@@ -47,7 +48,12 @@ public sealed class Microsoft365SiteSourcesDiscoveryService(
             cancellationToken);
         if (string.IsNullOrWhiteSpace(accessToken))
         {
-            throw new Microsoft365ExternalException("Microsoft 365 technical token is unavailable.");
+            accessToken = await (applicationTokenClient
+                ?? throw new Microsoft365ExternalException("Microsoft 365 technical token is unavailable."))
+                .AcquireGraphTokenAsync(
+                site.Microsoft365Connection.TenantId
+                    ?? throw new Microsoft365ExternalException("Microsoft 365 tenant is unavailable."),
+                cancellationToken);
         }
 
         var result = await siteSourcesClient.GetSiteSourcesAsync(

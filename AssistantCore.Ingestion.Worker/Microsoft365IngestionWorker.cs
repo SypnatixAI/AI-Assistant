@@ -13,6 +13,16 @@ public sealed class Microsoft365IngestionWorker(
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
+        await using (var initializationScope = scopeFactory.CreateAsyncScope())
+        {
+            var indexInitializer = initializationScope.ServiceProvider
+                .GetService<IMicrosoft365SearchIndexInitializer>();
+            if (indexInitializer is not null)
+            {
+                await indexInitializer.EnsureCreatedAsync(stoppingToken);
+            }
+        }
+
         if (options.Value.RunStartupConnectionCheck
             && options.Value.StartupConnectionId is { } connectionId)
         {
@@ -31,6 +41,8 @@ public sealed class Microsoft365IngestionWorker(
             TimeSpan.FromSeconds(options.Value.MaintenanceIntervalSeconds));
         do
         {
+            await ProcessPendingIngestionAsync(stoppingToken);
+
             try
             {
                 await using var scope = scopeFactory.CreateAsyncScope();
@@ -81,5 +93,49 @@ public sealed class Microsoft365IngestionWorker(
             }
         }
         while (await timer.WaitForNextTickAsync(stoppingToken));
+    }
+
+    private async Task ProcessPendingIngestionAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            for (var index = 0; index < options.Value.MaximumSynchronizationsPerCycle; index++)
+            {
+                await using var scope = scopeFactory.CreateAsyncScope();
+                var service = scope.ServiceProvider
+                    .GetService<IMicrosoft365PendingSynchronizationService>();
+                if (service is null)
+                {
+                    break;
+                }
+                if (!await service.ProcessNextAsync(cancellationToken))
+                {
+                    break;
+                }
+            }
+
+            for (var index = 0; index < options.Value.MaximumDocumentsPerCycle; index++)
+            {
+                await using var scope = scopeFactory.CreateAsyncScope();
+                var service = scope.ServiceProvider
+                    .GetService<IMicrosoft365DocumentProcessingService>();
+                if (service is null)
+                {
+                    break;
+                }
+                if (!await service.ProcessNextAsync(cancellationToken))
+                {
+                    break;
+                }
+            }
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception exception)
+        {
+            logger.LogError(exception, "Microsoft 365 pending ingestion cycle failed.");
+        }
     }
 }

@@ -6,4 +6,5 @@ public sealed class AzureAiSearchOptions
     public string Endpoint { get; init; } = string.Empty;
     public string IndexName { get; init; } = string.Empty;
     public string? ApiKey { get; init; }
+    public bool EnsureIndexOnStartup { get; init; }
 }

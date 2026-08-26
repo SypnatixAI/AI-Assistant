@@ -9,4 +9,8 @@ public sealed class Microsoft365WorkerOptions
     public Guid? StartupConnectionId { get; init; }
 
     public int MaintenanceIntervalSeconds { get; init; } = 300;
+
+    public int MaximumSynchronizationsPerCycle { get; init; } = 10;
+
+    public int MaximumDocumentsPerCycle { get; init; } = 100;
 }

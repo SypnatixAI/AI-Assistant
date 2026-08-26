@@ -4,6 +4,7 @@ using AssistantCore.Service.Application.Commands.CompleteMicrosoft365Consent.Mod
 namespace AssistantCore.Service.Application.Commands.CompleteMicrosoft365Consent;
 
 public sealed record CompleteMicrosoft365ConsentCommand(
-    string Code,
+    string TenantId,
+    bool AdminConsent,
     string State,
     string? MicrosoftError) : IRequest<CompleteMicrosoft365ConsentResponse>;

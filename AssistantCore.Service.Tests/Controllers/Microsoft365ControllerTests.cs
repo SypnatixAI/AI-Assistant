@@ -39,19 +39,22 @@ public sealed class Microsoft365ControllerTests
     [Theory, AutoDomainData]
     public async Task Given_AConsentCallback_When_CompleteConsent_Then_DispatchesCallbackValues(
         Guid connectionId,
-        string tenantId,
-        string code,
+        Guid tenantId,
         string state,
         CancellationToken cancellationToken)
     {
         // Given
-        var response = new CompleteMicrosoft365ConsentResponse(connectionId, tenantId, "Active");
+        var response = new CompleteMicrosoft365ConsentResponse(
+            connectionId,
+            tenantId.ToString("D"),
+            "Active");
         var dispatcher = new RecordingDispatcher { Response = response };
         var controller = new Microsoft365Controller(dispatcher);
 
         // When
         var actionResult = await controller.CompleteConsent(
-            code,
+            tenantId.ToString("D"),
+            true,
             state,
             null,
             cancellationToken);
@@ -60,7 +63,8 @@ public sealed class Microsoft365ControllerTests
         var okResult = Assert.IsType<OkObjectResult>(actionResult.Result);
         Assert.Same(response, okResult.Value);
         var command = Assert.IsType<CompleteMicrosoft365ConsentCommand>(dispatcher.ReceivedRequest);
-        Assert.Equal(code, command.Code);
+        Assert.Equal(tenantId.ToString("D"), command.TenantId);
+        Assert.True(command.AdminConsent);
         Assert.Equal(state, command.State);
         Assert.Null(command.MicrosoftError);
         Assert.Equal(cancellationToken, dispatcher.ReceivedCancellationToken);

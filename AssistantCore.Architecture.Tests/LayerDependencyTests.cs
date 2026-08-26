@@ -247,6 +247,30 @@ public sealed class LayerDependencyTests
         Assert.Empty(violations);
     }
 
+    [Fact]
+    public void Given_Microsoft365WordExtraction_When_ValidateExternalCallChain_Then_UsesAdapterAndExternalClient()
+    {
+        // Given
+        var applicationExtractorType = typeof(IMicrosoft365ContentExtractor);
+        var adapterType = typeof(Microsoft365WordContentExtractorAdapter);
+        var externalClientType = typeof(MicrosoftWordContentExtractorClient);
+
+        // When
+        var violations = new List<string>();
+        if (!applicationExtractorType.IsAssignableFrom(adapterType))
+        {
+            violations.Add($"{adapterType.FullName} must implement {applicationExtractorType.FullName}.");
+        }
+
+        if (!HasConstructorParameter(adapterType, externalClientType))
+        {
+            violations.Add($"{adapterType.FullName} must depend on {externalClientType.FullName}.");
+        }
+
+        // Then
+        Assert.Empty(violations);
+    }
+
     private static IReadOnlyCollection<string> ValidateApplicationServiceDependencies(
         System.Reflection.Assembly serviceAssembly)
     {
