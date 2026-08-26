@@ -13,7 +13,8 @@ public sealed class CompleteMicrosoft365ConsentCommandHandler(
         CancellationToken cancellationToken)
     {
         var result = await connectionService.CompleteConsentAsync(
-            request.Code,
+            request.TenantId,
+            request.AdminConsent,
             request.State,
             request.MicrosoftError,
             cancellationToken);

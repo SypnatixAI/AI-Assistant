@@ -38,12 +38,33 @@ public sealed class Microsoft365PassageIndexWriterAdapter(
             acl.AllowedSharePointGroupIds,
             acl.HasAnonymousLink,
             acl.Fingerprint,
-            IsAvailable: false)).ToArray();
+            IsAvailable: false,
+            passage.SiteId,
+            passage.DriveId,
+            passage.DriveItemId,
+            passage.DocumentVersion,
+            passage.ChunkNumber,
+            passage.Url,
+            passage.ModifiedAt,
+            passage.ContentVector)).ToArray();
         return client.MergeOrUploadAsync(
             configuration.Endpoint,
             configuration.IndexName,
             configuration.ApiKey,
             documents,
+            cancellationToken);
+    }
+
+    public Task DeleteAsync(
+        IReadOnlyCollection<string> chunkIds,
+        CancellationToken cancellationToken = default)
+    {
+        var configuration = options.Value;
+        return client.DeleteAsync(
+            configuration.Endpoint,
+            configuration.IndexName,
+            configuration.ApiKey,
+            chunkIds,
             cancellationToken);
     }
 }

@@ -13,19 +13,19 @@ public sealed class Microsoft365ConsentClientAdapter(
     IOptions<Microsoft365Options> options,
     TimeProvider timeProvider) : IMicrosoft365ConsentClient
 {
-    public Uri CreateAuthorizationUri(string state)
+    public Uri CreateAdminConsentUri(string state)
     {
         var configuration = options.Value;
         EnsureConfigured(configuration);
-        return identityClient.CreateAuthorizationUri(
+        return identityClient.CreateAdminConsentUri(
             configuration.AuthorityBaseUrl,
             configuration.ClientId,
             configuration.ConsentCallbackUrl,
             state);
     }
 
-    public async Task<Microsoft365ConsentExchange> ExchangeCodeAsync(
-        string code,
+    public async Task<Microsoft365ConsentExchange> CompleteAdminConsentAsync(
+        string tenantId,
         CancellationToken cancellationToken = default)
     {
         var configuration = options.Value;
@@ -34,17 +34,21 @@ public sealed class Microsoft365ConsentClientAdapter(
         AssistantCore.ExternalServices.Entities.Microsoft.MicrosoftTenant tenant;
         try
         {
-            token = await identityClient.ExchangeAuthorizationCodeAsync(
+            token = await identityClient.AcquireApplicationTokenAsync(
                 configuration.AuthorityBaseUrl,
+                tenantId,
                 configuration.ClientId,
                 configuration.ClientSecret,
-                configuration.ConsentCallbackUrl,
-                code,
                 cancellationToken);
             tenant = await graphClient.GetCurrentTenantAsync(
                 configuration.GraphBaseUrl,
                 token.AccessToken,
                 cancellationToken);
+            if (!string.Equals(tenant.Id, tenantId, StringComparison.OrdinalIgnoreCase))
+            {
+                throw new MicrosoftExternalException(
+                    "Microsoft tenant validation returned an unexpected tenant.");
+            }
         }
         catch (MicrosoftExternalException exception)
         {

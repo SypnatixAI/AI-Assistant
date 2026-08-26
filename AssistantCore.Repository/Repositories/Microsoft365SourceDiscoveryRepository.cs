@@ -8,6 +8,141 @@ namespace AssistantCore.Repository.Repositories;
 public sealed class Microsoft365SourceDiscoveryRepository(AssistantCoreDbContext dbContext)
     : IMicrosoft365SourceDiscoveryRepository
 {
+    public async Task<Microsoft365Site> SaveSiteAsync(
+        Microsoft365Connection connection,
+        string siteId,
+        string displayName,
+        string webUrl,
+        DateTimeOffset discoveredAt,
+        CancellationToken cancellationToken = default)
+    {
+        var site = await dbContext.Microsoft365Sites.SingleOrDefaultAsync(candidate =>
+            candidate.OrganizationId == connection.OrganizationId
+            && candidate.SiteId == siteId,
+            cancellationToken);
+        if (site is null)
+        {
+            site = new Microsoft365Site
+            {
+                Id = Guid.NewGuid(),
+                Microsoft365ConnectionId = connection.Id,
+                OrganizationId = connection.OrganizationId,
+                OrganizationConnectorId = connection.OrganizationConnectorId,
+                SiteId = siteId,
+                Kind = Microsoft365SourceKind.SharePointSite,
+                ExternalResourceId = siteId,
+                DisplayName = displayName,
+                WebUrl = webUrl,
+                Status = Microsoft365SourceStatus.Enabled,
+                IsIndexed = false,
+                DiscoveredAt = discoveredAt,
+                EnabledAt = discoveredAt
+            };
+            dbContext.Microsoft365Sites.Add(site);
+        }
+        else
+        {
+            site.RefreshDiscovery(displayName, webUrl);
+            site.Status = Microsoft365SourceStatus.Enabled;
+            site.EnabledAt ??= discoveredAt;
+        }
+
+        await dbContext.SaveChangesAsync(cancellationToken);
+        return site;
+    }
+
+    public async Task<IReadOnlyCollection<Microsoft365Drive>> GetDrivesAsync(
+        Guid organizationId,
+        string siteId,
+        CancellationToken cancellationToken = default) =>
+        await dbContext.Microsoft365Drives
+            .AsNoTracking()
+            .Where(drive => drive.OrganizationId == organizationId && drive.SiteId == siteId)
+            .OrderBy(drive => drive.DisplayName)
+            .ToArrayAsync(cancellationToken);
+
+    public Task<Microsoft365Drive?> FindDriveAsync(
+        Guid organizationId,
+        string siteId,
+        string driveId,
+        CancellationToken cancellationToken = default) =>
+        dbContext.Microsoft365Drives
+            .Include(drive => drive.Microsoft365Connection)
+            .Include(drive => drive.Synchronizations)
+            .Include(drive => drive.Subscriptions)
+            .SingleOrDefaultAsync(drive =>
+                drive.OrganizationId == organizationId
+                && drive.SiteId == siteId
+                && drive.DriveId == driveId,
+                cancellationToken);
+
+    public async Task SaveDriveActivationAsync(
+        Microsoft365Drive drive,
+        DateTimeOffset requestedAt,
+        CancellationToken cancellationToken = default)
+    {
+        if (drive.EnableIndexing(requestedAt)
+            && !drive.Synchronizations.Any(synchronization =>
+                synchronization.Type == Microsoft365SynchronizationType.Initial
+                && synchronization.Status is Microsoft365SynchronizationStatus.Pending
+                    or Microsoft365SynchronizationStatus.Running))
+        {
+            drive.Synchronizations.Add(new Microsoft365Synchronization
+            {
+                Id = Guid.NewGuid(),
+                Microsoft365SourceId = drive.Id,
+                Type = Microsoft365SynchronizationType.Initial,
+                Status = Microsoft365SynchronizationStatus.Pending,
+                RequestedAt = requestedAt
+            });
+        }
+
+        if (!drive.Subscriptions.Any(subscription =>
+                subscription.Status is Microsoft365SubscriptionStatus.Pending
+                    or Microsoft365SubscriptionStatus.Active
+                    or Microsoft365SubscriptionStatus.RenewalRequired))
+        {
+            drive.Subscriptions.Add(new Microsoft365Subscription
+            {
+                Id = Guid.NewGuid(),
+                Microsoft365SourceId = drive.Id,
+                OrganizationId = drive.OrganizationId,
+                Resource = $"/drives/{drive.DriveId}/root",
+                Status = Microsoft365SubscriptionStatus.Pending,
+                CreatedAt = requestedAt,
+                UpdatedAt = requestedAt
+            });
+        }
+
+        await dbContext.SaveChangesAsync(cancellationToken);
+    }
+
+    public async Task SaveDriveDeactivationAsync(
+        Microsoft365Drive drive,
+        DateTimeOffset requestedAt,
+        CancellationToken cancellationToken = default)
+    {
+        drive.DisableIndexing();
+        foreach (var subscription in drive.Subscriptions.Where(subscription =>
+                     subscription.Status is Microsoft365SubscriptionStatus.Pending
+                         or Microsoft365SubscriptionStatus.Active
+                         or Microsoft365SubscriptionStatus.RenewalRequired
+                         or Microsoft365SubscriptionStatus.Error))
+        {
+            subscription.Status = string.IsNullOrWhiteSpace(subscription.MicrosoftSubscriptionId)
+                ? Microsoft365SubscriptionStatus.Revoked
+                : Microsoft365SubscriptionStatus.RevocationRequired;
+            subscription.UpdatedAt = requestedAt;
+        }
+        foreach (var synchronization in drive.Synchronizations.Where(synchronization =>
+                     synchronization.Status is Microsoft365SynchronizationStatus.Pending
+                         or Microsoft365SynchronizationStatus.TemporaryFailure))
+        {
+            synchronization.Status = Microsoft365SynchronizationStatus.Cancelled;
+        }
+
+        await dbContext.SaveChangesAsync(cancellationToken);
+    }
     public Task<Microsoft365Site?> FindSiteAsync(
         Guid organizationId,
         string siteId,

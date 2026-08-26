@@ -1,8 +1,8 @@
 # AssistantCore Microsoft 365 ingestion worker
 
-Le Worker démarre séparément de l'API. Dans le socle du ticket 45, il peut
-effectuer une vérification contrôlée d'une connexion avant que les files et les
-traitements documentaires soient ajoutés par les tickets suivants.
+Le Worker démarre séparément de l'API. Il traite les synchronisations de
+bibliothèques en attente, télécharge les documents autorisés, extrait les DOCX,
+crée les passages et embeddings, puis les publie dans Azure AI Search.
 
 Les secrets ne sont pas présents dans `appsettings.json`. Le Worker et l'API
 partagent le même magasin local `user-secrets` :
@@ -10,6 +10,8 @@ partagent le même magasin local `user-secrets` :
 ```bash
 dotnet user-secrets --project AssistantCore.Service set "Microsoft365:ClientSecret" "<secret>"
 dotnet user-secrets --project AssistantCore.Service set "ConnectionStrings:AssistantCoreDatabase" "<connection-string>"
+dotnet user-secrets --project AssistantCore.Service set "Microsoft365:EmbeddingApiKey" "<openai-api-key>"
+dotnet user-secrets --project AssistantCore.Service set "AzureSearch:ApiKey" "<azure-search-api-key>"
 ```
 
 Pour vérifier une connexion précise au démarrage sans placer son identifiant
@@ -24,3 +26,8 @@ dotnet run --project AssistantCore.Ingestion.Worker
 Une connexion `Active` est acceptée. Une connexion `PendingConsent`, `Error` ou
 `Revoked` arrête la vérification avec une erreur et aucun appel Microsoft n'est
 effectué.
+
+Pour un index de développement qui n'existe pas encore, laisser
+`AzureSearch:EnsureIndexOnStartup` à `true` dans la configuration du Worker.
+Le Worker crée alors le schéma textuel, vectoriel, de provenance et d'ACL. Il
+ne remplace jamais automatiquement un index existant.

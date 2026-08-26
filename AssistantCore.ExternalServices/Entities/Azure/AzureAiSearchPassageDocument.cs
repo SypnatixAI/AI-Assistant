@@ -10,4 +10,12 @@ public sealed record AzureAiSearchPassageDocument(
     IReadOnlyCollection<string> AllowedSharePointGroupIds,
     bool HasAnonymousLink,
     string AclFingerprint,
-    bool IsAvailable);
+    bool IsAvailable,
+    string? SiteId = null,
+    string? DriveId = null,
+    string? DriveItemId = null,
+    string? DocumentVersion = null,
+    int ChunkNumber = 0,
+    string? Url = null,
+    DateTimeOffset? ModifiedAt = null,
+    IReadOnlyList<float>? ContentVector = null);

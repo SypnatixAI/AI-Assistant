@@ -43,11 +43,12 @@ public sealed class Microsoft365ConnectionService(
             now,
             cancellationToken);
 
-        return consentClient.CreateAuthorizationUri(state);
+        return consentClient.CreateAdminConsentUri(state);
     }
 
     public async Task<Microsoft365ConnectionResult> CompleteConsentAsync(
-        string code,
+        string tenantId,
+        bool adminConsent,
         string state,
         string? microsoftError,
         CancellationToken cancellationToken = default)
@@ -89,7 +90,7 @@ public sealed class Microsoft365ConnectionService(
             throw new BadRequestException("Microsoft 365 consent state has expired.");
         }
 
-        if (!string.IsNullOrWhiteSpace(microsoftError))
+        if (!string.IsNullOrWhiteSpace(microsoftError) || !adminConsent)
         {
             await connectionRepository.MarkConsentErrorAsync(
                 connection,
@@ -99,28 +100,31 @@ public sealed class Microsoft365ConnectionService(
             throw new BadRequestException("Microsoft 365 consent was not granted.");
         }
 
-        if (string.IsNullOrWhiteSpace(code))
+        if (!Guid.TryParse(tenantId, out var parsedTenantId) || parsedTenantId == Guid.Empty)
         {
-            throw new BadRequestException("Microsoft 365 authorization code is required.");
+            throw new BadRequestException("Microsoft 365 tenant is required.");
         }
 
+        var validatedTenantId = parsedTenantId.ToString("D");
         Microsoft365ConsentExchange exchange;
         try
         {
-            exchange = await consentClient.ExchangeCodeAsync(code, cancellationToken);
+            exchange = await consentClient.CompleteAdminConsentAsync(
+                validatedTenantId,
+                cancellationToken);
         }
         catch (Microsoft365ExternalException)
         {
             await connectionRepository.MarkConsentErrorAsync(
                 connection,
-                "MicrosoftConsentExchangeFailed",
+                "MicrosoftAdminConsentValidationFailed",
                 now,
                 cancellationToken);
             throw;
         }
         if (await connectionRepository.IsTenantConnectedToAnotherOrganizationAsync(
                 consentState.OrganizationId,
-                exchange.TenantId,
+                validatedTenantId,
                 cancellationToken))
         {
             throw new BadRequestException("Microsoft 365 tenant is already connected to another organization.");
@@ -128,7 +132,7 @@ public sealed class Microsoft365ConnectionService(
 
         await connectionRepository.CompleteConsentAsync(
             connection,
-            exchange.TenantId,
+            validatedTenantId,
             now,
             cancellationToken);
         try
@@ -151,7 +155,7 @@ public sealed class Microsoft365ConnectionService(
 
         return new Microsoft365ConnectionResult(
             connection.Id,
-            exchange.TenantId,
+            validatedTenantId,
             connection.Status);
     }
 

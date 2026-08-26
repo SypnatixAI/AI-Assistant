@@ -63,12 +63,37 @@ public sealed class AzureAiSearchPassageAclClient
                 ["organizationId"] = passage.OrganizationId,
                 ["title"] = passage.Title,
                 ["content"] = passage.Content,
+                ["siteId"] = passage.SiteId,
+                ["driveId"] = passage.DriveId,
+                ["driveItemId"] = passage.DriveItemId,
+                ["documentVersion"] = passage.DocumentVersion,
+                ["chunkNumber"] = passage.ChunkNumber,
+                ["url"] = passage.Url,
+                ["modifiedAt"] = passage.ModifiedAt,
+                ["contentVector"] = passage.ContentVector,
                 ["allowedUserIds"] = passage.AllowedUserIds,
                 ["allowedGroupIds"] = passage.AllowedGroupIds,
                 ["allowedSharePointGroupIds"] = passage.AllowedSharePointGroupIds,
                 ["hasAnonymousLink"] = passage.HasAnonymousLink,
                 ["aclFingerprint"] = passage.AclFingerprint,
                 ["isAvailable"] = passage.IsAvailable
+            }),
+            cancellationToken);
+
+    public Task DeleteAsync(
+        string endpoint,
+        string indexName,
+        string? apiKey,
+        IReadOnlyCollection<string> chunkIds,
+        CancellationToken cancellationToken = default) =>
+        SendBatchesAsync(
+            endpoint,
+            indexName,
+            apiKey,
+            chunkIds.Select(chunkId => new Dictionary<string, object?>
+            {
+                ["@search.action"] = "delete",
+                ["chunkId"] = chunkId
             }),
             cancellationToken);
 

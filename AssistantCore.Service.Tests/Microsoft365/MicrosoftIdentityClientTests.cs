@@ -43,7 +43,7 @@ public sealed class MicrosoftIdentityClientTests
     }
 
     [Theory, AutoDomainData]
-    public void Given_ConsentState_When_CreateAuthorizationUri_Then_UsesMultitenantAuthorizationCodeFlow(
+    public void Given_ConsentState_When_CreateAdminConsentUri_Then_UsesMultitenantAdminConsentFlow(
         string clientId,
         string state)
     {
@@ -53,7 +53,7 @@ public sealed class MicrosoftIdentityClientTests
         var client = new MicrosoftIdentityClient(httpClient);
 
         // When
-        var uri = client.CreateAuthorizationUri(
+        var uri = client.CreateAdminConsentUri(
             "https://login.microsoftonline.com",
             clientId,
             "https://localhost/callback",
@@ -61,42 +61,14 @@ public sealed class MicrosoftIdentityClientTests
 
         // Then
         Assert.Equal("login.microsoftonline.com", uri.Host);
-        Assert.Contains("/organizations/oauth2/v2.0/authorize", uri.AbsolutePath, StringComparison.Ordinal);
-        Assert.Contains("response_type=code", uri.Query, StringComparison.Ordinal);
-        Assert.Contains("prompt=admin_consent", uri.Query, StringComparison.Ordinal);
+        Assert.Contains("/organizations/v2.0/adminconsent", uri.AbsolutePath, StringComparison.Ordinal);
+        Assert.DoesNotContain("response_type", uri.Query, StringComparison.Ordinal);
+        Assert.DoesNotContain("prompt", uri.Query, StringComparison.Ordinal);
+        Assert.Contains(
+            Uri.EscapeDataString("https://graph.microsoft.com/.default"),
+            uri.Query,
+            StringComparison.Ordinal);
         Assert.Contains(Uri.EscapeDataString(state), uri.Query, StringComparison.Ordinal);
-    }
-
-    [Theory, AutoDomainData]
-    public async Task Given_AuthorizationCode_When_ExchangeAuthorizationCodeAsync_Then_ReturnsTokenWithoutLoggingIt(
-        string accessToken)
-    {
-        // Given
-        HttpRequestMessage? receivedRequest = null;
-        using var httpClient = new HttpClient(new StubHttpMessageHandler(request =>
-        {
-            receivedRequest = request;
-            return new HttpResponseMessage(HttpStatusCode.OK)
-            {
-                Content = new StringContent($$"""{"access_token":"{{accessToken}}","expires_in":3600}""")
-            };
-        }));
-        var client = new MicrosoftIdentityClient(httpClient);
-
-        // When
-        var result = await client.ExchangeAuthorizationCodeAsync(
-            "https://login.microsoftonline.com",
-            "client-id",
-            "client-secret",
-            "https://localhost/callback",
-            "authorization-code",
-            CancellationToken.None);
-
-        // Then
-        Assert.Equal(accessToken, result.AccessToken);
-        Assert.Equal(3600, result.ExpiresInSeconds);
-        Assert.Equal(HttpMethod.Post, receivedRequest?.Method);
-        Assert.Contains("/organizations/oauth2/v2.0/token", receivedRequest?.RequestUri?.AbsolutePath);
     }
 }
 

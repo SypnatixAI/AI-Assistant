@@ -70,6 +70,50 @@ public sealed class Microsoft365AclResolverAdapterTests
     }
 
     [Theory, AutoDomainData]
+    public async Task Given_ASiteGroupAndAnUnusableSharePointGroup_When_ResolveAsync_Then_UsesTheSiteGroup(
+        Guid organizationId)
+    {
+        // Given
+        using var identityHttpClient = CreateTokenHttpClient();
+        using var graphHttpClient = new HttpClient(new StubHttpMessageHandler(_ =>
+            CreateJsonResponse("""
+                {"value":[{
+                  "id":"permission-1",
+                  "roles":["read"],
+                  "grantedToV2":{
+                    "siteGroup":{"id":"17","displayName":"Site members"},
+                    "sharePointGroup":{"id":"unusable-id","displayName":"Site members"}
+                  }
+                }]}
+                """)));
+        using var sharePointHttpClient = new HttpClient(new StubHttpMessageHandler(_ =>
+            CreateJsonResponse("{}")));
+        var adapter = CreateAdapter(
+            identityHttpClient,
+            graphHttpClient,
+            sharePointHttpClient,
+            new CapturingLogger());
+        var reference = new Microsoft365ContentReference(
+            Microsoft365ContentReferenceKind.DriveItem,
+            "contoso.sharepoint.com,site-collection-id,web-id",
+            "drive-id",
+            null,
+            "item-id");
+
+        // When
+        var result = await adapter.ResolveAsync(
+            CreateOrganization(organizationId),
+            reference,
+            CancellationToken.None);
+
+        // Then
+        var acl = Assert.IsType<Microsoft365AclResolution.ResolvedAcl>(result).Acl;
+        Assert.Equal(
+            ["spg:contoso.sharepoint.com,site-collection-id,web-id:17"],
+            acl.AllowedSharePointGroupIds);
+    }
+
+    [Theory, AutoDomainData]
     public async Task Given_AListItem_When_ResolveAsync_Then_UsesSharePointRestAndMapsStableIdentities(
         Guid organizationId,
         Guid listId,

@@ -30,6 +30,10 @@ public interface IMicrosoft365ConnectionRepository
         Guid connectionId,
         CancellationToken cancellationToken = default);
 
+    Task<Microsoft365Connection?> FindActiveByOrganizationAsync(
+        Guid organizationId,
+        CancellationToken cancellationToken = default) => Task.FromResult<Microsoft365Connection?>(null);
+
     Task CompleteConsentAsync(
         Microsoft365Connection connection,
         string tenantId,

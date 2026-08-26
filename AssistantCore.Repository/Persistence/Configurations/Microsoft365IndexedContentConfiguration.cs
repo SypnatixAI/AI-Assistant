@@ -14,6 +14,9 @@ public sealed class Microsoft365IndexedContentConfiguration
         builder.Property(content => content.Id).ValueGeneratedNever();
         builder.Property(content => content.ExternalContentId).HasMaxLength(400).IsRequired();
         builder.Property(content => content.SiteUrl).HasMaxLength(2048);
+        builder.Property(content => content.DocumentVersion).HasMaxLength(1000);
+        builder.Property(content => content.Title).HasMaxLength(1000);
+        builder.Property(content => content.WebUrl).HasMaxLength(2048);
         builder.Property(content => content.AclFingerprint).HasMaxLength(64);
         builder.HasOne(content => content.Organization)
             .WithMany()

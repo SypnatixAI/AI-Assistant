@@ -28,6 +28,12 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IMicrosoft365SourceDiscoveryRepository, Microsoft365SourceDiscoveryRepository>();
         services.AddScoped<IMicrosoft365SubscriptionRepository, Microsoft365SubscriptionRepository>();
         services.AddScoped<IMicrosoft365IndexedContentRepository, Microsoft365IndexedContentRepository>();
+        services.AddScoped<
+            IMicrosoft365DocumentWorkProcessingRepository,
+            Microsoft365DocumentWorkProcessingRepository>();
+        services.AddScoped<
+            IMicrosoft365PendingSynchronizationRepository,
+            Microsoft365PendingSynchronizationRepository>();
 
         return services;
     }

@@ -95,6 +95,16 @@ public sealed class Microsoft365ConnectionRepository(AssistantCoreDbContext dbCo
             .AsNoTracking()
             .SingleOrDefaultAsync(connection => connection.Id == connectionId, cancellationToken);
 
+    public Task<Microsoft365Connection?> FindActiveByOrganizationAsync(
+        Guid organizationId,
+        CancellationToken cancellationToken = default) =>
+        dbContext.Microsoft365Connections
+            .Include(connection => connection.OrganizationConnector)
+            .SingleOrDefaultAsync(connection =>
+                connection.OrganizationId == organizationId
+                && connection.Status == Microsoft365ConnectionStatus.Active,
+                cancellationToken);
+
     public async Task CompleteConsentAsync(
         Microsoft365Connection connection,
         string tenantId,
@@ -104,6 +114,27 @@ public sealed class Microsoft365ConnectionRepository(AssistantCoreDbContext dbCo
         connection.Activate(tenantId, completedAt);
         connection.OrganizationConnector.Status = RecordStatus.Active;
         connection.OrganizationConnector.IsConfigured = true;
+
+        var sharePointSource = await dbContext.OrganizationConnectorSources
+            .SingleOrDefaultAsync(source =>
+                source.OrganizationConnectorId == connection.OrganizationConnectorId
+                && source.SourceType == Microsoft365SourceType.SharePoint,
+                cancellationToken);
+        if (sharePointSource is null)
+        {
+            dbContext.OrganizationConnectorSources.Add(new OrganizationConnectorSource
+            {
+                OrganizationConnectorId = connection.OrganizationConnectorId,
+                SourceType = Microsoft365SourceType.SharePoint,
+                Status = RecordStatus.Active,
+                IsIndexed = true
+            });
+        }
+        else
+        {
+            sharePointSource.Status = RecordStatus.Active;
+            sharePointSource.IsIndexed = true;
+        }
 
         await dbContext.SaveChangesAsync(cancellationToken);
     }

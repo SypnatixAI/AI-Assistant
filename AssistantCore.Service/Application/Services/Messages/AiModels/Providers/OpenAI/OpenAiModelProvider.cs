@@ -46,9 +46,11 @@ public sealed class OpenAiModelProvider(
         {
             throw new AiProviderLimitException(ProviderName);
         }
-        catch (OpenAiTransportException)
+        catch (OpenAiTransportException exception)
         {
-            throw new AiProviderUnavailableException(ProviderName);
+            throw new AiProviderUnavailableException(
+                ProviderName,
+                exception.StatusCode);
         }
         catch (AiProviderException)
         {

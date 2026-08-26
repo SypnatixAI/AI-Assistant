@@ -1,4 +1,5 @@
 using AssistantCore.Repository.Domain.Entities;
+using AssistantCore.Repository.Domain.Enums;
 using AssistantCore.Repository.Persistence;
 using Microsoft.EntityFrameworkCore;
 
@@ -82,6 +83,7 @@ public sealed class Microsoft365DriveSynchronizationRepository(AssistantCoreDbCo
                 Size = work.Size,
                 MimeType = work.MimeType,
                 DeduplicationKey = work.DeduplicationKey,
+                Status = Microsoft365DocumentWorkStatus.Pending,
                 CreatedAt = work.CreatedAt
             })
             .ToArray();
