@@ -21,7 +21,8 @@ public sealed class AuthenticateUserServiceTests
         var identity = new StubCurrentIdentity { Identity = authenticatedIdentity };
         var organizationQueries = new StubOrganizationQueries { Result = organization };
         var memberQueries = new StubOrganizationMemberQueries { FoundMember = member };
-        var service = new AuthenticateUserService(identity, memberQueries, organizationQueries);
+        var timeProvider = new StubTimeProvider();
+        var service = new AuthenticateUserService(identity, memberQueries, organizationQueries, timeProvider);
 
         // When
         var result = await service.GetOrganizationAsync(cancellationToken);
@@ -36,6 +37,9 @@ public sealed class AuthenticateUserServiceTests
         Assert.Equal(cancellationToken, organizationQueries.ReceivedCancellationToken);
         Assert.Equal(cancellationToken, memberQueries.ReceivedCancellationToken);
         Assert.Null(memberQueries.CreatedMember);
+        Assert.Equal(1, memberQueries.RecordSuccessfulAuthenticationCallCount);
+        Assert.Equal(member.Id, memberQueries.ReceivedAuthenticatedMemberId);
+        Assert.Equal(timeProvider.UtcNow, memberQueries.ReceivedAuthenticatedAt);
     }
 
     [Theory, AutoDomainData]
@@ -47,7 +51,8 @@ public sealed class AuthenticateUserServiceTests
         var service = new AuthenticateUserService(
             new StubCurrentIdentity { Identity = authenticatedIdentity },
             memberQueries,
-            new StubOrganizationQueries());
+            new StubOrganizationQueries(),
+            new StubTimeProvider());
 
         // When
         var exception = await Assert.ThrowsAsync<ForbiddenException>(
@@ -56,6 +61,7 @@ public sealed class AuthenticateUserServiceTests
         // Then
         Assert.Equal("Organization access denied.", exception.Message);
         Assert.Equal(0, memberQueries.FindMemberCallCount);
+        Assert.Equal(0, memberQueries.RecordSuccessfulAuthenticationCallCount);
     }
 
     [Theory, AutoDomainData]
@@ -71,7 +77,8 @@ public sealed class AuthenticateUserServiceTests
         };
         var organizationQueries = new StubOrganizationQueries { Result = organization };
         var memberQueries = new StubOrganizationMemberQueries();
-        var service = new AuthenticateUserService(identity, memberQueries, organizationQueries);
+        var timeProvider = new StubTimeProvider();
+        var service = new AuthenticateUserService(identity, memberQueries, organizationQueries, timeProvider);
 
         // When
         var result = await service.GetOrganizationAsync(cancellationToken);
@@ -88,6 +95,9 @@ public sealed class AuthenticateUserServiceTests
         Assert.Equal(OrganizationRole.User, createdMember.Role);
         Assert.Equal(RecordStatus.Active, createdMember.Status);
         Assert.Equal(cancellationToken, memberQueries.ReceivedCancellationToken);
+        Assert.Equal(1, memberQueries.RecordSuccessfulAuthenticationCallCount);
+        Assert.Equal(createdMember.Id, memberQueries.ReceivedAuthenticatedMemberId);
+        Assert.Equal(timeProvider.UtcNow, memberQueries.ReceivedAuthenticatedAt);
     }
 
     [Theory, AutoDomainData]
@@ -105,7 +115,8 @@ public sealed class AuthenticateUserServiceTests
         var service = new AuthenticateUserService(
             identity,
             memberQueries,
-            new StubOrganizationQueries { Result = organization });
+            new StubOrganizationQueries { Result = organization },
+            new StubTimeProvider());
 
         // When
         await service.GetOrganizationAsync(CancellationToken.None);
@@ -127,7 +138,8 @@ public sealed class AuthenticateUserServiceTests
                 Identity = authenticatedIdentity with { Email = null }
             },
             memberQueries,
-            new StubOrganizationQueries { Result = organization });
+            new StubOrganizationQueries { Result = organization },
+            new StubTimeProvider());
 
         // When
         var exception = await Assert.ThrowsAsync<UnauthorizedAccessException>(
@@ -136,6 +148,7 @@ public sealed class AuthenticateUserServiceTests
         // Then
         Assert.Equal("Authenticated user email is missing.", exception.Message);
         Assert.Null(memberQueries.CreatedMember);
+        Assert.Equal(0, memberQueries.RecordSuccessfulAuthenticationCallCount);
     }
 
     [Theory, AutoDomainData]
@@ -147,10 +160,12 @@ public sealed class AuthenticateUserServiceTests
         // Given
         member.OrganizationId = organization.Id;
         member.Status = RecordStatus.Inactive;
+        var memberQueries = new StubOrganizationMemberQueries { FoundMember = member };
         var service = new AuthenticateUserService(
             new StubCurrentIdentity { Identity = authenticatedIdentity },
-            new StubOrganizationMemberQueries { FoundMember = member },
-            new StubOrganizationQueries { Result = organization });
+            memberQueries,
+            new StubOrganizationQueries { Result = organization },
+            new StubTimeProvider());
 
         // When
         var exception = await Assert.ThrowsAsync<ForbiddenException>(
@@ -158,6 +173,7 @@ public sealed class AuthenticateUserServiceTests
 
         // Then
         Assert.Equal("Organization member access denied.", exception.Message);
+        Assert.Equal(0, memberQueries.RecordSuccessfulAuthenticationCallCount);
     }
 
 }

@@ -103,4 +103,21 @@ public sealed class OrganizationMemberQueries(AssistantCoreDbContext dbContext) 
         await dbContext.SaveChangesAsync(cancellationToken);
         return member;
     }
+
+    public async Task RecordSuccessfulAuthenticationAsync(
+        Guid memberId,
+        DateTimeOffset authenticatedAt,
+        CancellationToken cancellationToken = default)
+    {
+        var member = await dbContext.OrganizationMembers
+            .SingleOrDefaultAsync(candidate => candidate.Id == memberId, cancellationToken);
+
+        if (member is null || member.LastSuccessfulAuthenticationAt >= authenticatedAt)
+        {
+            return;
+        }
+
+        member.LastSuccessfulAuthenticationAt = authenticatedAt;
+        await dbContext.SaveChangesAsync(cancellationToken);
+    }
 }

@@ -10,7 +10,8 @@ namespace AssistantCore.Service.Application.Services.AuthenticateUser;
 public sealed class AuthenticateUserService(
     ICurrentIdentity currentIdentity,
     IOrganizationMemberQueries organizationMemberQueries,
-    IOrganizationQueries organizationQueries) : IAuthenticateUserService
+    IOrganizationQueries organizationQueries,
+    TimeProvider timeProvider) : IAuthenticateUserService
 {
     public async Task<(Organization Organization, OrganizationMember Member)> GetOrganizationAsync(CancellationToken cancellationToken)
     {
@@ -61,6 +62,11 @@ public sealed class AuthenticateUserService(
         {
             throw new ForbiddenException("Organization member access denied.");
         }
+
+        await organizationMemberQueries.RecordSuccessfulAuthenticationAsync(
+            member.Id,
+            timeProvider.GetUtcNow(),
+            cancellationToken);
 
         return member;
     }
