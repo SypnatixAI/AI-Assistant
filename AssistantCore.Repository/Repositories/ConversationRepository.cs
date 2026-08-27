@@ -57,6 +57,51 @@ public sealed class ConversationRepository(AssistantCoreDbContext dbContext)
                 cancellationToken);
     }
 
+    public async Task<ConversationListPage> ListConversationsAsync(
+        Guid organizationId,
+        Guid ownerMemberId,
+        int limit,
+        DateTimeOffset? cursorUpdatedAt,
+        Guid? cursorId,
+        CancellationToken cancellationToken = default)
+    {
+        var query = dbContext.Conversations
+            .AsNoTracking()
+            .Where(conversation =>
+                conversation.OrganizationId == organizationId
+                && conversation.OwnerMemberId == ownerMemberId
+                && conversation.Status == ConversationStatus.Active);
+
+        if (cursorUpdatedAt is not null && cursorId is not null)
+        {
+            query = query.Where(conversation =>
+                conversation.UpdatedAt < cursorUpdatedAt
+                || (conversation.UpdatedAt == cursorUpdatedAt && conversation.Id < cursorId));
+        }
+
+        var items = await query
+            .OrderByDescending(conversation => conversation.UpdatedAt)
+            .ThenByDescending(conversation => conversation.Id)
+            .Take(limit + 1)
+            .Select(conversation => new ConversationListItem(
+                conversation.Id,
+                conversation.Title,
+                conversation.CreatedAt,
+                conversation.UpdatedAt,
+                conversation.Messages
+                    .OrderByDescending(message => message.CreatedAt)
+                    .ThenByDescending(message => message.Id)
+                    .Select(message => message.Content)
+                    .FirstOrDefault()))
+            .ToListAsync(cancellationToken);
+
+        var hasMore = items.Count > limit;
+
+        return new ConversationListPage(
+            hasMore ? items.Take(limit).ToList() : items,
+            hasMore);
+    }
+
     public async Task<Message?> AddUserMessageAsync(
         Guid organizationId,
         Guid ownerMemberId,

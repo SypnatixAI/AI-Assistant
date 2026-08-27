@@ -438,6 +438,19 @@ public sealed class MessageProcessingLifecycleServiceTests
             return Task.FromResult(FoundConversation);
         }
 
+        public Task<ConversationListPage> ListConversationsAsync(
+            Guid organizationId,
+            Guid ownerMemberId,
+            int limit,
+            DateTimeOffset? cursorUpdatedAt,
+            Guid? cursorId,
+            CancellationToken cancellationToken = default)
+        {
+            Operations.Add("ListConversations");
+            ReceivedCancellationToken = cancellationToken;
+            return Task.FromResult(new ConversationListPage([], false));
+        }
+
         public Task<Message?> AddUserMessageAsync(
             Guid organizationId,
             Guid ownerMemberId,
