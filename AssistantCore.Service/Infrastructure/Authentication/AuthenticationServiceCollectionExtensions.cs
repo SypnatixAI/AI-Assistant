@@ -22,6 +22,7 @@ public static class AuthenticationServiceCollectionExtensions
             .ValidateOnStart();
 
         services.AddSingleton<IAuthorizationHandler, RequiredScopeAuthorizationHandler>();
+        services.AddSingleton<IAuthorizationHandler, RequiredAppRoleAuthorizationHandler>();
         services.AddSingleton<IConfigureOptions<AuthorizationOptions>, ConfigureApiAuthorizationOptions>();
         services.AddAuthorization();
 

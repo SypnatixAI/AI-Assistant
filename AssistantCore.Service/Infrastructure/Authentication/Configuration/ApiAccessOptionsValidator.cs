@@ -6,19 +6,41 @@ public sealed class ApiAccessOptionsValidator : IValidateOptions<ApiAccessOption
 {
     public ValidateOptionsResult Validate(string? name, ApiAccessOptions options)
     {
-        var key = $"{ApiAccessOptions.SectionName}:{nameof(ApiAccessOptions.RequiredScope)}";
+        var scopeError = ValidateSingleValue(
+            options.RequiredScope,
+            nameof(ApiAccessOptions.RequiredScope));
 
-        if (string.IsNullOrWhiteSpace(options.RequiredScope))
+        if (scopeError is not null)
         {
-            return ValidateOptionsResult.Fail($"{key} is required.");
+            return ValidateOptionsResult.Fail(scopeError);
         }
 
-        if (options.RequiredScope.Any(char.IsWhiteSpace))
+        var roleError = ValidateSingleValue(
+            options.RequiredAdmissionRole,
+            nameof(ApiAccessOptions.RequiredAdmissionRole));
+
+        if (roleError is not null)
         {
-            return ValidateOptionsResult.Fail(
-                $"{key} must be a single value without whitespace.");
+            return ValidateOptionsResult.Fail(roleError);
         }
 
         return ValidateOptionsResult.Success;
+    }
+
+    private static string? ValidateSingleValue(string value, string propertyName)
+    {
+        var key = $"{ApiAccessOptions.SectionName}:{propertyName}";
+
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return $"{key} is required.";
+        }
+
+        if (value.Any(char.IsWhiteSpace))
+        {
+            return $"{key} must be a single value without whitespace.";
+        }
+
+        return null;
     }
 }
