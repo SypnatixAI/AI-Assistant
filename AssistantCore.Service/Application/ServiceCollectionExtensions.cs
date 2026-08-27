@@ -1,5 +1,6 @@
 using AssistantCore.Service.Application.Configuration;
 using AssistantCore.Service.Application.Services.AuthenticateUser;
+using AssistantCore.Service.Application.Services.Conversations.Pagination;
 using AssistantCore.Service.Application.Services.Members;
 using AssistantCore.Service.Application.Services.Messages;
 using AssistantCore.Service.Application.Services.Messages.Authorization;
@@ -42,6 +43,7 @@ public static class ServiceCollectionExtensions
                 $"Every value in {MessageOrchestrationOptions.SectionName} must be greater than zero.")
             .ValidateOnStart();
         services.AddScoped<ISendMessageCommandValidator, SendMessageCommandValidator>();
+        services.AddSingleton<IConversationCursorCodec, ConversationCursorCodec>();
         services.AddScoped<IMessageUserContextService, MessageUserContextService>();
         services.AddScoped<IAuthenticateUserService, AuthenticateUserService>();
         services.AddScoped<IMemberManagementService, MemberManagementService>();
