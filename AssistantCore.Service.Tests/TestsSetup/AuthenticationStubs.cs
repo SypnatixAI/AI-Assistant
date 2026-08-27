@@ -79,6 +79,12 @@ internal sealed class StubOrganizationMemberQueries : IOrganizationMemberQueries
 
     public int UpdateRoleCallCount { get; private set; }
 
+    public int RecordSuccessfulAuthenticationCallCount { get; private set; }
+
+    public Guid? ReceivedAuthenticatedMemberId { get; private set; }
+
+    public DateTimeOffset? ReceivedAuthenticatedAt { get; private set; }
+
     public Task<OrganizationMember?> FindMember(
         Guid organizationId,
         IdentityProvider identityProvider,
@@ -136,6 +142,25 @@ internal sealed class StubOrganizationMemberQueries : IOrganizationMemberQueries
         member.Role = role;
         return Task.FromResult(member);
     }
+
+    public Task RecordSuccessfulAuthenticationAsync(
+        Guid memberId,
+        DateTimeOffset authenticatedAt,
+        CancellationToken cancellationToken = default)
+    {
+        RecordSuccessfulAuthenticationCallCount++;
+        ReceivedAuthenticatedMemberId = memberId;
+        ReceivedAuthenticatedAt = authenticatedAt;
+        ReceivedCancellationToken = cancellationToken;
+        return Task.CompletedTask;
+    }
+}
+
+internal sealed class StubTimeProvider : TimeProvider
+{
+    public DateTimeOffset UtcNow { get; set; } = DateTimeOffset.UtcNow;
+
+    public override DateTimeOffset GetUtcNow() => UtcNow;
 }
 
 internal sealed class StubAuthenticateUserService : IAuthenticateUserService

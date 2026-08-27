@@ -28,4 +28,9 @@ public interface IOrganizationMemberQueries
         OrganizationMember member,
         OrganizationRole role,
         CancellationToken cancellationToken = default);
+
+    Task RecordSuccessfulAuthenticationAsync(
+        Guid memberId,
+        DateTimeOffset authenticatedAt,
+        CancellationToken cancellationToken = default);
 }
