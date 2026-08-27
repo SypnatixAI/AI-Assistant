@@ -15,7 +15,9 @@ public sealed class ConfigureApiAuthorizationOptions(IOptions<ApiAccessOptions> 
     {
         options.DefaultPolicy = new AuthorizationPolicyBuilder()
             .RequireAuthenticatedUser()
-            .AddRequirements(new RequiredScopeRequirement(apiAccessOptions.Value.RequiredScope))
+            .AddRequirements(
+                new RequiredScopeRequirement(apiAccessOptions.Value.RequiredScope),
+                new RequiredAppRoleRequirement(apiAccessOptions.Value.RequiredAdmissionRole))
             .Build();
     }
 }

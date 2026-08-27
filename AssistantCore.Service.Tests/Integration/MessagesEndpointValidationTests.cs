@@ -117,7 +117,8 @@ public sealed class MessagesEndpointValidationTests
             var identity = new ClaimsIdentity(
                 [
                     new Claim(ClaimTypes.NameIdentifier, "test-user"),
-                    new Claim("scp", "access_as_user")
+                    new Claim("scp", "access_as_user"),
+                    new Claim("roles", "AssistantCore.Access")
                 ],
                 AuthenticationScheme);
             var principal = new ClaimsPrincipal(identity);

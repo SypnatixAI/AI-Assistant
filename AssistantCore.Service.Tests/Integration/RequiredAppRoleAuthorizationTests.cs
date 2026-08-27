@@ -4,31 +4,18 @@ using static AssistantCore.Service.Tests.AuthorizationIntegrationTestFactory;
 namespace AssistantCore.Service.Tests.Integration;
 
 /// <summary>
-/// Verifie que le scope delegue est exige sur les endpoints utilisateur.
+/// Verifie que le role d'admission Entra (AssistantCore.Access) est exige sur les
+/// endpoints utilisateur, en plus du scope delegue.
 /// </summary>
-public sealed class RequiredScopeAuthorizationTests
+public sealed class RequiredAppRoleAuthorizationTests
 {
     [Fact]
-    public async Task Given_NoToken_When_CallingAuthenticateUser_Then_ReturnsUnauthorized()
-    {
-        // Given
-        await using var factory = CreateFactory(useTestAuthentication: false);
-        using var client = CreateClient(factory);
-
-        // When
-        using var response = await client.GetAsync(AuthenticateUserRoute);
-
-        // Then
-        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
-    }
-
-    [Fact]
-    public async Task Given_AnAuthenticatedTokenWithoutTheRequiredScope_When_CallingAuthenticateUser_Then_ReturnsForbidden()
+    public async Task Given_AnAuthenticatedTokenWithoutAnyRole_When_CallingAuthenticateUser_Then_ReturnsForbidden()
     {
         // Given
         await using var factory = CreateFactory(useTestAuthentication: true);
         using var client = CreateClient(factory);
-        client.DefaultRequestHeaders.Add(RoleHeaderName, RequiredAdmissionRole);
+        client.DefaultRequestHeaders.Add(ScopeHeaderName, RequiredScope);
 
         // When
         using var response = await client.GetAsync(AuthenticateUserRoute);
@@ -38,13 +25,13 @@ public sealed class RequiredScopeAuthorizationTests
     }
 
     [Fact]
-    public async Task Given_AnAuthenticatedTokenWithAnotherScope_When_CallingAuthenticateUser_Then_ReturnsForbidden()
+    public async Task Given_AnAuthenticatedTokenWithAnotherRole_When_CallingAuthenticateUser_Then_ReturnsForbidden()
     {
         // Given
         await using var factory = CreateFactory(useTestAuthentication: true);
         using var client = CreateClient(factory);
-        client.DefaultRequestHeaders.Add(ScopeHeaderName, "profile openid");
-        client.DefaultRequestHeaders.Add(RoleHeaderName, RequiredAdmissionRole);
+        client.DefaultRequestHeaders.Add(ScopeHeaderName, RequiredScope);
+        client.DefaultRequestHeaders.Add(RoleHeaderName, "SomeOtherApp.Access");
 
         // When
         using var response = await client.GetAsync(AuthenticateUserRoute);
@@ -54,7 +41,7 @@ public sealed class RequiredScopeAuthorizationTests
     }
 
     [Fact]
-    public async Task Given_AnAuthenticatedTokenWithTheRequiredScope_When_CallingAuthenticateUser_Then_AuthorizationIsGranted()
+    public async Task Given_AnAuthenticatedTokenWithTheRequiredRole_When_CallingAuthenticateUser_Then_AuthorizationIsGranted()
     {
         // Given
         await using var factory = CreateFactory(useTestAuthentication: true);
