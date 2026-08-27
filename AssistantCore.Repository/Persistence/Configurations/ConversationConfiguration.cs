@@ -59,5 +59,14 @@ public sealed class ConversationConfiguration : IEntityTypeConfiguration<Convers
             conversation.OwnerMemberId,
             conversation.Id
         });
+
+        builder.HasIndex(conversation => new
+        {
+            conversation.OrganizationId,
+            conversation.OwnerMemberId,
+            conversation.Status,
+            conversation.UpdatedAt,
+            conversation.Id
+        });
     }
 }
