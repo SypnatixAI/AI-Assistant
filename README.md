@@ -85,6 +85,58 @@ Swagger est disponible sur :
 https://localhost:7292/swagger
 ```
 
+## Deux modes de démarrage local
+
+### Mode local sans vrais secrets
+
+Ce mode utilise un JWT local et un serveur WireMock pour Microsoft 365,
+Azure AI Search, les embeddings et OpenAI. Les valeurs factices sont versionnées
+dans les fichiers `appsettings.Local.json`; elles ne sont pas lues depuis les
+`user-secrets`.
+
+```bash
+bash scripts/start-local-wiremock.sh
+```
+
+Le script :
+
+1. démarre SQL Server et recrée la base isolée `AssistantCoreLocalDb`;
+2. crée une organisation locale et son administrateur de manière idempotente;
+3. démarre WireMock sur `https://localhost:9443`;
+4. génère un JWT valable huit heures dans `.local/local-jwt.txt`;
+5. démarre l'API et le Worker avec l'environnement `Local`.
+
+Le JWT est également affiché au démarrage. Dans Swagger, utiliser `Authorize`,
+coller uniquement le JWT, puis appeler `GET /api/core/authenticateUser` pour
+valider l'identité locale.
+
+Dans Postman, importer la collection et l'environnement local du dossier
+`postman`, puis sélectionner l'environnement `AssistantCore Local`. Aucune copie
+du JWT n'est nécessaire : avant chaque requête, la collection récupère
+automatiquement le token à l'adresse `https://localhost:9443/local-auth/token`
+et ajoute l'en-tête `Authorization`. Cette automatisation est active uniquement
+lorsque `authentication_mode` vaut `LocalJwt`.
+
+Le mode `LocalJwt` est refusé par l'application dans tout environnement autre
+que `Local`.
+
+La base `AssistantCoreLocalDb` est supprimée et recréée à chaque lancement du
+mode WireMock. La base `AssistantCoreDb`, utilisée par le mode connecté, n'est
+pas réinitialisée.
+
+### Mode local connecté aux vrais services
+
+Ce mode conserve Microsoft Entra, Microsoft Graph, Azure AI Search et OpenAI.
+Il utilise les vrais secrets configurés avec `dotnet user-secrets` comme décrit
+dans la section suivante.
+
+Dans Postman, définir `authentication_mode` à `MicrosoftEntra` pour conserver
+le parcours OAuth 2.0 configuré dans la collection.
+
+```bash
+bash scripts/start-local-live.sh
+```
+
 ## Tester un DOCX localement
 
 Le parcours de test démarre l'API et le Worker Microsoft 365 dans le même
@@ -129,7 +181,7 @@ https://localhost:7292/api/microsoft365/consent/callback
 Créer `.env.database` comme indiqué plus haut, puis exécuter :
 
 ```bash
-bash scripts/start-local-e2e.sh
+bash scripts/start-local-live.sh
 ```
 
 Le script démarre SQL Server, applique les migrations, compile la solution,

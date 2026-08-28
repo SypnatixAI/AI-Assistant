@@ -1,0 +1,24 @@
+{
+  "request": {
+    "method": "POST",
+    "urlPath": "/indexes('microsoft-content-local')/docs/search.post.search"
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "jsonBody": {
+      "value": [
+        {
+          "chunkId": "local-chunk-1",
+          "title": "Document WireMock",
+          "content": "Ce contenu provient du scénario Microsoft 365 local.",
+          "url": "https://contoso.local/sites/assistant/Documents/document-local.docx",
+          "modifiedAt": "2026-01-01T00:00:00Z",
+          "@search.score": 1.0
+        }
+      ]
+    }
+  }
+}

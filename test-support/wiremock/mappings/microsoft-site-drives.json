@@ -1,0 +1,22 @@
+{
+  "request": {
+    "method": "GET",
+    "urlPathPattern": "/v1.0/sites/[^/]+/drives"
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "jsonBody": {
+      "value": [
+        {
+          "id": "local-drive",
+          "name": "Documents locaux",
+          "webUrl": "https://contoso.local/sites/assistant/Documents",
+          "driveType": "documentLibrary"
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "request": {
+    "method": "GET",
+    "urlPathPattern": "/v1.0/drives/[^/]+/root/delta"
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "jsonBody": {
+      "value": [],
+      "@odata.deltaLink": "https://localhost:9443/v1.0/drives/local-drive/root/delta?token=local"
+    }
+  }
+}
