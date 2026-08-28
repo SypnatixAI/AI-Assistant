@@ -123,6 +123,14 @@ public sealed class ConversationListingServiceTests
             CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();
 
+        public Task<ConversationMessagePage> ListMessagesAsync(
+            Guid conversationId,
+            int limit,
+            DateTimeOffset? cursorCreatedAt,
+            Guid? cursorId,
+            CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
         public Task<Conversation?> FindConversationAsync(
             Guid organizationId,
             Guid ownerMemberId,

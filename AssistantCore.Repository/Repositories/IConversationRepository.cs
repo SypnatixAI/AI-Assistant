@@ -18,6 +18,13 @@ public interface IConversationRepository
         Guid conversationId,
         CancellationToken cancellationToken = default);
 
+    Task<ConversationMessagePage> ListMessagesAsync(
+        Guid conversationId,
+        int limit,
+        DateTimeOffset? cursorCreatedAt,
+        Guid? cursorId,
+        CancellationToken cancellationToken = default);
+
     /// <summary>
     /// Retourne une page de resumes de conversations visibles (statut Active),
     /// triees par UpdatedAt puis Id decroissants. Lit toujours limit + 1 elements

@@ -57,6 +57,59 @@ public sealed class ConversationRepository(AssistantCoreDbContext dbContext)
                 cancellationToken);
     }
 
+    public async Task<ConversationMessagePage> ListMessagesAsync(
+        Guid conversationId,
+        int limit,
+        DateTimeOffset? cursorCreatedAt,
+        Guid? cursorId,
+        CancellationToken cancellationToken = default)
+    {
+        var query = dbContext.Messages
+            .AsNoTracking()
+            .Where(message => message.ConversationId == conversationId);
+
+        if (cursorCreatedAt is not null && cursorId is not null)
+        {
+            query = query.Where(message =>
+                message.CreatedAt < cursorCreatedAt
+                || (message.CreatedAt == cursorCreatedAt && message.Id < cursorId));
+        }
+
+        var mostRecentFirst = await query
+            .OrderByDescending(message => message.CreatedAt)
+            .ThenByDescending(message => message.Id)
+            .Take(limit + 1)
+            .Select(message => new ConversationMessageItem(
+                message.Id,
+                message.Role,
+                message.Content,
+                message.ProcessingStatus,
+                message.Model,
+                message.CreatedAt,
+                message.UpdatedAt,
+                message.Sources
+                    .Select(source => new ConversationMessageSourceItem(
+                        source.SourceType,
+                        source.Title,
+                        source.Url,
+                        source.Reference,
+                        source.SourceDate))
+                    .ToList()))
+            .ToListAsync(cancellationToken);
+
+        var hasMore = mostRecentFirst.Count > limit;
+        var page = hasMore ? mostRecentFirst.Take(limit).ToList() : mostRecentFirst;
+        var oldest = hasMore ? page[^1] : null;
+
+        page.Reverse();
+
+        return new ConversationMessagePage(
+            page,
+            hasMore,
+            oldest?.CreatedAt,
+            oldest?.Id);
+    }
+
     public async Task<ConversationListPage> ListConversationsAsync(
         Guid organizationId,
         Guid ownerMemberId,

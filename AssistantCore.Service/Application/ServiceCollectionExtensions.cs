@@ -51,7 +51,9 @@ public static class ServiceCollectionExtensions
             .ValidateOnStart();
         services.AddScoped<ISendMessageCommandValidator, SendMessageCommandValidator>();
         services.AddSingleton<IConversationCursorCodec, ConversationCursorCodec>();
+        services.AddSingleton<IConversationMessageCursorCodec, ConversationMessageCursorCodec>();
         services.AddScoped<IConversationListingService, ConversationListingService>();
+        services.AddScoped<IConversationMessageListingService, ConversationMessageListingService>();
         services.AddScoped<IMessageUserContextService, MessageUserContextService>();
         services.AddScoped<IAuthenticateUserService, AuthenticateUserService>();
         services.AddScoped<IMemberManagementService, MemberManagementService>();
