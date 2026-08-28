@@ -1,0 +1,26 @@
+{
+  "request": {
+    "method": "GET",
+    "urlPathPattern": "/v1.0/drives/[^/]+/items/[^/]+/permissions"
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "jsonBody": {
+      "value": [
+        {
+          "id": "local-permission",
+          "roles": ["read"],
+          "grantedToV2": {
+            "user": {
+              "id": "00000000-0000-0000-0000-000000000200",
+              "displayName": "Administrateur local"
+            }
+          }
+        }
+      ]
+    }
+  }
+}

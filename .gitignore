@@ -66,6 +66,9 @@ publish/
 secrets.json
 appsettings.Local.json
 appsettings.*.Local.json
+!AssistantCore.Service/appsettings.Local.json
+!AssistantCore.Ingestion.Worker/appsettings.Local.json
+.local/
 
 # Certificates and signing keys
 *.pfx

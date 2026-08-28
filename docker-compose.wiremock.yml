@@ -1,0 +1,23 @@
+services:
+  wiremock:
+    image: wiremock/wiremock:3.13.2
+    container_name: assistantcore-wiremock
+    command:
+      - --disable-http
+      - --https-port
+      - "8443"
+      - --https-keystore
+      - /certs/wiremock.pfx
+      - --keystore-type
+      - PKCS12
+      - --keystore-password
+      - local-wiremock
+      - --key-manager-password
+      - local-wiremock
+      - --global-response-templating
+      - --verbose
+    ports:
+      - "9443:8443"
+    volumes:
+      - ./.local/wiremock.pfx:/certs/wiremock.pfx:ro
+      - ./test-support/wiremock:/home/wiremock:ro

@@ -1,0 +1,15 @@
+{
+  "request": {
+    "method": "GET",
+    "urlPath": "/microsoft/organizations/v2.0/adminconsent"
+  },
+  "response": {
+    "status": 302,
+    "headers": {
+      "Location": "{{request.query.redirect_uri}}?tenant=00000000-0000-0000-0000-000000000100&admin_consent=True&state={{request.query.state}}"
+    },
+    "transformers": [
+      "response-template"
+    ]
+  }
+}

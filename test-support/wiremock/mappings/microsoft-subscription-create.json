@@ -1,0 +1,16 @@
+{
+  "request": {
+    "method": "POST",
+    "urlPath": "/graph/v1.0/subscriptions"
+  },
+  "response": {
+    "status": 201,
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "body": "{\"id\":\"local-subscription\",\"resource\":\"{{jsonPath request.body '$.resource'}}\",\"expirationDateTime\":\"{{jsonPath request.body '$.expirationDateTime'}}\"}",
+    "transformers": [
+      "response-template"
+    ]
+  }
+}

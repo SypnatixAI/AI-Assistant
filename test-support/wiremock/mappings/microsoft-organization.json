@@ -1,0 +1,20 @@
+{
+  "request": {
+    "method": "GET",
+    "urlPath": "/graph/v1.0/organization"
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "jsonBody": {
+      "value": [
+        {
+          "id": "00000000-0000-0000-0000-000000000100",
+          "displayName": "Organisation locale"
+        }
+      ]
+    }
+  }
+}
