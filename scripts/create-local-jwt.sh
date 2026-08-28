@@ -21,6 +21,8 @@ base64_url_encode() {
 issuer="$(jq -er '.Authentication.LocalJwt.Issuer' "$CONFIGURATION_FILE")"
 audience="$(jq -er '.Authentication.LocalJwt.Audience' "$CONFIGURATION_FILE")"
 signing_key="$(jq -er '.Authentication.LocalJwt.SigningKey' "$CONFIGURATION_FILE")"
+required_scope="$(jq -er '.AzureAd.RequiredScope' "$CONFIGURATION_FILE")"
+required_admission_role="$(jq -er '.AzureAd.RequiredAdmissionRole' "$CONFIGURATION_FILE")"
 issued_at="$(date +%s)"
 expires_at="$((issued_at + 28800))"
 
@@ -28,6 +30,8 @@ header="$(jq -cn '{alg:"HS256",typ:"JWT"}' | base64_url_encode)"
 payload="$(jq -cn \
     --arg issuer "$issuer" \
     --arg audience "$audience" \
+    --arg required_scope "$required_scope" \
+    --arg required_admission_role "$required_admission_role" \
     --argjson issued_at "$issued_at" \
     --argjson expires_at "$expires_at" \
     '{
@@ -40,7 +44,8 @@ payload="$(jq -cn \
         oid: "00000000-0000-0000-0000-000000000200",
         name: "Administrateur local",
         preferred_username: "admin@local.test",
-        scp: "access_as_user"
+        scp: $required_scope,
+        roles: [$required_admission_role]
     }' | base64_url_encode)"
 unsigned_token="$header.$payload"
 signature="$(printf '%s' "$unsigned_token" \

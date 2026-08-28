@@ -23,6 +23,7 @@ public sealed class LocalJwtAuthenticationTests
     private const string Issuer = "AssistantCore.Local";
     private const string Audience = "AssistantCore.Api";
     private const string SigningKey = "assistant-core-local-signing-key-not-a-secret-2026";
+    private const string RequiredAdmissionRole = "AssistantCore.Access";
 
     [Theory, AutoDomainData]
     public async Task Given_AValidLocalJwt_When_AuthenticateUser_Then_AuthorizationIsGranted(
@@ -131,7 +132,8 @@ public sealed class LocalJwtAuthenticationTests
                 new Claim("oid", "00000000-0000-0000-0000-000000000200"),
                 new Claim("name", "Administrateur local"),
                 new Claim("preferred_username", "admin@local.test"),
-                new Claim("scp", scope)
+                new Claim("scp", scope),
+                new Claim("roles", RequiredAdmissionRole)
             ],
             notBefore: DateTime.UtcNow.AddMinutes(-1),
             expires: DateTime.UtcNow.AddHours(1),
