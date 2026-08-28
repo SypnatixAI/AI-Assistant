@@ -5,6 +5,7 @@ using AssistantCore.Service.Application.Exceptions;
 using AssistantCore.Service.Application.Models.Messages;
 using AssistantCore.Service.Application.Models.Messages.Lifecycle;
 using AssistantCore.Service.Application.Models.Messages.Orchestration;
+using AssistantCore.Service.Application.Services.Conversations;
 
 namespace AssistantCore.Service.Application.Services.Messages.Lifecycle;
 
@@ -58,7 +59,7 @@ public sealed class MessageProcessingLifecycleService(
         DateTimeOffset now,
         CancellationToken cancellationToken)
     {
-        var conversation = CreateConversation(organization.Id, member.Id, now);
+        var conversation = CreateConversation(organization.Id, member.Id, userMessage.Content, now);
         userMessage.ConversationId = conversation.Id;
 
         await conversationRepository.CreateConversationWithFirstMessageAsync(
@@ -177,13 +178,14 @@ public sealed class MessageProcessingLifecycleService(
     private static Conversation CreateConversation(
         Guid organizationId,
         Guid ownerMemberId,
+        string firstMessage,
         DateTimeOffset now) =>
         new()
         {
             Id = Guid.NewGuid(),
             OrganizationId = organizationId,
             OwnerMemberId = ownerMemberId,
-            Title = string.Empty,
+            Title = ConversationTitleFactory.CreateFromFirstMessage(firstMessage),
             Status = ConversationStatus.Active,
             CreatedAt = now,
             UpdatedAt = now

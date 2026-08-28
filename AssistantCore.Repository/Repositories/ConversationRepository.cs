@@ -114,15 +114,15 @@ public sealed class ConversationRepository(AssistantCoreDbContext dbContext)
             conversationId,
             nameof(userMessage.ConversationId));
 
-        var conversationExists = await dbContext.Conversations
-            .AnyAsync(
-                conversation =>
-                    conversation.Id == conversationId
-                    && conversation.OrganizationId == organizationId
-                    && conversation.OwnerMemberId == ownerMemberId,
+        var conversation = await dbContext.Conversations
+            .SingleOrDefaultAsync(
+                candidate =>
+                    candidate.Id == conversationId
+                    && candidate.OrganizationId == organizationId
+                    && candidate.OwnerMemberId == ownerMemberId,
                 cancellationToken);
 
-        if (!conversationExists)
+        if (conversation is null)
         {
             return null;
         }
@@ -130,6 +130,7 @@ public sealed class ConversationRepository(AssistantCoreDbContext dbContext)
         userMessage.ConversationId = conversationId;
         userMessage.Role = MessageRole.User;
         userMessage.ProcessingStatus = MessageProcessingStatus.Pending;
+        conversation.UpdatedAt = userMessage.CreatedAt;
 
         dbContext.Messages.Add(userMessage);
         await dbContext.SaveChangesAsync(cancellationToken);

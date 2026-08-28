@@ -42,6 +42,40 @@ public sealed class ConversationRepositoryAddUserMessageTests
         Assert.Equal(MessageProcessingStatus.Pending, persistedMessage.ProcessingStatus);
     }
 
+    [Theory, AutoDomainData]
+    public async Task Given_AnOwnedConversation_When_AddUserMessageAsync_Then_UpdatesConversationLastActivity(
+        Guid organizationId,
+        Guid ownerMemberId,
+        Conversation conversation,
+        Message userMessage,
+        DateTimeOffset newMessageCreatedAt)
+    {
+        // Given
+        conversation.OrganizationId = organizationId;
+        conversation.OwnerMemberId = ownerMemberId;
+        conversation.UpdatedAt = newMessageCreatedAt.AddDays(-1);
+        userMessage.ConversationId = Guid.Empty;
+        userMessage.CreatedAt = newMessageCreatedAt;
+        await using var dbContext = CreateDbContext();
+        dbContext.Conversations.Add(conversation);
+        await dbContext.SaveChangesAsync();
+        dbContext.ChangeTracker.Clear();
+        var repository = new ConversationRepository(dbContext);
+
+        // When
+        await repository.AddUserMessageAsync(
+            organizationId,
+            ownerMemberId,
+            conversation.Id,
+            userMessage,
+            CancellationToken.None);
+
+        // Then
+        dbContext.ChangeTracker.Clear();
+        var persistedConversation = await dbContext.Conversations.SingleAsync();
+        Assert.Equal(newMessageCreatedAt, persistedConversation.UpdatedAt);
+    }
+
     [Theory]
     [InlineAutoDomainData("organization")]
     [InlineAutoDomainData("owner")]

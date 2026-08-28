@@ -39,6 +39,7 @@ public sealed class MessageProcessingLifecycleServiceTests
         Assert.Equal(organization.Id, repository.CreatedConversation.OrganizationId);
         Assert.Equal(member.Id, repository.CreatedConversation.OwnerMemberId);
         Assert.Equal(ConversationStatus.Active, repository.CreatedConversation.Status);
+        Assert.Equal("Question already validated", repository.CreatedConversation.Title);
         Assert.Equal(now, repository.CreatedConversation.CreatedAt);
         Assert.Equal(now, repository.CreatedConversation.UpdatedAt);
         Assert.Equal(repository.CreatedConversation.Id, repository.CreatedFirstMessage.ConversationId);
@@ -53,6 +54,34 @@ public sealed class MessageProcessingLifecycleServiceTests
         Assert.Equal(repository.CreatedFirstMessage.Id, result.UserMessageId);
         Assert.Equal(["CreateConversation", "UpdateStatus"], repository.Operations);
         Assert.Equal(cancellationTokenSource.Token, repository.ReceivedCancellationToken);
+    }
+
+    [Theory, AutoDomainData]
+    public async Task Given_ALongFirstMessage_When_StartAsync_Then_TruncatesTheDerivedTitle(
+        Organization organization,
+        OrganizationMember member,
+        DateTimeOffset now)
+    {
+        // Given
+        member.OrganizationId = organization.Id;
+        var repository = new RecordingConversationRepository();
+        var service = new MessageProcessingLifecycleService(
+            repository,
+            new StubTimeProvider(now));
+        var longMessage = new string('a', 250);
+
+        // When
+        await service.StartAsync(
+            null,
+            longMessage,
+            organization,
+            member,
+            CancellationToken.None);
+
+        // Then
+        Assert.NotNull(repository.CreatedConversation);
+        Assert.Equal(200, repository.CreatedConversation.Title.Length);
+        Assert.EndsWith("…", repository.CreatedConversation.Title, StringComparison.Ordinal);
     }
 
     [Theory, AutoDomainData]
