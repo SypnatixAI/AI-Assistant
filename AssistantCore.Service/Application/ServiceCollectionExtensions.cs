@@ -1,5 +1,6 @@
 using AssistantCore.Service.Application.Configuration;
 using AssistantCore.Service.Application.Services.AuthenticateUser;
+using AssistantCore.Service.Application.Services.Conversations;
 using AssistantCore.Service.Application.Services.Conversations.Pagination;
 using AssistantCore.Service.Application.Services.Members;
 using AssistantCore.Service.Application.Services.Messages;
@@ -42,8 +43,15 @@ public static class ServiceCollectionExtensions
                     && options.MaximumParallelToolCalls > 0,
                 $"Every value in {MessageOrchestrationOptions.SectionName} must be greater than zero.")
             .ValidateOnStart();
+        services.AddOptions<ConversationListingOptions>()
+            .Bind(configuration.GetSection(ConversationListingOptions.SectionName))
+            .Validate(
+                options => options.MaximumPreviewLength > 0,
+                $"{ConversationListingOptions.SectionName}:{nameof(ConversationListingOptions.MaximumPreviewLength)} must be greater than zero.")
+            .ValidateOnStart();
         services.AddScoped<ISendMessageCommandValidator, SendMessageCommandValidator>();
         services.AddSingleton<IConversationCursorCodec, ConversationCursorCodec>();
+        services.AddScoped<IConversationListingService, ConversationListingService>();
         services.AddScoped<IMessageUserContextService, MessageUserContextService>();
         services.AddScoped<IAuthenticateUserService, AuthenticateUserService>();
         services.AddScoped<IMemberManagementService, MemberManagementService>();
