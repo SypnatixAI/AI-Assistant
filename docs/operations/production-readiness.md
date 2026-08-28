@@ -8,6 +8,13 @@
 - [Santé](#production-health)
 - [Exemples de santé](#production-health-examples)
 - [Déploiement](#production-deployment)
+  - [Structure versionnée](#production-deployment-structure)
+  - [Environnements](#production-deployment-environments)
+  - [Images immuables](#production-deployment-images)
+  - [Déploiement DEV simulé](#production-deployment-dev)
+  - [Déploiement CERTIF réel et manuel](#production-deployment-certification)
+  - [Secrets](#production-deployment-secrets)
+  - [Échecs et retour à la version précédente](#production-deployment-rollback)
 - [Observabilité](#production-observability)
 - [Sauvegarde et reprise](#production-backup)
 - [Sécurité web](#production-web-security)
@@ -25,6 +32,9 @@ observables et récupérables sans dépendre d'une procédure implicite.
 Chaque environnement définit les hôtes, régions, dépendances et responsabilités
 pour Angular, API, worker d'ingestion, webhooks, SQL Server, Azure AI Search et
 stockage distribué. Les données de production restent séparées des tests.
+
+La première étape d'hébergement couvre uniquement DEV et CERTIF. La production
+reste hors périmètre jusqu'à ce que ces deux environnements soient validés.
 
 <a id="production-configuration"></a>
 ## Configuration et secrets
@@ -71,24 +81,174 @@ pour la sonde complète. Ces valeurs sont configurables.
 <a id="production-deployment"></a>
 ## Déploiement
 
-Le pipeline construit des artefacts immuables, exécute tests et architecture,
-applique Flyway une seule fois, déploie progressivement, effectue les smoke
-tests puis permet un rollback compatible avec les migrations.
+Le pipeline construit des artefacts immuables, exécute les tests, applique
+Flyway une seule fois, déploie l'application et vérifie sa santé avant de
+considérer le déploiement comme réussi.
 
-Ordre obligatoire d’un déploiement :
+Une migration destructive incompatible avec l'ancienne version interdit un
+retour sûr à la version précédente. Elle doit être découpée en plusieurs
+migrations additives compatibles avec les deux versions de l'application.
 
-1. compiler Angular et chaque exécutable .NET avec le SHA du commit;
-2. exécuter tests backend, tests Angular, lint et tests d’architecture;
-3. publier des artefacts immuables sans secret;
-4. valider les références Key Vault et les options de l’environnement;
-5. exécuter Flyway une seule fois avec un verrou de déploiement;
-6. déployer une instance sans lui envoyer tout le trafic;
-7. appeler `live`, `ready`, l’authentification et un smoke test sans contenu client;
-8. augmenter progressivement le trafic;
-9. arrêter et revenir à l’artefact précédent si une sonde échoue.
+<a id="production-deployment-structure"></a>
+### Structure versionnée
 
-Une migration destructive incompatible avec l’ancienne version interdit un
-rollback sûr et doit être découpée en plusieurs déploiements additifs.
+Le dépôt utilise une définition commune pour les ressources Azure et un fichier
+de paramètres par environnement :
+
+```text
+deploy/
+├── docker/
+│   ├── api.Dockerfile
+│   └── worker.Dockerfile
+├── infra/
+│   ├── main.bicep
+│   └── modules/
+├── environments/
+│   ├── manifest-vars-dev.bicepparam
+│   └── manifest-vars-certif.bicepparam
+└── scripts/
+    ├── run-migrations.sh
+    ├── smoke-test.sh
+    └── rollback.sh
+
+.github/workflows/
+├── build-images.yml
+├── _deploy-environment.yml
+├── deploy-to-dev.yml
+└── deploy-to-certif.yml
+```
+
+`main.bicep` décrit la structure commune. Les fichiers `.bicepparam`
+contiennent uniquement les différences non sensibles entre DEV et CERTIF.
+Aucun fichier ou workflow PROD n'est créé pendant cette étape.
+
+<a id="production-deployment-environments"></a>
+### Environnements
+
+DEV et CERTIF possèdent chacun :
+
+- leur propre base Azure SQL;
+- leur propre configuration;
+- leur propre Key Vault;
+- leur propre identité managée;
+- leurs propres données;
+- leur propre déploiement de l'API et du worker.
+
+Les deux bases peuvent initialement partager un serveur logique Azure SQL
+non-production afin de réduire les coûts. Leurs bases, utilisateurs, chaînes de
+connexion et droits restent séparés. Une application ne peut accéder qu'à la
+base de son environnement.
+
+Le développement local conserve SQL Server dans Docker. Dans Azure, DEV et
+CERTIF utilisent de vraies bases Azure SQL afin de valider Flyway, les
+contraintes, les transactions, les repositories et la persistance après un
+redémarrage.
+
+<a id="production-deployment-images"></a>
+### Images immuables
+
+L'API, le worker et Flyway sont publiés avec un tag basé sur le SHA du commit :
+
+```text
+ghcr.io/sypnatixai/assistantcore-api:sha-abc123
+ghcr.io/sypnatixai/assistantcore-worker:sha-abc123
+ghcr.io/sypnatixai/assistantcore-migrations:sha-abc123
+```
+
+Une image n'est jamais reconstruite lors de sa promotion. Le même SHA passe de
+DEV à CERTIF. Le tag `latest` ne sert jamais de référence de déploiement.
+
+<a id="production-deployment-dev"></a>
+### Déploiement DEV simulé
+
+DEV reprend le comportement de `scripts/start-local-wiremock.sh`. Les services
+externes sont appelés à travers une instance WireMock déployée uniquement dans
+l'environnement DEV.
+
+WireMock simule :
+
+- l'authentification locale avec JWT;
+- l'autorité Microsoft;
+- Microsoft Graph;
+- OpenAI;
+- les embeddings;
+- Azure AI Search.
+
+L'API et le worker utilisent l'adresse interne de WireMock, jamais
+`localhost`. Azure SQL n'est pas simulé : Flyway et l'application utilisent
+la vraie base `assistantcore-dev`.
+
+Le mode d'authentification locale, les réponses WireMock et les données DEV
+restent exclusivement fictifs. La configuration doit empêcher le mode simulé
+d'être activé dans CERTIF.
+
+Une pull request exécute la compilation et les tests, sans déployer
+d'environnement. Un push dans `master`, normalement produit par un merge,
+déclenche :
+
+1. la compilation et les tests;
+2. la construction des images immuables;
+3. leur publication avec le SHA du commit;
+4. la migration de `assistantcore-dev`;
+5. le déploiement automatique de DEV;
+6. les appels à `/health/live` et `/health/ready`;
+7. les smoke tests contre les services simulés.
+
+Si Flyway échoue, la nouvelle version de l'API et du worker n'est pas déployée.
+
+<a id="production-deployment-certification"></a>
+### Déploiement CERTIF réel et manuel
+
+CERTIF utilise les véritables services Microsoft Entra, Microsoft Graph,
+OpenAI et Azure AI Search. Il utilise la base Azure SQL
+`assistantcore-certif` et uniquement des données de certification autorisées.
+
+Le déploiement CERTIF est déclenché manuellement avec `workflow_dispatch`.
+L'utilisateur fournit le tag d'une image déjà déployée et validée dans DEV.
+
+Le workflow CERTIF ne reconstruit aucune image. Il :
+
+1. vérifie que le tag immuable existe;
+2. vérifie que l'image a déjà été déployée avec succès dans DEV;
+3. exécute Flyway sur `assistantcore-certif`;
+4. déploie exactement les mêmes images;
+5. appelle `/health/live` et `/health/ready`;
+6. exécute les smoke tests avec les véritables intégrations.
+
+Le déclenchement manuel constitue la décision de promotion. Une protection
+GitHub Environment peut exiger une approbation supplémentaire si l'équipe le
+souhaite.
+
+<a id="production-deployment-secrets"></a>
+### Secrets
+
+DEV et CERTIF possèdent des Key Vault séparés.
+
+DEV conserve dans son coffre la chaîne Azure SQL et la clé de signature du JWT
+de développement. Les valeurs factices utilisées avec WireMock ne sont jamais
+utilisables dans CERTIF.
+
+CERTIF conserve les véritables secrets Microsoft 365, OpenAI, Azure AI Search
+et Azure SQL.
+
+Les Container Apps accèdent uniquement au coffre de leur environnement avec
+une identité managée et le rôle minimal nécessaire pour lire les secrets. Aucun
+mot de passe, token, Client Secret, API key ou chaîne de connexion n'est stocké
+dans Git, les fichiers Bicep, les workflows ou les images.
+
+GitHub Actions se connecte à Azure avec OIDC et des jetons temporaires. Aucun
+Client Secret Azure permanent n'est stocké dans GitHub.
+
+<a id="production-deployment-rollback"></a>
+### Échecs et retour à la version précédente
+
+La nouvelle révision ne doit pas être considérée comme valide avant la réussite
+des migrations, des sondes et des smoke tests. En cas d'échec après le
+déploiement, le workflow réactive ou redéploie le dernier SHA fonctionnel.
+
+Le retour applicatif utilise une image déjà publiée. Il ne reconstruit pas
+l'ancien commit. Flyway n'exécute jamais automatiquement une migration
+destructive inverse.
 
 <a id="production-observability"></a>
 ## Observabilité
@@ -134,8 +294,13 @@ URIs Entra correspondent exactement aux domaines déployés.
 <a id="production-acceptance"></a>
 ## Critères d'acceptation
 
-- Un environnement peut être recréé depuis une définition versionnée.
-- Secrets, migrations, health checks et rollback sont automatisés.
+- DEV et CERTIF peuvent être recréés depuis une définition versionnée.
+- DEV utilise les services externes simulés et une vraie base Azure SQL.
+- CERTIF utilise ses véritables intégrations et une base Azure SQL séparée.
+- Un merge dans `master` déploie uniquement DEV.
+- CERTIF est déployé manuellement avec le même SHA validé dans DEV.
+- Aucun fichier ou workflow PROD n'est créé pendant cette étape.
+- Secrets, migrations, health checks et retour à la version précédente sont automatisés.
 - Alertes et tableaux de bord couvrent les pannes importantes.
 - Une restauration est exécutée et mesurée.
 - Les contrôles de sécurité web sont vérifiés après déploiement.
