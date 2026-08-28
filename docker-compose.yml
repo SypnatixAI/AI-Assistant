@@ -41,7 +41,7 @@ services:
       SQLPAD_CONNECTIONS__assistantcore__driver: "sqlserver"
       SQLPAD_CONNECTIONS__assistantcore__host: "sqlserver"
       SQLPAD_CONNECTIONS__assistantcore__port: "1433"
-      SQLPAD_CONNECTIONS__assistantcore__database: "AssistantCoreDb"
+      SQLPAD_CONNECTIONS__assistantcore__database: "${SQLPAD_DATABASE:-AssistantCoreDb}"
       SQLPAD_CONNECTIONS__assistantcore__username: "sa"
       SQLPAD_CONNECTIONS__assistantcore__password: "${SQL_SERVER_PASSWORD}"
     ports:

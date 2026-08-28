@@ -59,6 +59,37 @@
       }
     ]
   },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "if (pm.environment.get('authentication_mode') === 'LocalJwt') {",
+          "    const tokenUrl = pm.environment.get('local_token_url');",
+          "    if (!tokenUrl) {",
+          "        throw new Error('local_token_url must be configured for LocalJwt authentication.');",
+          "    }",
+          "",
+          "    const tokenResponse = await pm.sendRequest(tokenUrl);",
+          "    if (tokenResponse.code !== 200) {",
+          "        throw new Error('Unable to obtain the local JWT from WireMock.');",
+          "    }",
+          "",
+          "    const accessToken = tokenResponse.json().access_token;",
+          "    if (!accessToken) {",
+          "        throw new Error('WireMock did not return a local access token.');",
+          "    }",
+          "",
+          "    pm.request.headers.upsert({",
+          "        key: 'Authorization',",
+          "        value: 'Bearer ' + accessToken",
+          "    });",
+          "}"
+        ]
+      }
+    }
+  ],
   "item": [
     {
       "name": "Organizations",

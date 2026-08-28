@@ -1,0 +1,17 @@
+{
+  "request": {
+    "method": "POST",
+    "urlPathPattern": "/microsoft/[^/]+/oauth2/v2.0/token"
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "jsonBody": {
+      "access_token": "wiremock-microsoft-access-token",
+      "token_type": "Bearer",
+      "expires_in": 3600
+    }
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "request": {
+    "method": "POST",
+    "urlPath": "/indexes('microsoft-content-local')/docs/search.index"
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "body": "{\"value\":[{{#each (jsonPath request.body '$.value')}}{\"status\":true}{{#unless @last}},{{/unless}}{{/each}}]}",
+    "transformers": [
+      "response-template"
+    ]
+  }
+}

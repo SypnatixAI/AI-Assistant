@@ -1,0 +1,25 @@
+{
+  "request": {
+    "method": "GET",
+    "urlPathPattern": "/v1.0/sites/[^/]+/lists"
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "jsonBody": {
+      "value": [
+        {
+          "id": "local-list",
+          "displayName": "Liste locale",
+          "webUrl": "https://contoso.local/sites/assistant/Lists/Local",
+          "list": {
+            "hidden": false,
+            "template": "genericList"
+          }
+        }
+      ]
+    }
+  }
+}
