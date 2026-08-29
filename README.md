@@ -110,6 +110,11 @@ Le JWT est également affiché au démarrage. Dans Swagger, utiliser `Authorize`
 coller uniquement le JWT, puis appeler `GET /api/core/authenticateUser` pour
 valider l'identité locale.
 
+La SPA utilise ce mode par défaut. Après le démarrage du présent script,
+démarrer le dépôt `Assistant.SPA` avec `npm start`, ouvrir `/login`, puis choisir
+`Continuer comme administrateur local`. La SPA récupère alors le JWT auprès de
+WireMock et ne le conserve qu'en mémoire.
+
 Dans Postman, importer la collection et l'environnement local du dossier
 `postman`, puis sélectionner l'environnement `AssistantCore Local`. Aucune copie
 du JWT n'est nécessaire : avant chaque requête, la collection récupère
@@ -136,6 +141,11 @@ le parcours OAuth 2.0 configuré dans la collection.
 ```bash
 bash scripts/start-local-live.sh
 ```
+
+Pour tester également le vrai parcours Microsoft dans la SPA locale, renseigner
+ses identifiants publics Entra dans
+`public/assets/config/config.local-entra.json` du dépôt `Assistant.SPA`, puis
+lancer `npm run start:entra`. Aucun client secret n'est utilisé par la SPA.
 
 ## Tester un DOCX localement
 
