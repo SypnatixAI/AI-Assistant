@@ -1,0 +1,20 @@
+{
+  "request": {
+    "method": "GET",
+    "urlPath": "/api/usage"
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "jsonBody": {
+      "periodStartsAt": "2026-08-01T00:00:00Z",
+      "periodEndsAt": "2026-09-01T00:00:00Z",
+      "tokenLimit": 1000000,
+      "tokensUsed": 428000,
+      "tokensRemaining": 572000,
+      "isExhausted": false
+    }
+  }
+}
