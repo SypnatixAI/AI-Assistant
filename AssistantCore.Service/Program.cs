@@ -3,6 +3,7 @@ using AssistantCore.Service.Application.Abstractions;
 using AssistantCore.Service.Infrastructure.Authentication;
 using AssistantCore.Service.Infrastructure.AiModels;
 using AssistantCore.Service.Infrastructure.Connectors;
+using AssistantCore.Service.Infrastructure.Cors;
 using AssistantCore.Service.Infrastructure.Microsoft365;
 using AssistantCore.Service.Middleware;
 using AssistantCore.Repository.Persistence;
@@ -14,6 +15,7 @@ var builder = WebApplication.CreateBuilder(args);
 // Add services to the container.
 
 builder.Services.AddApiAuthentication(builder.Configuration, builder.Environment);
+builder.Services.AddApiCors(builder.Configuration);
 
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
@@ -52,6 +54,8 @@ if (app.Environment.IsDevelopment() || app.Environment.IsEnvironment("Local"))
 app.UseMiddleware<ExceptionMiddleware>();
 
 app.UseHttpsRedirection();
+
+app.UseCors(ApiCorsServiceCollectionExtensions.PolicyName);
 
 app.UseAuthentication();
 app.UseAuthorization();
