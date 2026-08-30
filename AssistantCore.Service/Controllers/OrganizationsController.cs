@@ -25,10 +25,7 @@ public sealed class OrganizationsController(IDispatcher dispatcher) : Controller
         CancellationToken cancellationToken)
     {
         var result = await dispatcher.SendAsync(
-            new CreateOrganizationCommand(
-                request.Name,
-                request.IdentityProvider,
-                request.ExternalTenantId),
+            new CreateOrganizationCommand(request.Domain),
             cancellationToken);
 
         return StatusCode(StatusCodes.Status201Created, result);

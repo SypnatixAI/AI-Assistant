@@ -13,4 +13,9 @@ public interface IOrganizationQueries
         IdentityProvider identityProvider,
         string externalTenantId,
         CancellationToken cancellationToken = default);
+
+    Task<Organization?> FindOrganizationByDomain(
+        IdentityProvider identityProvider,
+        string domain,
+        CancellationToken cancellationToken = default);
 }

@@ -1,3 +1,4 @@
+using System.Net;
 using AssistantCore.ExternalServices.Services.Microsoft;
 using AssistantCore.Service.Application.Configuration;
 using AssistantCore.Service.Application.Exceptions;
@@ -13,6 +14,8 @@ public sealed class Microsoft365ConsentClientAdapter(
     IOptions<Microsoft365Options> options,
     TimeProvider timeProvider) : IMicrosoft365ConsentClient
 {
+    private const int MaximumTenantValidationAttempts = 3;
+
     public Uri CreateAdminConsentUri(string state)
     {
         var configuration = options.Value;
@@ -30,24 +33,40 @@ public sealed class Microsoft365ConsentClientAdapter(
     {
         var configuration = options.Value;
         EnsureConfigured(configuration);
-        AssistantCore.ExternalServices.Entities.Microsoft.MicrosoftAuthorizationCodeToken token;
-        AssistantCore.ExternalServices.Entities.Microsoft.MicrosoftTenant tenant;
         try
         {
-            token = await identityClient.AcquireApplicationTokenAsync(
-                configuration.AuthorityBaseUrl,
-                tenantId,
-                configuration.ClientId,
-                configuration.ClientSecret,
-                cancellationToken);
-            tenant = await graphClient.GetCurrentTenantAsync(
-                configuration.GraphBaseUrl,
-                token.AccessToken,
-                cancellationToken);
-            if (!string.Equals(tenant.Id, tenantId, StringComparison.OrdinalIgnoreCase))
+            for (var attempt = 1; attempt <= MaximumTenantValidationAttempts; attempt++)
             {
-                throw new MicrosoftExternalException(
-                    "Microsoft tenant validation returned an unexpected tenant.");
+                var token = await identityClient.AcquireApplicationTokenAsync(
+                    configuration.AuthorityBaseUrl,
+                    tenantId,
+                    configuration.ClientId,
+                    configuration.ClientSecret,
+                    cancellationToken);
+
+                try
+                {
+                    var tenant = await graphClient.GetCurrentTenantAsync(
+                        configuration.GraphBaseUrl,
+                        token.AccessToken,
+                        cancellationToken);
+                    if (!string.Equals(tenant.Id, tenantId, StringComparison.OrdinalIgnoreCase))
+                    {
+                        throw new MicrosoftExternalException(
+                            "Microsoft tenant validation returned an unexpected tenant.");
+                    }
+
+                    return new Microsoft365ConsentExchange(
+                        tenant.Id,
+                        token.AccessToken,
+                        timeProvider.GetUtcNow().AddSeconds(token.ExpiresInSeconds));
+                }
+                catch (MicrosoftExternalException exception)
+                    when (exception.StatusCode == HttpStatusCode.Forbidden
+                        && attempt < MaximumTenantValidationAttempts)
+                {
+                    await Task.Delay(TimeSpan.FromSeconds(attempt), cancellationToken);
+                }
             }
         }
         catch (MicrosoftExternalException exception)
@@ -55,10 +74,7 @@ public sealed class Microsoft365ConsentClientAdapter(
             throw new Microsoft365ExternalException("Microsoft 365 consent could not be completed.", exception);
         }
 
-        return new Microsoft365ConsentExchange(
-            tenant.Id,
-            token.AccessToken,
-            timeProvider.GetUtcNow().AddSeconds(token.ExpiresInSeconds));
+        throw new InvalidOperationException("Microsoft tenant validation did not complete.");
     }
 
     private static void EnsureConfigured(Microsoft365Options configuration)

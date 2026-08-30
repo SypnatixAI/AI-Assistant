@@ -20,6 +20,10 @@ public sealed class OrganizationConfiguration : IEntityTypeConfiguration<Organiz
             .HasMaxLength(200)
             .IsRequired();
 
+        builder.Property(organization => organization.Domain)
+            .HasMaxLength(200)
+            .IsRequired();
+
         builder.Property(organization => organization.IdentityProvider)
             .HasConversion<string>()
             .HasMaxLength(50)
@@ -27,7 +31,7 @@ public sealed class OrganizationConfiguration : IEntityTypeConfiguration<Organiz
 
         builder.Property(organization => organization.ExternalTenantId)
             .HasMaxLength(100)
-            .IsRequired();
+            .IsRequired(false);
 
         builder.Property(organization => organization.Status)
             .HasConversion(
@@ -50,6 +54,9 @@ public sealed class OrganizationConfiguration : IEntityTypeConfiguration<Organiz
             .WithOne(connection => connection.Organization)
             .HasForeignKey(connection => connection.OrganizationId)
             .OnDelete(DeleteBehavior.Restrict);
+
+        builder.HasIndex(organization => new { organization.IdentityProvider, organization.Domain })
+            .IsUnique();
 
         builder.HasIndex(organization => new { organization.IdentityProvider, organization.ExternalTenantId })
             .IsUnique();

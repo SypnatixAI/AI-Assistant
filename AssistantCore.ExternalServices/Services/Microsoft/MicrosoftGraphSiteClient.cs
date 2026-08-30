@@ -13,38 +13,22 @@ public sealed class MicrosoftGraphSiteClient(HttpClient httpClient)
         CancellationToken cancellationToken = default)
     {
         var graphBaseUri = CreateGraphBaseUri(graphBaseUrl);
-        Uri? nextPageUri = new(graphBaseUri, "v1.0/sites?$select=id,displayName,webUrl");
-        var sites = new List<MicrosoftSite>();
-        var visitedPageUris = new HashSet<string>(StringComparer.Ordinal);
+        var sites = await ListSitesAsync(
+            graphBaseUri,
+            accessToken,
+            "v1.0/sites?$select=id,displayName,webUrl",
+            cancellationToken);
 
-        while (nextPageUri is not null)
+        if (sites.Count > 0)
         {
-            EnsureTrustedGraphUri(graphBaseUri, nextPageUri);
-            if (!visitedPageUris.Add(nextPageUri.AbsoluteUri))
-            {
-                throw new MicrosoftExternalException("Microsoft Graph site pagination contained a loop.");
-            }
-
-            using var request = new HttpRequestMessage(HttpMethod.Get, nextPageUri);
-            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
-            using var response = await httpClient.SendAsync(request, cancellationToken);
-            if (!response.IsSuccessStatusCode)
-            {
-                throw new MicrosoftExternalException(
-                    $"Microsoft Graph site listing failed with status {(int)response.StatusCode}.",
-                    statusCode: response.StatusCode);
-            }
-
-            var page = await response.Content.ReadFromJsonAsync<SiteCollectionResponse>(cancellationToken)
-                ?? throw new MicrosoftExternalException("Microsoft Graph returned an empty site collection response.");
-            sites.AddRange(page.Value.Select(site =>
-                new MicrosoftSite(site.Id, site.DisplayName, site.WebUrl)));
-            nextPageUri = string.IsNullOrWhiteSpace(page.NextLink)
-                ? null
-                : new Uri(page.NextLink, UriKind.Absolute);
+            return sites;
         }
 
-        return sites;
+        return await ListSitesAsync(
+            graphBaseUri,
+            accessToken,
+            "v1.0/sites?search=*&$select=id,displayName,webUrl",
+            cancellationToken);
     }
 
     public async Task<MicrosoftSite> GetAsync(
@@ -78,6 +62,46 @@ public sealed class MicrosoftGraphSiteClient(HttpClient httpClient)
     private sealed record SiteCollectionResponse(
         [property: JsonPropertyName("value")] IReadOnlyCollection<SiteResponse> Value,
         [property: JsonPropertyName("@odata.nextLink")] string? NextLink);
+
+    private async Task<IReadOnlyCollection<MicrosoftSite>> ListSitesAsync(
+        Uri graphBaseUri,
+        string accessToken,
+        string relativeRequestUri,
+        CancellationToken cancellationToken)
+    {
+        Uri? nextPageUri = new(graphBaseUri, relativeRequestUri);
+        var sites = new List<MicrosoftSite>();
+        var visitedPageUris = new HashSet<string>(StringComparer.Ordinal);
+
+        while (nextPageUri is not null)
+        {
+            EnsureTrustedGraphUri(graphBaseUri, nextPageUri);
+            if (!visitedPageUris.Add(nextPageUri.AbsoluteUri))
+            {
+                throw new MicrosoftExternalException("Microsoft Graph site pagination contained a loop.");
+            }
+
+            using var request = new HttpRequestMessage(HttpMethod.Get, nextPageUri);
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+            using var response = await httpClient.SendAsync(request, cancellationToken);
+            if (!response.IsSuccessStatusCode)
+            {
+                throw new MicrosoftExternalException(
+                    $"Microsoft Graph site listing failed with status {(int)response.StatusCode}.",
+                    statusCode: response.StatusCode);
+            }
+
+            var page = await response.Content.ReadFromJsonAsync<SiteCollectionResponse>(cancellationToken)
+                ?? throw new MicrosoftExternalException("Microsoft Graph returned an empty site collection response.");
+            sites.AddRange(page.Value.Select(site =>
+                new MicrosoftSite(site.Id, site.DisplayName, site.WebUrl)));
+            nextPageUri = string.IsNullOrWhiteSpace(page.NextLink)
+                ? null
+                : new Uri(page.NextLink, UriKind.Absolute);
+        }
+
+        return sites;
+    }
 
     private static Uri CreateGraphBaseUri(string graphBaseUrl)
     {

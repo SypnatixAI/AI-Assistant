@@ -35,4 +35,19 @@ public sealed class OrganizationQueries(AssistantCoreDbContext dbContext) : IOrg
                     && organization.Status == RecordStatus.Active,
                 cancellationToken);
     }
+
+    public async Task<Organization?> FindOrganizationByDomain(
+        IdentityProvider identityProvider,
+        string domain,
+        CancellationToken cancellationToken = default)
+    {
+        return await dbContext.Organizations
+            .AsNoTracking()
+            .SingleOrDefaultAsync(
+                organization =>
+                    organization.IdentityProvider == identityProvider
+                    && organization.Domain == domain
+                    && organization.Status == RecordStatus.Active,
+                cancellationToken);
+    }
 }

@@ -8,67 +8,43 @@ namespace AssistantCore.Service.Application.Services.Organizations;
 public sealed class OrganizationManagementService(IOrganizationRepository organizationRepository)
     : IOrganizationManagementService
 {
-    private const int MaximumNameLength = 200;
-    private const int MaximumExternalTenantIdLength = 100;
+    private const int MaximumDomainLength = 200;
 
     public async Task<Organization> CreateOrganizationAsync(
-        string name,
-        string identityProvider,
-        string externalTenantId,
+        string domain,
         CancellationToken cancellationToken = default)
     {
-        var normalizedName = ValidateRequiredValue(name, nameof(name), MaximumNameLength);
-        var normalizedExternalTenantId = ValidateRequiredValue(
-            externalTenantId,
-            nameof(externalTenantId),
-            MaximumExternalTenantIdLength);
-        var parsedIdentityProvider = ParseIdentityProvider(identityProvider);
+        var normalizedDomain = ValidateDomain(domain);
 
         var organization = new Organization
         {
             Id = Guid.NewGuid(),
-            Name = normalizedName,
-            IdentityProvider = parsedIdentityProvider,
-            ExternalTenantId = normalizedExternalTenantId,
+            Name = normalizedDomain,
+            Domain = normalizedDomain,
+            IdentityProvider = IdentityProvider.MicrosoftEntraId,
+            ExternalTenantId = null,
             Status = RecordStatus.Active
         };
 
         return await organizationRepository.TryCreateOrganizationAsync(organization, cancellationToken)
             ?? throw new ConflictException(
-                "An organization already exists for this identity provider and external tenant.");
+                "An organization already exists for this identity provider and domain.");
     }
 
-    private static IdentityProvider ParseIdentityProvider(string identityProvider)
+    private static string ValidateDomain(string domain)
     {
-        var normalizedIdentityProvider = identityProvider?.Trim();
-        var providerName = Enum.GetNames<IdentityProvider>()
-            .SingleOrDefault(name => string.Equals(
-                name,
-                normalizedIdentityProvider,
-                StringComparison.OrdinalIgnoreCase));
-
-        if (providerName is not null)
+        var normalizedDomain = domain?.Trim().ToLowerInvariant();
+        if (string.IsNullOrWhiteSpace(normalizedDomain))
         {
-            return Enum.Parse<IdentityProvider>(providerName);
+            throw new BadRequestException("domain is required.");
         }
 
-        throw new BadRequestException("Identity provider must be 'MicrosoftEntraId'.");
-    }
-
-    private static string ValidateRequiredValue(string value, string propertyName, int maximumLength)
-    {
-        var normalizedValue = value?.Trim();
-        if (string.IsNullOrWhiteSpace(normalizedValue))
-        {
-            throw new BadRequestException($"{propertyName} is required.");
-        }
-
-        if (normalizedValue.Length > maximumLength)
+        if (normalizedDomain.Length > MaximumDomainLength)
         {
             throw new BadRequestException(
-                $"{propertyName} must contain at most {maximumLength} characters.");
+                $"domain must contain at most {MaximumDomainLength} characters.");
         }
 
-        return normalizedValue;
+        return normalizedDomain;
     }
 }

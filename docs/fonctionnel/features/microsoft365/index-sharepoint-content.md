@@ -298,8 +298,8 @@ Microsoft Graph refuse l'accès au Worker
 
 Le consentement n'ajoute pas automatiquement tous les sites du tenant. Il
 autorise les appels Graph. AssistantCore attend ensuite que l'administrateur
-choisisse un site. Ce choix ajoute automatiquement les bibliothèques et les
-listes compatibles de ce site.
+choisisse un ou plusieurs sites. Ce choix ajoute automatiquement les
+bibliothèques et les listes compatibles de chaque site confirmé.
 
 ### Flow détaillé de connexion
 
@@ -557,9 +557,11 @@ dans le même assistant. Un consentement valide active immédiatement l'étape d
 sélection du site. Un refus conserve l'étape d'autorisation active et permet de
 recommencer.
 
-Le choix du site ajoute automatiquement toutes ses bibliothèques et toutes ses
-listes compatibles. Le bouton permettant d'accéder au chat apparaît dès que
-les deux étapes sont terminées; il n'existe aucune troisième étape obligatoire.
+L'administrateur peut cocher et décocher plusieurs sites avant de confirmer sa
+sélection. La confirmation ajoute automatiquement toutes les bibliothèques et
+toutes les listes compatibles des sites retenus. Le bouton permettant d'accéder
+au chat apparaît dès qu'au moins un site a été préparé; il n'existe aucune
+troisième étape obligatoire.
 Lors des connexions suivantes, une organisation déjà
 configurée arrive directement dans le chat. Un membre non administrateur voit
 un écran d'attente clair tant que la configuration doit encore être terminée
@@ -926,12 +928,16 @@ La souscription contient :
 - sa date d’expiration;
 - un `clientState` aléatoire et secret.
 
-Pour recevoir aussi les événements de sécurité pris en charge, la création
-utilise l’en-tête :
+Pour recevoir aussi les événements de sécurité pris en charge sur les
+bibliothèques et OneDrive, la création d'une souscription `/drives/...` utilise
+l’en-tête :
 
 ```http
 Prefer: includesecuritywebhooks
 ```
+
+Cet en-tête n'est pas envoyé pour une souscription de liste
+`/sites/{siteId}/lists/{listId}`.
 
 ### Validation initiale
 
@@ -1764,7 +1770,7 @@ En mode local, Service Bus reste désactivé : les synchronisations persistées
 dans SQL sont réclamées directement par le Worker. Le transport Service Bus est
 réservé à un environnement où les files et leurs consommateurs sont déployés.
 
-Ordre de démarrage :
+Ordre de démarrage manuel :
 
 1. démarrer SQL Server;
 2. démarrer AssistantCore.Service;
@@ -1778,6 +1784,11 @@ Ordre de démarrage :
 
 Une URL de tunnel modifiée demande de mettre à jour ou recréer les
 souscriptions concernées.
+
+Le script `scripts/start-local-live.sh` automatise cet ordre : il démarre
+l'API, vérifie que le webhook public retourne correctement un token de
+validation, démarre ngrok si nécessaire, puis lance le Worker. Il s'arrête
+avant le Worker si le webhook reste inaccessible.
 
 <a id="m365-sharepoint-end-to-end-test"></a>
 ## Test complet avec le tenant fictif

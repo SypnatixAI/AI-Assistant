@@ -11,6 +11,10 @@ using Microsoft.OpenApi;
 using System.Reflection;
 
 var builder = WebApplication.CreateBuilder(args);
+if (builder.Environment.IsEnvironment("Certif"))
+{
+    builder.Configuration.AddUserSecrets<Program>();
+}
 
 // Add services to the container.
 

@@ -21,7 +21,8 @@ public sealed class MicrosoftGraphClient(HttpClient httpClient)
         if (!response.IsSuccessStatusCode)
         {
             throw new MicrosoftExternalException(
-                $"Microsoft tenant lookup failed with status {(int)response.StatusCode}.");
+                $"Microsoft tenant lookup failed with status {(int)response.StatusCode}.",
+                statusCode: response.StatusCode);
         }
 
         var payload = await response.Content.ReadFromJsonAsync<OrganizationResponse>(cancellationToken)
