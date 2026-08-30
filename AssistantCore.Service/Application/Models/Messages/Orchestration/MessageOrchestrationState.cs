@@ -16,6 +16,7 @@ public sealed class MessageOrchestrationState
 
     private MessageOrchestrationState(
         StartedMessageProcessing messageProcessing,
+        ConnectorExecutionContext toolExecutionContext,
         SelectedAiModel selectedModel,
         IReadOnlyCollection<AiConversationMessage> conversationHistory,
         IReadOnlyCollection<AiToolDefinition> allowedTools,
@@ -26,9 +27,7 @@ public sealed class MessageOrchestrationState
         SelectedModel = selectedModel;
         ConversationHistory = conversationHistory.ToArray();
         AllowedTools = allowedTools.ToArray();
-        ToolExecutionContext = new ConnectorExecutionContext(
-            messageProcessing.OrganizationId,
-            messageProcessing.OwnerMemberId);
+        ToolExecutionContext = toolExecutionContext;
         Budget = new OrchestrationBudgetTracker(limits, startedAtUtc);
     }
 
@@ -132,6 +131,7 @@ public sealed class MessageOrchestrationState
 
     public static MessageOrchestrationState Start(
         StartedMessageProcessing messageProcessing,
+        ConnectorExecutionContext toolExecutionContext,
         SelectedAiModel selectedModel,
         IReadOnlyCollection<AiConversationMessage> conversationHistory,
         IReadOnlyCollection<AiToolDefinition> allowedTools,
@@ -139,6 +139,7 @@ public sealed class MessageOrchestrationState
         DateTimeOffset startedAtUtc)
     {
         ArgumentNullException.ThrowIfNull(messageProcessing);
+        ArgumentNullException.ThrowIfNull(toolExecutionContext);
         ArgumentNullException.ThrowIfNull(selectedModel);
         ArgumentNullException.ThrowIfNull(conversationHistory);
         ArgumentNullException.ThrowIfNull(allowedTools);
@@ -146,10 +147,29 @@ public sealed class MessageOrchestrationState
 
         return new MessageOrchestrationState(
             messageProcessing,
+            toolExecutionContext,
             selectedModel,
             conversationHistory,
             allowedTools,
             limits,
             startedAtUtc);
     }
+
+    public static MessageOrchestrationState Start(
+        StartedMessageProcessing messageProcessing,
+        SelectedAiModel selectedModel,
+        IReadOnlyCollection<AiConversationMessage> conversationHistory,
+        IReadOnlyCollection<AiToolDefinition> allowedTools,
+        OrchestrationExecutionLimits limits,
+        DateTimeOffset startedAtUtc) =>
+        Start(
+            messageProcessing,
+            new ConnectorExecutionContext(
+                messageProcessing.OrganizationId,
+                messageProcessing.OwnerMemberId),
+            selectedModel,
+            conversationHistory,
+            allowedTools,
+            limits,
+            startedAtUtc);
 }
