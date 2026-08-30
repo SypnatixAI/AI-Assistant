@@ -195,11 +195,9 @@ Concretement, il faut :
 - enregistrer son email
 - enregistrer son `displayName`
 - definir son statut initial a `Actif`
-- lui attribuer le role `User` par defaut
+- lui attribuer le role interne derive de ses app roles Entra (voir [Politique d'admission](#auth-admission-policy))
 
-Pourquoi le role `User` :
-- c'est le role par defaut du systeme
-- un utilisateur ne doit pas devenir `Admin` automatiquement a sa premiere connexion
+Le role attribue a la creation n'est jamais code en dur : il vient du resolveur de role interne, qui lit les app roles Entra du token (`AssistantCore.Access` et, le cas echeant, `tenantAdmin`).
 
 Le point important :
 un utilisateur authentifie peut entrer dans la plateforme meme s'il n'existait pas encore en base, parce que la creation automatique est autorisee.
@@ -233,8 +231,11 @@ Ces permissions ont des responsabilites differentes :
 | `access_as_user` | L'application cliente peut appeler l'API au nom de l'utilisateur connecte |
 | `AssistantCore.Access` | L'utilisateur a ete admis sur la plateforme par son organisation |
 | Role interne `Admin` ou `User` | Le membre peut effectuer les actions metier autorisees dans AssistantCore |
+| App role Entra `tenantAdmin` | L'organisation cliente designe ce membre comme administrateur de son espace AssistantCore |
 
-Le role Entra `AssistantCore.Access` ne doit jamais etre transforme automatiquement en role interne `Admin`.
+Le role Entra `AssistantCore.Access` reste uniquement une preuve d'admission : il ne donne jamais `Admin` a lui seul. En revanche, l'app role Entra `tenantAdmin` (distinct de `AssistantCore.Access`) est la source d'autorite pour le role interne `Admin` : voir [Politique d'admission](#auth-admission-policy) pour la regle exacte de derivation.
+
+Seul un app role definit sur l'App Registration d'AssistantCore compte pour cette derivation. Un role natif Microsoft comme `Global Administrator` du tenant client n'est jamais utilise pour deduire `tenantAdmin`.
 
 Le backend doit verifier, dans cet ordre :
 
@@ -243,8 +244,8 @@ Le backend doit verifier, dans cet ordre :
 3. la presence de `AssistantCore.Access` dans le claim `roles`
 4. la presence des claims `tid` et `oid`
 5. l'existence et le statut actif de l'organisation interne
-6. l'existence ou le provisionnement du membre interne
-7. le statut actif et le role interne du membre
+6. l'existence ou le provisionnement du membre interne, avec le role interne derive de `roles` (voir [Politique d'admission](#auth-admission-policy))
+7. le statut actif du membre
 
 Un token absent ou invalide retourne `401 Unauthorized`.
 
@@ -261,7 +262,14 @@ Pour le MVP, une organisation doit etre creee et activee dans AssistantCore avan
 
 L'administrateur Microsoft Entra du client decide qui peut entrer dans AssistantCore. Il affecte les utilisateurs ou groupes autorises au role Entra `AssistantCore.Access` de l'Enterprise Application.
 
-L'administrateur AssistantCore gere ensuite les roles metier `Admin` et `User`. Il ne gere pas l'emission des tokens Microsoft.
+Ce meme administrateur Entra du client gere aussi le role metier interne, via un second app role, `tenantAdmin`, defini sur l'App Registration d'AssistantCore. AssistantCore ne gere plus manuellement qui est `Admin` : le tenant Entra du client est la source d'autorite, exactement comme il l'est deja pour l'admission generale. Ce choix evite qu'un role revoque cote client reste actif silencieusement dans AssistantCore.
+
+Regle de derivation du role interne, appliquee a chaque authentification :
+
+- absence de `AssistantCore.Access` dans `roles` -> acces refuse (`403`)
+- `AssistantCore.Access` seul -> role interne `User`
+- `AssistantCore.Access` et `tenantAdmin` -> role interne `Admin`
+- `tenantAdmin` sans `AssistantCore.Access` -> acces refuse (`403`), `tenantAdmin` seul ne suffit jamais
 
 Un utilisateur peut etre provisionne automatiquement seulement si :
 
@@ -274,10 +282,12 @@ Un utilisateur peut etre provisionne automatiquement seulement si :
 
 Le membre cree automatiquement recoit toujours :
 
-- le role interne `User`
+- le role interne derive de la regle ci-dessus (`Admin` ou `User`)
 - le statut interne `Active`
 - l'organisation determinee depuis `tid`
 - l'identite externe determinee depuis `oid`
+
+A chaque authentification suivante d'un membre deja existant, son role interne est recompare au role derive du token courant et resynchronise si necessaire (promotion `User` -> `Admin` si `tenantAdmin` est ajoute, retrogradation `Admin` -> `User` s'il est retire). Cette synchronisation est idempotente : elle n'ecrit en base que lorsque le role derive differe du role deja enregistre.
 
 Les utilisateurs invites peuvent être autorisés dans la première version
 seulement s’ils possèdent un objet invité dans le tenant Microsoft Entra du
@@ -306,6 +316,8 @@ La désactivation interne utilise
 `PATCH /api/members/{memberId}/status`, décrit dans
 [Gérer le statut d'un membre](../membres/manage-member-status.md).
 
+Retirer uniquement `tenantAdmin` (en laissant `AssistantCore.Access`) ne retire pas l'acces a la plateforme : le membre redevient simplement `User` a sa prochaine authentification, sans intervention manuelle cote AssistantCore.
+
 ---
 
 <a id="auth-entra-configuration"></a>
@@ -330,6 +342,19 @@ Dans le tenant qui possede l'App Registration AssistantCore :
 11. activer le role puis enregistrer
 
 Le role est defini sur l'API afin d'apparaitre dans le token d'acces destine a AssistantCore.
+
+### A2. Creer le role d'administration dans l'App Registration
+
+Dans la meme App Registration, repeter les etapes precedentes pour un second app role :
+
+1. cliquer sur `Create app role`
+2. utiliser `AssistantCore Tenant Admin` comme nom affiche
+3. selectionner `Users/Groups` dans les types de membres autorises
+4. utiliser exactement `tenantAdmin` comme valeur
+5. ajouter une description indiquant que ce role donne le role metier interne `Admin`, en plus de l'admission
+6. activer le role puis enregistrer
+
+`tenantAdmin` ne remplace jamais `AssistantCore.Access` : un membre doit toujours avoir les deux pour obtenir `Admin` (voir [Politique d'admission](#auth-admission-policy)).
 
 ### B. Verifier le scope delegue
 
@@ -365,6 +390,7 @@ Dans l'Enterprise Application AssistantCore du tenant client :
 4. selectionner le role `AssistantCore.Access`
 5. cliquer sur `Assign`
 6. verifier que chaque affectation apparait avec le bon role
+7. pour les membres qui doivent obtenir `Admin` cote AssistantCore, repeter l'affectation avec le role `tenantAdmin`, en plus de `AssistantCore.Access`
 
 Ne pas affecter de service principal ou de groupe dont le périmètre n’est pas
 maîtrisé. Un compte invité doit être affecté individuellement ou par un groupe
@@ -379,8 +405,9 @@ Avec un utilisateur de test affecte :
 3. verifier que `scp` contient `access_as_user`
 4. verifier que `roles` contient `AssistantCore.Access`
 5. appeler `authenticateUser`
-6. verifier que le membre est cree avec le role interne `User`
+6. verifier que le membre est cree avec le role interne `User` si `roles` ne contient pas `tenantAdmin`, ou `Admin` s'il le contient
 7. rappeler l'endpoint et verifier qu'aucun doublon n'est cree
+8. affecter ou retirer `tenantAdmin` a cet utilisateur dans le tenant client, rappeler `authenticateUser` et verifier que le role interne est resynchronise sans intervention manuelle
 
 Avec un utilisateur non affecte, verifier que l'acces est refuse et qu'aucun membre interne n'est cree.
 
@@ -401,10 +428,11 @@ L'email et le nom affiche sont des donnees de profil. Ils ne doivent jamais serv
 
 Lors d'une authentification reussie, le backend peut actualiser le nom et l'email d'un membre existant lorsque les nouvelles valeurs sont valides. Cette synchronisation ne doit jamais modifier :
 
-- le role interne
 - le statut interne
 - l'organisation
 - l'identifiant externe
+
+Le role interne fait exception : il est explicitement resynchronise a chaque authentification a partir des app roles Entra du token (voir [Politique d'admission](#auth-admission-policy)). C'est la seule valeur que l'authentification est autorisee a faire evoluer automatiquement.
 
 Un changement d'email ne doit pas creer un second membre. Deux identites externes differentes ne doivent pas etre fusionnees uniquement parce qu'elles presentent le meme email.
 
@@ -427,19 +455,18 @@ Cette etape permet de bloquer un utilisateur qui serait valide dans le systeme e
 
 ---
 
-### 8. Charger le role interne de l'utilisateur
+### 8. Deriver et synchroniser le role interne de l'utilisateur
 
-Dans ce systeme, les roles viennent uniquement de la base interne.
+Le tenant Entra du client est la source d'autorite pour le role interne. La base interne stocke la derniere valeur synchronisee, mais ne decide jamais seule.
 
 Concretement :
-- lire le ou les roles stockes pour l'utilisateur
-- verifier qu'ils font partie des roles autorises
+- deriver le role a partir des app roles Entra du token, avec la regle de [Politique d'admission](#auth-admission-policy)
+- comparer ce role derive au role deja enregistre pour ce membre
+- ecrire le nouveau role en base seulement s'il differe (synchronisation idempotente)
 
-Les roles possibles sont seulement :
+Les roles possibles restent seulement :
 - `Admin`
 - `User`
-
-La base interne est la seule source de verite pour les roles.
 
 ---
 
@@ -551,7 +578,7 @@ Le frontend peut alors :
 5. retrouver l'utilisateur interne
 6. le creer automatiquement s'il n'existe pas
 7. verifier qu'il est actif
-8. lire son role interne
+8. deriver et synchroniser son role interne depuis ses app roles Entra
 9. construire la reponse
 10. retourner le contexte complet au frontend
 
@@ -585,8 +612,9 @@ A retourner si une erreur technique empeche la construction de la session.
 - le nom fonctionnel de l'endpoint est `authenticateUser`
 - l'utilisateur doit deja etre authentifie avant l'appel
 - le compte utilisateur est cree automatiquement s'il n'existe pas
-- le role par defaut a la creation est `User`
-- les roles viennent uniquement de la base interne
+- le role interne est derive des app roles Entra (`AssistantCore.Access` obligatoire, `tenantAdmin` optionnel) et non code en dur
+- le role interne est resynchronise a chaque authentification, meme pour un membre existant, de facon idempotente
+- seul un app role defini sur l'App Registration d'AssistantCore compte pour cette derivation, jamais un role natif Microsoft comme `Global Administrator`
 - il existe seulement deux roles : `Admin` et `User`
 - le frontend ne choisit jamais librement l'organisation
 - la reponse ne doit contenir aucune donnee sensible

@@ -24,6 +24,15 @@ public sealed class ApiAccessOptionsValidator : IValidateOptions<ApiAccessOption
             return ValidateOptionsResult.Fail(roleError);
         }
 
+        var tenantAdminRoleError = ValidateSingleValue(
+            options.TenantAdminRole,
+            nameof(ApiAccessOptions.TenantAdminRole));
+
+        if (tenantAdminRoleError is not null)
+        {
+            return ValidateOptionsResult.Fail(tenantAdminRoleError);
+        }
+
         return ValidateOptionsResult.Success;
     }
 

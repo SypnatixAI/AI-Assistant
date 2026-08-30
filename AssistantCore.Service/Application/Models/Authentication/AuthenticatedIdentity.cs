@@ -7,4 +7,5 @@ public sealed record AuthenticatedIdentity(
     string ExternalOrganizationId,
     string ExternalUserId,
     string? DisplayName,
-    string? Email);
+    string? Email,
+    IReadOnlyCollection<string> AppRoles);

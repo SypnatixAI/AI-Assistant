@@ -68,6 +68,13 @@ public static class ServiceCollectionExtensions
                 options => options.ConversationRecoveryDays > 0,
                 $"{RetentionOptions.SectionName}:{nameof(RetentionOptions.ConversationRecoveryDays)} must be greater than zero.")
             .ValidateOnStart();
+        services.AddOptions<OrganizationRoleOptions>()
+            .Bind(configuration.GetSection(OrganizationRoleOptions.SectionName))
+            .Validate(
+                options => !string.IsNullOrWhiteSpace(options.RequiredAdmissionRole)
+                    && !string.IsNullOrWhiteSpace(options.TenantAdminRole),
+                $"{OrganizationRoleOptions.SectionName}:{nameof(OrganizationRoleOptions.RequiredAdmissionRole)} and {nameof(OrganizationRoleOptions.TenantAdminRole)} are required.")
+            .ValidateOnStart();
         services.AddScoped<ISendMessageCommandValidator, SendMessageCommandValidator>();
         services.AddSingleton<IConversationCursorCodec, ConversationCursorCodec>();
         services.AddSingleton<IConversationMessageCursorCodec, ConversationMessageCursorCodec>();
@@ -77,6 +84,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IConversationLifecycleService, ConversationLifecycleService>();
         services.AddScoped<IMessageUserContextService, MessageUserContextService>();
         services.AddScoped<IAuthenticateUserService, AuthenticateUserService>();
+        services.AddScoped<IOrganizationRoleResolver, OrganizationRoleResolver>();
         services.AddScoped<IMemberManagementService, MemberManagementService>();
         services.AddScoped<IOrganizationManagementService, OrganizationManagementService>();
         services.AddMicrosoft365Application();

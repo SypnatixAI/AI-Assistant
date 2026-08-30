@@ -14,9 +14,31 @@ internal sealed class StubCurrentIdentity : ICurrentIdentity
         "tenant-id",
         "user-id",
         "Test User",
-        "test.user@example.com");
+        "test.user@example.com",
+        []);
 
     public AuthenticatedIdentity GetIdentity() => Identity;
+}
+
+internal sealed class StubOrganizationRoleResolver : IOrganizationRoleResolver
+{
+    public OrganizationRole Role { get; set; } = OrganizationRole.User;
+
+    public Exception? Exception { get; set; }
+
+    public IReadOnlyCollection<string>? ReceivedAppRoles { get; private set; }
+
+    public OrganizationRole Resolve(IReadOnlyCollection<string> appRoles)
+    {
+        ReceivedAppRoles = appRoles;
+
+        if (Exception is not null)
+        {
+            throw Exception;
+        }
+
+        return Role;
+    }
 }
 
 internal sealed class StubOrganizationQueries : IOrganizationQueries

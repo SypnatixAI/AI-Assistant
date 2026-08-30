@@ -11,7 +11,8 @@ public sealed class ApiAccessOptionsValidatorTests
         var options = new ApiAccessOptions
         {
             RequiredScope = "access_as_user",
-            RequiredAdmissionRole = "AssistantCore.Access"
+            RequiredAdmissionRole = "AssistantCore.Access",
+            TenantAdminRole = "tenantAdmin"
         };
 
         // When
@@ -30,7 +31,8 @@ public sealed class ApiAccessOptionsValidatorTests
         var options = new ApiAccessOptions
         {
             RequiredScope = scope,
-            RequiredAdmissionRole = "AssistantCore.Access"
+            RequiredAdmissionRole = "AssistantCore.Access",
+            TenantAdminRole = "tenantAdmin"
         };
 
         // When
@@ -49,7 +51,8 @@ public sealed class ApiAccessOptionsValidatorTests
         var options = new ApiAccessOptions
         {
             RequiredScope = "access_as_user profile",
-            RequiredAdmissionRole = "AssistantCore.Access"
+            RequiredAdmissionRole = "AssistantCore.Access",
+            TenantAdminRole = "tenantAdmin"
         };
 
         // When
@@ -71,7 +74,8 @@ public sealed class ApiAccessOptionsValidatorTests
         var options = new ApiAccessOptions
         {
             RequiredScope = "access_as_user",
-            RequiredAdmissionRole = role
+            RequiredAdmissionRole = role,
+            TenantAdminRole = "tenantAdmin"
         };
 
         // When
@@ -89,7 +93,8 @@ public sealed class ApiAccessOptionsValidatorTests
         var options = new ApiAccessOptions
         {
             RequiredScope = "access_as_user",
-            RequiredAdmissionRole = "AssistantCore.Access Some.Other"
+            RequiredAdmissionRole = "AssistantCore.Access Some.Other",
+            TenantAdminRole = "tenantAdmin"
         };
 
         // When
@@ -99,6 +104,48 @@ public sealed class ApiAccessOptionsValidatorTests
         Assert.True(result.Failed);
         Assert.Contains(
             "AzureAd:RequiredAdmissionRole must be a single value without whitespace.",
+            result.Failures);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void Given_AMissingTenantAdminRole_When_Validate_Then_ValidationFailsOnTheTenantAdminRoleKey(string role)
+    {
+        // Given
+        var options = new ApiAccessOptions
+        {
+            RequiredScope = "access_as_user",
+            RequiredAdmissionRole = "AssistantCore.Access",
+            TenantAdminRole = role
+        };
+
+        // When
+        var result = new ApiAccessOptionsValidator().Validate(name: null, options);
+
+        // Then
+        Assert.True(result.Failed);
+        Assert.Contains("AzureAd:TenantAdminRole is required.", result.Failures);
+    }
+
+    [Fact]
+    public void Given_ATenantAdminRoleContainingSeveralValues_When_Validate_Then_ValidationFails()
+    {
+        // Given
+        var options = new ApiAccessOptions
+        {
+            RequiredScope = "access_as_user",
+            RequiredAdmissionRole = "AssistantCore.Access",
+            TenantAdminRole = "tenantAdmin Some.Other"
+        };
+
+        // When
+        var result = new ApiAccessOptionsValidator().Validate(name: null, options);
+
+        // Then
+        Assert.True(result.Failed);
+        Assert.Contains(
+            "AzureAd:TenantAdminRole must be a single value without whitespace.",
             result.Failures);
     }
 }
