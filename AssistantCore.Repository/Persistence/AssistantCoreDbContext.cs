@@ -37,6 +37,9 @@ public class AssistantCoreDbContext(DbContextOptions<AssistantCoreDbContext> opt
 
     public DbSet<Conversation> Conversations => Set<Conversation>();
 
+    public DbSet<ConversationPurgeRequest> ConversationPurgeRequests =>
+        Set<ConversationPurgeRequest>();
+
     public DbSet<Message> Messages => Set<Message>();
 
     public DbSet<MessageSource> MessageSources => Set<MessageSource>();

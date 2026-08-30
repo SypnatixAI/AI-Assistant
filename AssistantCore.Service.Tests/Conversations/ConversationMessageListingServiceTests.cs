@@ -100,6 +100,26 @@ public sealed class ConversationMessageListingServiceTests
         Conversation? foundConversation,
         ConversationMessagePage? page = null) : IConversationRepository
     {
+        public Task<ConversationUpdateResult> UpdateConversationAsync(
+            Guid organizationId,
+            Guid ownerMemberId,
+            Guid conversationId,
+            int? expectedVersion,
+            string? title,
+            ConversationStatus? status,
+            DateTimeOffset updatedAt,
+            CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
+        public Task<ConversationDeleteStatus> SoftDeleteConversationAsync(
+            Guid organizationId,
+            Guid ownerMemberId,
+            Guid conversationId,
+            DateTimeOffset deletedAt,
+            DateTimeOffset purgeAfter,
+            CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
         public bool ListMessagesWasCalled { get; private set; }
 
         public Task<Conversation?> FindConversationAsync(

@@ -8,6 +8,8 @@ namespace AssistantCore.Repository.Repositories;
 public sealed class ConversationRepository(AssistantCoreDbContext dbContext)
     : IConversationRepository
 {
+    private const int InitialConversationVersion = 1;
+
     public async Task<(Conversation Conversation, Message UserMessage)> CreateConversationWithFirstMessageAsync(
         Guid organizationId,
         Guid ownerMemberId,
@@ -33,6 +35,8 @@ public sealed class ConversationRepository(AssistantCoreDbContext dbContext)
         userMessage.ConversationId = conversation.Id;
         userMessage.Role = MessageRole.User;
         userMessage.ProcessingStatus = MessageProcessingStatus.Pending;
+        conversation.Version = InitialConversationVersion;
+        conversation.DeletedAt = null;
 
         conversation.Messages.Add(userMessage);
         dbContext.Conversations.Add(conversation);
@@ -53,7 +57,8 @@ public sealed class ConversationRepository(AssistantCoreDbContext dbContext)
                 conversation =>
                     conversation.Id == conversationId
                     && conversation.OrganizationId == organizationId
-                    && conversation.OwnerMemberId == ownerMemberId,
+                    && conversation.OwnerMemberId == ownerMemberId
+                    && conversation.DeletedAt == null,
                 cancellationToken);
     }
 
@@ -123,7 +128,8 @@ public sealed class ConversationRepository(AssistantCoreDbContext dbContext)
             .Where(conversation =>
                 conversation.OrganizationId == organizationId
                 && conversation.OwnerMemberId == ownerMemberId
-                && conversation.Status == ConversationStatus.Active);
+                && conversation.Status == ConversationStatus.Active
+                && conversation.DeletedAt == null);
 
         if (cursorUpdatedAt is not null && cursorId is not null)
         {
@@ -172,7 +178,8 @@ public sealed class ConversationRepository(AssistantCoreDbContext dbContext)
                 candidate =>
                     candidate.Id == conversationId
                     && candidate.OrganizationId == organizationId
-                    && candidate.OwnerMemberId == ownerMemberId,
+                    && candidate.OwnerMemberId == ownerMemberId
+                    && candidate.DeletedAt == null,
                 cancellationToken);
 
         if (conversation is null)
@@ -207,7 +214,8 @@ public sealed class ConversationRepository(AssistantCoreDbContext dbContext)
                     && candidate.Role == MessageRole.User
                     && candidate.ConversationId == conversationId
                     && candidate.Conversation.OrganizationId == organizationId
-                    && candidate.Conversation.OwnerMemberId == ownerMemberId,
+                    && candidate.Conversation.OwnerMemberId == ownerMemberId
+                    && candidate.Conversation.DeletedAt == null,
                 cancellationToken);
 
         if (message is null)
@@ -242,7 +250,8 @@ public sealed class ConversationRepository(AssistantCoreDbContext dbContext)
                     && message.ProcessingStatus == MessageProcessingStatus.InProgress
                     && message.ConversationId == conversationId
                     && message.Conversation.OrganizationId == organizationId
-                    && message.Conversation.OwnerMemberId == ownerMemberId,
+                    && message.Conversation.OwnerMemberId == ownerMemberId
+                    && message.Conversation.DeletedAt == null,
                 cancellationToken);
 
         if (userMessage is null)
@@ -303,7 +312,8 @@ public sealed class ConversationRepository(AssistantCoreDbContext dbContext)
                     && message.ProcessingStatus == MessageProcessingStatus.InProgress
                     && message.ConversationId == conversationId
                     && message.Conversation.OrganizationId == organizationId
-                    && message.Conversation.OwnerMemberId == ownerMemberId,
+                    && message.Conversation.OwnerMemberId == ownerMemberId
+                    && message.Conversation.DeletedAt == null,
                 cancellationToken);
 
         if (userMessage is null)
@@ -318,6 +328,116 @@ public sealed class ConversationRepository(AssistantCoreDbContext dbContext)
         await dbContext.SaveChangesAsync(cancellationToken);
 
         return true;
+    }
+
+    public async Task<ConversationUpdateResult> UpdateConversationAsync(
+        Guid organizationId,
+        Guid ownerMemberId,
+        Guid conversationId,
+        int? expectedVersion,
+        string? title,
+        ConversationStatus? status,
+        DateTimeOffset updatedAt,
+        CancellationToken cancellationToken = default)
+    {
+        var conversation = await dbContext.Conversations
+            .SingleOrDefaultAsync(
+                candidate =>
+                    candidate.Id == conversationId
+                    && candidate.OrganizationId == organizationId
+                    && candidate.OwnerMemberId == ownerMemberId
+                    && candidate.DeletedAt == null,
+                cancellationToken);
+
+        if (conversation is null)
+        {
+            return ConversationUpdateResult.NotFound;
+        }
+
+        if (expectedVersion is not null && conversation.Version != expectedVersion)
+        {
+            return ConversationUpdateResult.VersionConflict;
+        }
+
+        if (title is not null)
+        {
+            conversation.Title = title;
+        }
+
+        if (status is not null)
+        {
+            conversation.Status = status.Value;
+        }
+
+        conversation.Version += 1;
+        conversation.UpdatedAt = updatedAt;
+
+        try
+        {
+            await dbContext.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            return ConversationUpdateResult.VersionConflict;
+        }
+
+        return ConversationUpdateResult.Updated(conversation);
+    }
+
+    public async Task<ConversationDeleteStatus> SoftDeleteConversationAsync(
+        Guid organizationId,
+        Guid ownerMemberId,
+        Guid conversationId,
+        DateTimeOffset deletedAt,
+        DateTimeOffset purgeAfter,
+        CancellationToken cancellationToken = default)
+    {
+        var conversation = await dbContext.Conversations
+            .SingleOrDefaultAsync(
+                candidate =>
+                    candidate.Id == conversationId
+                    && candidate.OrganizationId == organizationId
+                    && candidate.OwnerMemberId == ownerMemberId,
+                cancellationToken);
+
+        if (conversation is null)
+        {
+            return ConversationDeleteStatus.NotFound;
+        }
+
+        var alreadyRequested = await dbContext.ConversationPurgeRequests
+            .AnyAsync(
+                request => request.ConversationId == conversationId,
+                cancellationToken);
+
+        if (conversation.DeletedAt is not null && alreadyRequested)
+        {
+            return ConversationDeleteStatus.AlreadyDeleted;
+        }
+
+        if (conversation.DeletedAt is null)
+        {
+            conversation.DeletedAt = deletedAt;
+            conversation.Version += 1;
+            conversation.UpdatedAt = deletedAt;
+        }
+
+        if (!alreadyRequested)
+        {
+            dbContext.ConversationPurgeRequests.Add(new ConversationPurgeRequest
+            {
+                Id = Guid.NewGuid(),
+                ConversationId = conversationId,
+                OrganizationId = organizationId,
+                RequestedAt = deletedAt,
+                PurgeAfter = purgeAfter,
+                Status = ConversationPurgeStatus.Pending
+            });
+        }
+
+        await dbContext.SaveChangesAsync(cancellationToken);
+
+        return ConversationDeleteStatus.Deleted;
     }
 
     private static void ValidateIdentifier(

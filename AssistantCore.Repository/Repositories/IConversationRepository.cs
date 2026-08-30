@@ -66,6 +66,35 @@ public interface IConversationRepository
         DateTimeOffset completedAt,
         CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Applique un renommage ou un changement de statut sur une conversation visible.
+    /// Lorsque <paramref name="expectedVersion"/> est fourni, la mise a jour n'est appliquee
+    /// que s'il correspond encore a la version persistee, ce qui protege contre une
+    /// modification concurrente. Un appel sans version attendue ne verifie rien.
+    /// </summary>
+    Task<ConversationUpdateResult> UpdateConversationAsync(
+        Guid organizationId,
+        Guid ownerMemberId,
+        Guid conversationId,
+        int? expectedVersion,
+        string? title,
+        ConversationStatus? status,
+        DateTimeOffset updatedAt,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Marque une conversation comme supprimee et enregistre une demande de purge unique.
+    /// L'operation est idempotente : repeter la suppression ne cree pas un second travail
+    /// de purge et ne revele pas l'existence passee de la conversation.
+    /// </summary>
+    Task<ConversationDeleteStatus> SoftDeleteConversationAsync(
+        Guid organizationId,
+        Guid ownerMemberId,
+        Guid conversationId,
+        DateTimeOffset deletedAt,
+        DateTimeOffset purgeAfter,
+        CancellationToken cancellationToken = default);
+
     Task<bool> FailMessageProcessingAsync(
         Guid organizationId,
         Guid ownerMemberId,

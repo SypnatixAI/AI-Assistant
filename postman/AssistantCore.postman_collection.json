@@ -370,8 +370,14 @@
             "header": [],
             "url": {
               "raw": "{{base_url}}/api/microsoft365/consent",
-              "host": ["{{base_url}}"],
-              "path": ["api", "microsoft365", "consent"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "microsoft365",
+                "consent"
+              ]
             },
             "description": "Retourne l'URL de consentement administrateur et l'enregistre dans authorization_url. Ouvre ensuite cette variable dans le navigateur."
           },
@@ -409,8 +415,15 @@
             "header": [],
             "url": {
               "raw": "{{base_url}}/api/microsoft365/sites/{{site_id}}",
-              "host": ["{{base_url}}"],
-              "path": ["api", "microsoft365", "sites", "{{site_id}}"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "microsoft365",
+                "sites",
+                "{{site_id}}"
+              ]
             },
             "description": "Enregistre le site SharePoint identifié par site_id."
           },
@@ -450,8 +463,16 @@
             "header": [],
             "url": {
               "raw": "{{base_url}}/api/microsoft365/sites/{{site_id}}/drives",
-              "host": ["{{base_url}}"],
-              "path": ["api", "microsoft365", "sites", "{{site_id}}", "drives"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "microsoft365",
+                "sites",
+                "{{site_id}}",
+                "drives"
+              ]
             },
             "description": "Découvre les bibliothèques du site et enregistre le drive_id correspondant à drive_name."
           },
@@ -489,19 +510,162 @@
           "request": {
             "method": "PATCH",
             "header": [
-              {"key": "Content-Type", "value": "application/json"}
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"isIndexed\": true\n}",
-              "options": {"raw": {"language": "json"}}
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
             "url": {
               "raw": "{{base_url}}/api/microsoft365/sites/{{site_id}}/drives/{{drive_id}}",
-              "host": ["{{base_url}}"],
-              "path": ["api", "microsoft365", "sites", "{{site_id}}", "drives", "{{drive_id}}"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "microsoft365",
+                "sites",
+                "{{site_id}}",
+                "drives",
+                "{{drive_id}}"
+              ]
             },
             "description": "Active l'indexation de la bibliothèque et crée la synchronisation initiale traitée par le Worker local."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Conversations",
+      "item": [
+        {
+          "name": "Update Conversation",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (!pm.environment.get('conversation_id')) {",
+                  "    throw new Error('conversation_id is missing. Run Send Message or set conversation_id manually.');",
+                  "}",
+                  "",
+                  "const version = pm.environment.get('conversation_version');",
+                  "if (!version) {",
+                  "    pm.request.headers.remove('If-Match');",
+                  "}"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Conversation was updated', function () {",
+                  "    const response = pm.response.json();",
+                  "    pm.expect(response.id).to.eql(pm.environment.get('conversation_id'));",
+                  "    pm.expect(response.version).to.be.a('number');",
+                  "    pm.environment.set('conversation_version', response.version);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "If-Match",
+                "value": "\"{{conversation_version}}\""
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"{{conversation_title}}\",\n  \"status\": \"{{conversation_status}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/conversations/{{conversation_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "conversations",
+                "{{conversation_id}}"
+              ]
+            },
+            "description": "Renomme, archive ou restaure la conversation ciblee. Les deux champs sont optionnels mais au moins un doit rester dans le body. status accepte Active ou Archived.\n\nL'en-tete If-Match transporte la version connue du client. Il est retire automatiquement lorsque conversation_version est vide. Une version perimee retourne 409 avec le code stable conversation_version_conflict; le test enregistre la version retournee pour l'appel suivant."
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Conversation",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (!pm.environment.get('conversation_id')) {",
+                  "    throw new Error('conversation_id is missing. Run Send Message or set conversation_id manually.');",
+                  "}"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 204', function () {",
+                  "    pm.response.to.have.status(204);",
+                  "});",
+                  "",
+                  "pm.test('Response has no content', function () {",
+                  "    pm.expect(pm.response.text()).to.be.empty;",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/conversations/{{conversation_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "conversations",
+                "{{conversation_id}}"
+              ]
+            },
+            "description": "Supprime logiquement la conversation et programme sa purge. La reponse est 204 sans contenu.\n\nL'operation est idempotente : rejouer cette requete retourne encore 204, sans creer un second travail de purge et sans reveler le titre de la conversation supprimee. Une conversation appartenant a un autre membre retourne 404."
           },
           "response": []
         }
@@ -534,17 +698,29 @@
           "request": {
             "method": "POST",
             "header": [
-              {"key": "Content-Type", "value": "application/json"}
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"conversationId\": null,\n  \"message\": \"{{question}}\",\n  \"model\": \"{{model}}\"\n}",
-              "options": {"raw": {"language": "json"}}
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
             "url": {
               "raw": "{{base_url}}/api/messages",
-              "host": ["{{base_url}}"],
-              "path": ["api", "messages"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "messages"
+              ]
             },
             "description": "Pose question à l'assistant. Une valeur model vide utilise le modèle par défaut."
           },

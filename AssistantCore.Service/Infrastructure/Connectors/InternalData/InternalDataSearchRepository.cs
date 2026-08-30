@@ -42,6 +42,7 @@ public sealed class InternalDataSearchRepository(AssistantCoreDbContext dbContex
             .Where(conversation =>
                 conversation.OrganizationId == parameters.OrganizationId
                 && conversation.OwnerMemberId == parameters.MemberId
+                && conversation.DeletedAt == null
                 && conversation.Title.Contains(parameters.Query))
             .OrderByDescending(conversation => conversation.UpdatedAt)
             .Take(parameters.MaximumResults)
@@ -61,6 +62,7 @@ public sealed class InternalDataSearchRepository(AssistantCoreDbContext dbContex
             .Where(message =>
                 message.Conversation.OrganizationId == parameters.OrganizationId
                 && message.Conversation.OwnerMemberId == parameters.MemberId
+                && message.Conversation.DeletedAt == null
                 && message.ProcessingStatus == MessageProcessingStatus.Completed
                 && (message.Content.Contains(parameters.Query)
                     || message.Conversation.Title.Contains(parameters.Query)))

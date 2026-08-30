@@ -30,6 +30,10 @@ public sealed class ConversationConfiguration : IEntityTypeConfiguration<Convers
             .HasMaxLength(20)
             .IsRequired();
 
+        builder.Property(conversation => conversation.Version)
+            .IsConcurrencyToken()
+            .IsRequired();
+
         builder.Property(conversation => conversation.CreatedAt)
             .HasColumnType("datetimeoffset")
             .IsRequired();
@@ -37,6 +41,9 @@ public sealed class ConversationConfiguration : IEntityTypeConfiguration<Convers
         builder.Property(conversation => conversation.UpdatedAt)
             .HasColumnType("datetimeoffset")
             .IsRequired();
+
+        builder.Property(conversation => conversation.DeletedAt)
+            .HasColumnType("datetimeoffset");
 
         builder.HasOne(conversation => conversation.Organization)
             .WithMany()

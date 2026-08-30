@@ -63,7 +63,8 @@ public sealed class ExceptionMiddleware(
 
             var response = new ExceptionResponse(
                 exception.Message,
-                environment.IsDevelopment() ? exception.Message : null);
+                environment.IsDevelopment() ? exception.Message : null,
+                exception.ErrorCode);
 
             await context.Response.WriteAsync(JsonSerializer.Serialize(response));
         }
@@ -155,5 +156,8 @@ public sealed class ExceptionMiddleware(
         }
     }
 
-    private sealed record ExceptionResponse(string Message, string? Detail);
+    private sealed record ExceptionResponse(
+        string Message,
+        string? Detail,
+        string? Code = null);
 }

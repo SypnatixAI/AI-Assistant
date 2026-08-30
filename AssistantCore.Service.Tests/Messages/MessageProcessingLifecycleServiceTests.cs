@@ -404,8 +404,58 @@ public sealed class MessageProcessingLifecycleServiceTests
         public override DateTimeOffset GetUtcNow() => utcNow;
     }
 
+    [Theory, AutoDomainData]
+    public async Task Given_AnArchivedConversation_When_StartAsync_Then_ThrowsAConflictWithTheArchivedCode(
+        Organization organization,
+        OrganizationMember member,
+        Conversation conversation,
+        DateTimeOffset now)
+    {
+        // Given
+        member.OrganizationId = organization.Id;
+        conversation.OrganizationId = organization.Id;
+        conversation.OwnerMemberId = member.Id;
+        conversation.Status = ConversationStatus.Archived;
+        var repository = new RecordingConversationRepository { FoundConversation = conversation };
+        var service = new MessageProcessingLifecycleService(
+            repository,
+            new StubTimeProvider(now));
+
+        // When
+        var exception = await Assert.ThrowsAsync<ConflictException>(() =>
+            service.StartAsync(
+                conversation.Id,
+                "Nouvelle question",
+                organization,
+                member,
+                CancellationToken.None));
+
+        // Then
+        Assert.Equal(ConflictException.ConversationArchived, exception.ErrorCode);
+    }
+
     private sealed class RecordingConversationRepository : IConversationRepository
     {
+        public Task<ConversationUpdateResult> UpdateConversationAsync(
+            Guid organizationId,
+            Guid ownerMemberId,
+            Guid conversationId,
+            int? expectedVersion,
+            string? title,
+            ConversationStatus? status,
+            DateTimeOffset updatedAt,
+            CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
+        public Task<ConversationDeleteStatus> SoftDeleteConversationAsync(
+            Guid organizationId,
+            Guid ownerMemberId,
+            Guid conversationId,
+            DateTimeOffset deletedAt,
+            DateTimeOffset purgeAfter,
+            CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
         public Conversation? FoundConversation { get; init; }
 
         public bool ReturnNullWhenAddingMessage { get; init; }

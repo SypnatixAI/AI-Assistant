@@ -33,6 +33,20 @@ Chaque champ est optionnel, mais au moins un doit être fourni. `status` accepte
 `Active` ou `Archived`. Un titre est nettoyé, non vide et limité par une
 configuration backend.
 
+La version connue du client voyage dans l'en-tête HTTP `If-Match`, pas dans le
+corps : le corps ne contient que des champs modifiables, et tous y sont
+optionnels.
+
+```http
+PATCH /api/conversations/conversation-123
+If-Match: "7"
+```
+
+L'en-tête est optionnel. Absent, aucune vérification de concurrence n'est
+demandée et la dernière écriture gagne. Présent mais illisible, la demande est
+refusée avec `400` plutôt que d'écraser silencieusement une version plus
+récente.
+
 La réponse `200 OK` retourne la conversation actualisée :
 
 ```json
