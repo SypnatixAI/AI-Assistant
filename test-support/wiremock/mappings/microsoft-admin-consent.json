@@ -4,10 +4,13 @@
     "urlPath": "/microsoft/organizations/v2.0/adminconsent"
   },
   "response": {
-    "status": 302,
+    "status": 200,
     "headers": {
-      "Location": "{{request.query.redirect_uri}}?tenant=00000000-0000-0000-0000-000000000100&admin_consent=True&state={{request.query.state}}"
+      "Content-Type": "text/html; charset=utf-8",
+      "Cache-Control": "no-store",
+      "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'; form-action 'self' https://localhost:7292 http://localhost:4200; base-uri 'none'"
     },
+    "bodyFileName": "microsoft-admin-consent.html",
     "transformers": [
       "response-template"
     ]

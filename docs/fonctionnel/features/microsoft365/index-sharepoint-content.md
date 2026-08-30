@@ -296,9 +296,10 @@ Microsoft Graph refuse l'accès au Worker
   -> aucun passage Microsoft 365 ne peut être injecté dans Azure AI Search
 ```
 
-Le consentement n'active pas automatiquement tous les sites du tenant. Il
-autorise les appels Graph; AssistantCore applique ensuite sa propre liste de
-sites et de sources explicitement activés.
+Le consentement n'ajoute pas automatiquement tous les sites du tenant. Il
+autorise les appels Graph. AssistantCore attend ensuite que l'administrateur
+choisisse un site. Ce choix ajoute automatiquement les bibliothèques et les
+listes compatibles de ce site.
 
 ### Flow détaillé de connexion
 
@@ -316,6 +317,7 @@ Admin chez Microsoft
   -> validation du state, du consentement et du tenant
   -> obtention d'un token applicatif et vérification du tenant auprès de Graph
   -> connexion Active
+  -> redirection vers la page de confirmation du frontend
   -> Worker autorisé à obtenir un token Graph et à lire les sources activées
 ```
 
@@ -389,11 +391,54 @@ ConsentValidatedAt: date du callback
 
 Le token technique est protégé et n'est jamais écrit dans les logs. Le Worker
 dispose alors de la condition nécessaire pour demander un token Graph et lire
-les sources qui seront activées dans les étapes suivantes de l'ingestion.
+les contenus des sites qui seront choisis ensuite.
+
+Après une validation réussie, l'API ne présente pas de réponse JSON à
+l'administrateur. Elle retourne une redirection HTTP vers une URL frontend fixe
+et configurée par l'environnement. La page onPremia confirme que Microsoft 365
+est connecté et met clairement en évidence le choix du site comme prochaine
+étape. L'identifiant du tenant, le token technique et le `state` ne sont
+jamais ajoutés à cette URL.
+
+Si le consentement est refusé, expire ou ne peut pas être validé, le callback
+redirige vers une page frontend d'échec. Le détail technique est conservé dans
+les journaux du backend, tandis que l'interface indique seulement comment
+recommencer avec un compte administrateur approprié.
 
 Le callback ne découvre pas encore les sites, ne télécharge aucun document et
 n'écrit rien dans Azure AI Search. Ces traitements appartiennent aux étapes de
 découverte et de synchronisation.
+
+#### Consentement dans l'environnement local simulé
+
+La SPA utilise le même bouton, le même endpoint et le même traitement de retour
+en environnement local et en environnement connecté.
+
+En environnement connecté, `authorizationUrl` pointe vers Microsoft Entra.
+En environnement `Local`, elle pointe vers une page HTML servie par WireMock.
+Cette page est clairement identifiée comme une simulation locale et permet de
+choisir `Accepter` ou `Refuser`.
+
+```text
+SPA
+  -> POST /api/microsoft365/consent
+  <- authorizationUrl
+  -> environnement connecté : page Microsoft Entra
+  -> environnement Local : page de consentement WireMock
+  -> callback AssistantCore identique
+  -> validation du tenant avec Microsoft Graph réel ou simulé
+  -> redirection vers la même page SPA
+```
+
+WireMock ne contourne pas le backend. Il simule uniquement les réponses du
+fournisseur Microsoft : consentement, token applicatif, organisation et
+ressources Graph. Le `state`, le callback, les validations, la persistence et
+les changements d'état restent exécutés par AssistantCore.
+
+Le JWT local est conservé dans le `sessionStorage` du navigateur afin de
+survivre à la redirection vers la page simulée. Il est supprimé lors de la
+déconnexion ou à la fermeture de l'onglet. Ce comportement est limité au mode
+`Local`; le mode connecté continue d'utiliser le cache MSAL.
 
 #### Révoquer la connexion
 
@@ -452,8 +497,8 @@ Le client ne doit pas fournir de secret, certificat ou token à AssistantCore.
 <a id="m365-sharepoint-permissions"></a>
 ## Permissions Microsoft nécessaires
 
-Pour le premier test dans le tenant fictif, utiliser des permissions
-applicatives documentées pour les webhooks et les requêtes delta :
+Le connecteur utilise les permissions applicatives étendues nécessaires aux
+webhooks, aux requêtes delta et à la lecture des autorisations :
 
 - `Files.Read.All`;
 - `Sites.Read.All`;
@@ -464,24 +509,115 @@ applicatives documentées pour les webhooks et les requêtes delta :
 
 Ces permissions demandent un consentement administrateur.
 
-Elles donnent une visibilité étendue dans le tenant. AssistantCore doit donc
-conserver sa propre liste de sites activés et refuser toute ingestion provenant
-d’un autre site.
+Elles donnent une visibilité étendue dans le tenant. Ce choix est assumé pour
+permettre la découverte, les webhooks, les deltas et la synchronisation rapide
+des changements de permissions. AssistantCore doit donc conserver sa propre
+liste de sites activés et refuser toute découverte, ingestion ou indexation
+provenant d'un site qui n'a pas été explicitement autorisé dans onPremia.
 
-Avant d’utiliser la fonctionnalité avec un vrai client, effectuer une revue de
-sécurité pour décider entre :
-
-- conserver ces permissions tenant-wide;
-- utiliser `Sites.Selected` avec une synchronisation différente;
-- utiliser un autre mécanisme Microsoft officiellement compatible avec les
-  webhooks, les deltas et les ACL nécessaires.
-
-Cette décision de production ne doit pas être cachée dans le code.
+`Sites.Selected` n'est pas utilisé dans ce flow. Les écrans d'administration
+doivent expliquer clairement la portée des permissions demandées et rappeler
+que la sélection réalisée dans onPremia contrôle les sources effectivement
+traitées.
 
 <a id="m365-sharepoint-sources"></a>
 ## Sites, bibliothèques et listes autorisés
 
-Découvrir un site ne signifie pas qu’il doit être indexé.
+### Onboarding et écran d'administration Microsoft 365
+
+Après l'authentification, la SPA vérifie la progression de la configuration de
+l'organisation avant d'ouvrir le chat :
+
+```http
+GET /api/microsoft365/onboarding
+Authorization: Bearer <JWT AssistantCore>
+```
+
+La réponse indique si le membre est administrateur, si le consentement est
+valide, si un site a été choisi, si du contenu est disponible et si
+l'onboarding est terminé. Elle ne contient aucun secret, token technique ou
+identifiant de tenant.
+
+Pour une organisation qui n'est pas encore prête, un administrateur suit un
+assistant linéaire en deux étapes :
+
+1. autoriser l'accès de l'organisation à Microsoft 365;
+2. choisir au moins un site SharePoint.
+
+Les deux étapes restent visibles pendant tout le parcours. Seule l'étape
+courante est interactive. Les étapes suivantes sont grisées et expliquent ce
+qui doit être terminé avant de devenir disponibles. Cette présentation empêche
+de sauter une validation tout en laissant comprendre l'ensemble du parcours.
+Une étape terminée est atténuée et l'étape courante est mise en évidence. Au
+retour du consentement, une courte animation guide le regard vers le choix du
+site sans bloquer l'utilisateur.
+
+Le retour du consentement, qu'il soit accepté ou refusé, affiche son résultat
+dans le même assistant. Un consentement valide active immédiatement l'étape de
+sélection du site. Un refus conserve l'étape d'autorisation active et permet de
+recommencer.
+
+Le choix du site ajoute automatiquement toutes ses bibliothèques et toutes ses
+listes compatibles. Le bouton permettant d'accéder au chat apparaît dès que
+les deux étapes sont terminées; il n'existe aucune troisième étape obligatoire.
+Lors des connexions suivantes, une organisation déjà
+configurée arrive directement dans le chat. Un membre non administrateur voit
+un écran d'attente clair tant que la configuration doit encore être terminée
+par un administrateur.
+
+Après l'onboarding, un membre possédant le rôle `Admin` retrouve le même écran
+depuis le menu de la SPA pour retirer ou ajouter des contenus. Ce réglage est
+facultatif et ne bloque pas le chat. Le backend continue de refuser les actions
+administratives aux autres membres.
+
+La SPA n'utilise aucune donnée Microsoft 365 codée en dur. Elle appelle les
+mêmes endpoints dans tous les environnements. En mode local, le backend reçoit
+les réponses Graph de WireMock; en mode connecté, il reçoit celles de Microsoft.
+
+### Découvrir les sites disponibles
+
+Après le consentement, l'administrateur appelle :
+
+```http
+GET /api/microsoft365/sites
+Authorization: Bearer <JWT AssistantCore>
+```
+
+Le traitement suit le chemin obligatoire :
+
+```text
+Controller
+  -> IDispatcher
+  -> QueryHandler
+  -> service applicatif
+  -> interface applicative
+  -> adapter Infrastructure
+  -> client AssistantCore.ExternalServices
+  -> GET Microsoft Graph /v1.0/sites
+```
+
+Le service vérifie que le membre courant est administrateur et que son
+organisation possède une connexion Microsoft 365 active. Il obtient ensuite
+un token technique pour le tenant et demande les sites à Microsoft Graph.
+Toutes les pages `@odata.nextLink` sont suivies.
+
+La réponse contient l'identifiant, le nom, l'URL et l'indication qu'un site est
+déjà sélectionné dans onPremia. La découverte seule ne crée aucune source,
+n'active aucune indexation et ne télécharge aucun contenu.
+
+L'administrateur sélectionne un site avec l'endpoint existant :
+
+```http
+POST /api/microsoft365/sites/{siteId}
+```
+
+Le backend valide de nouveau le site auprès de Graph avant de l'enregistrer.
+Il découvre ensuite ses bibliothèques et ses listes compatibles, les active et
+crée le travail nécessaire à leur première synchronisation. La SPA considère
+alors l'onboarding comme terminé sans demander une sélection supplémentaire.
+
+Voir un site dans la liste ne l'ajoute pas à onPremia. Seul le choix explicite
+de l'administrateur autorise ses contenus compatibles.
 
 Chaque site possède un état :
 
@@ -490,21 +626,23 @@ Chaque site possède un état :
 - `Disabled` : désactivé volontairement;
 - `Error` : configuration ou accès invalide.
 
-Un nouveau site est ajouté comme `Discovered`. Il n’est pas indexé avant une
-approbation dans AssistantCore.
+Un nouveau site choisi est ajouté comme `Enabled`. Ses contenus compatibles
+sont activés dans la même opération.
 
 Lorsqu’un site est activé :
 
 1. lire ses bibliothèques;
 2. lire ses listes avec Microsoft Graph;
 3. enregistrer les bibliothèques et listes comme sources découvertes;
-4. attendre qu’un administrateur active chaque source séparément;
-5. créer une synchronisation initiale pour chaque source activée;
+4. activer automatiquement chaque contenu compatible;
+5. créer une synchronisation initiale pour chaque contenu activé;
 6. créer une souscription par bibliothèque ou liste lorsque cela est supporté.
 
-Une liste n’est jamais activée automatiquement parce que son site est actif.
-Cette règle évite d’indexer par erreur une liste contenant des données internes,
-par exemple une liste de salaires ou de demandes disciplinaires.
+Le choix du site autorise donc tout son contenu compatible, y compris les
+listes non masquées qui ne sont ni des listes système ni des bibliothèques de
+documents. L'administrateur doit choisir un site approprié pour l'organisation.
+Il peut ensuite retirer individuellement un contenu depuis l'écran
+d'administration.
 
 ### Découvrir les listes d’un site
 
@@ -544,10 +682,11 @@ GET /api/microsoft365/sites/{siteId}/lists
 PATCH /api/microsoft365/sites/{siteId}/lists/{listId}
 ```
 
-Le premier endpoint valide le site auprès de Microsoft Graph et l'enregistre
-comme site autorisé. Le `GET` des bibliothèques actualise les drives Graph sans
-les activer. Le `PATCH` d'une bibliothèque avec `{ "isIndexed": true }` crée
-une synchronisation initiale. Le Worker prend ensuite le travail en charge :
+Le premier endpoint valide le site auprès de Microsoft Graph, l'enregistre et
+active automatiquement ses contenus compatibles. Les endpoints `GET` affichent
+ensuite les contenus disponibles. Les endpoints `PATCH` permettent à
+l'administrateur de retirer un contenu ou de l'ajouter de nouveau. Le Worker
+prend ensuite le travail en charge :
 
 ```text
 bibliothèque activée
@@ -1551,6 +1690,8 @@ Configuration non secrète attendue :
     "AuthorityBaseUrl": "https://login.microsoftonline.com",
     "GraphBaseUrl": "https://graph.microsoft.com",
     "ConsentCallbackUrl": "https://<api>/api/microsoft365/consent/callback",
+    "ConsentSuccessRedirectUrl": "https://<frontend>/microsoft365/consent/success",
+    "ConsentErrorRedirectUrl": "https://<frontend>/microsoft365/consent/error",
     "ConsentStateLifetimeMinutes": 10,
     "WebhookBaseUrl": "https://<url-publique>",
     "SynchronizationLeaseMinutes": 15,
@@ -1920,6 +2061,7 @@ La fonctionnalité est terminée seulement si :
 - [Consentement administrateur Microsoft Identity](https://learn.microsoft.com/en-us/entra/identity-platform/v2-admin-consent)
 - [Flow OAuth 2.0 avec informations d'identification du client](https://learn.microsoft.com/en-us/entra/identity-platform/v2-oauth2-client-creds-grant-flow)
 - [Lire l'organisation avec Microsoft Graph](https://learn.microsoft.com/en-us/graph/api/organization-list)
+- [Lister les sites avec Microsoft Graph v1.0](https://learn.microsoft.com/en-us/graph/api/site-list?view=graph-rest-1.0)
 - [Notifications Microsoft Graph](https://learn.microsoft.com/en-us/graph/change-notifications-overview)
 - [Recevoir les notifications par webhook](https://learn.microsoft.com/en-us/graph/change-notifications-delivery-webhooks)
 - [Créer une souscription](https://learn.microsoft.com/en-us/graph/api/subscription-post-subscriptions)

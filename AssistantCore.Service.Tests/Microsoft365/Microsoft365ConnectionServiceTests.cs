@@ -53,6 +53,9 @@ public sealed class Microsoft365ConnectionServiceTests
         Assert.Equal(connectionId, result.ConnectionId);
         Assert.Equal(tenantId.ToString("D"), result.TenantId);
         Assert.Equal(Microsoft365ConnectionStatus.Active, result.Status);
+        Assert.Equal(
+            "https://app.onpremia.example/microsoft365/consent/success",
+            result.FrontendRedirectUri.AbsoluteUri);
         Assert.Equal(1, repository.CompleteConsentCallCount);
         Assert.Equal(connectionId, tokenStore.ConnectionId);
         Assert.Equal(accessToken, tokenStore.AccessToken);
@@ -307,7 +310,12 @@ public sealed class Microsoft365ConnectionServiceTests
             consentClient,
             stateProtector,
             tokenStore,
-            Options.Create(new Microsoft365Options { ConsentStateLifetimeMinutes = 10 }),
+            Options.Create(new Microsoft365Options
+            {
+                ConsentStateLifetimeMinutes = 10,
+                ConsentSuccessRedirectUrl =
+                    "https://app.onpremia.example/microsoft365/consent/success"
+            }),
             new FixedTimeProvider(now));
 
     private static IAuthenticateUserService CreateDefaultAuthenticateUserService()

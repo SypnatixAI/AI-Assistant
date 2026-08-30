@@ -1,0 +1,13 @@
+{
+  "request": {
+    "method": "GET",
+    "urlPath": "/local-consent/refuse"
+  },
+  "response": {
+    "status": 302,
+    "headers": {
+      "Location": "{{request.query.redirect_uri}}?error=consent_denied&state={{request.query.state}}"
+    },
+    "transformers": ["response-template"]
+  }
+}

@@ -105,6 +105,15 @@ public sealed class Microsoft365ConnectionRepository(AssistantCoreDbContext dbCo
                 && connection.Status == Microsoft365ConnectionStatus.Active,
                 cancellationToken);
 
+    public Task<Microsoft365Connection?> FindByOrganizationAsync(
+        Guid organizationId,
+        CancellationToken cancellationToken = default) =>
+        dbContext.Microsoft365Connections
+            .AsNoTracking()
+            .SingleOrDefaultAsync(
+                connection => connection.OrganizationId == organizationId,
+                cancellationToken);
+
     public async Task CompleteConsentAsync(
         Microsoft365Connection connection,
         string tenantId,

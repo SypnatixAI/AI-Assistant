@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Consentement Microsoft 365 simulé</title>
+    <style>
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: grid;
+        place-items: center;
+        background: #f5f5f5;
+        color: #242424;
+        font-family: "Segoe UI", sans-serif;
+      }
+      main {
+        width: min(34rem, calc(100% - 3rem));
+        padding: 2rem;
+        background: white;
+        border: 1px solid #ddd;
+        border-radius: 0.75rem;
+        box-shadow: 0 1rem 3rem rgb(0 0 0 / 10%);
+      }
+      .local-label {
+        color: #5c2d91;
+        font-weight: 700;
+      }
+      .actions {
+        display: flex;
+        gap: 0.75rem;
+        margin-top: 2rem;
+      }
+      form {
+        margin: 0;
+      }
+      button {
+        padding: 0.75rem 1.25rem;
+        border: 0;
+        border-radius: 0.25rem;
+        cursor: pointer;
+        font: inherit;
+      }
+      .approve {
+        background: #0067b8;
+        color: white;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <p class="local-label">Simulation locale</p>
+      <h1>Autoriser onPremia à accéder à Microsoft 365?</h1>
+      <p>
+        Cette page simule le consentement administrateur Microsoft.
+        Aucun appel n’est envoyé à Microsoft.
+      </p>
+      <p>
+        onPremia pourra découvrir les sites SharePoint, puis traiter uniquement
+        les bibliothèques et les listes que vous activerez.
+      </p>
+      <div class="actions">
+        <form action="/local-consent/approve" method="get">
+          <input type="hidden" name="redirect_uri" value="{{request.query.redirect_uri}}">
+          <input type="hidden" name="state" value="{{request.query.state}}">
+          <button class="approve" type="submit">Accepter</button>
+        </form>
+        <form action="/local-consent/refuse" method="get">
+          <input type="hidden" name="redirect_uri" value="{{request.query.redirect_uri}}">
+          <input type="hidden" name="state" value="{{request.query.state}}">
+          <button type="submit">Refuser</button>
+        </form>
+      </div>
+    </main>
+  </body>
+</html>

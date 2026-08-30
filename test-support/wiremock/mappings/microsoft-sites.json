@@ -1,0 +1,21 @@
+{
+  "request": {
+    "method": "GET",
+    "urlPath": "/graph/v1.0/sites"
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "jsonBody": {
+      "value": [
+        {
+          "id": "local-site",
+          "displayName": "Site SharePoint local",
+          "webUrl": "https://contoso.local/sites/assistant"
+        }
+      ]
+    }
+  }
+}

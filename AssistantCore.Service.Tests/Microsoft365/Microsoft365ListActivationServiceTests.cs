@@ -288,6 +288,11 @@ public sealed class Microsoft365ListActivationServiceTests
         public DateTimeOffset ReceivedRequestedAt { get; private set; }
         public CancellationToken ReceivedCancellationToken { get; private set; }
 
+        public Task<IReadOnlyCollection<string>> GetSiteIdsAsync(
+            Guid organizationId,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult<IReadOnlyCollection<string>>([]);
+
         public Task<Microsoft365Site?> FindSiteAsync(
             Guid organizationId,
             string siteId,

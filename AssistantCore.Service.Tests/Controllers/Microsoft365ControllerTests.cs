@@ -6,8 +6,12 @@ using AssistantCore.Service.Application.Commands.RevokeMicrosoft365Connection;
 using AssistantCore.Service.Application.Commands.RevokeMicrosoft365Connection.Models;
 using AssistantCore.Service.Application.Commands.GetMicrosoft365SiteLists;
 using AssistantCore.Service.Application.Commands.GetMicrosoft365SiteLists.Models;
+using AssistantCore.Service.Application.Commands.GetMicrosoft365Sites;
+using AssistantCore.Service.Application.Commands.GetMicrosoft365Sites.Models;
 using AssistantCore.Service.Application.Commands.EnableMicrosoft365List;
 using AssistantCore.Service.Application.Commands.EnableMicrosoft365List.Models;
+using AssistantCore.Service.Application.Commands.GetMicrosoft365OnboardingStatus;
+using AssistantCore.Service.Application.Commands.GetMicrosoft365OnboardingStatus.Models;
 using AssistantCore.Service.Application.Models.Microsoft365;
 using AssistantCore.Service.Controllers;
 using Microsoft.AspNetCore.Mvc;
@@ -16,6 +20,51 @@ namespace AssistantCore.Service.Tests.Controllers;
 
 public sealed class Microsoft365ControllerTests
 {
+    [Theory, AutoDomainData]
+    public async Task Given_OnboardingStatus_When_GetOnboardingStatus_Then_DispatchesCommandAndReturnsOk(
+        CancellationToken cancellationToken)
+    {
+        // Given
+        var response = new GetMicrosoft365OnboardingStatusResponse(
+            IsAdministrator: true,
+            ConnectionStatus: "Active",
+            IsConsentComplete: true,
+            HasSelectedSite: true,
+            HasIndexedSource: true,
+            IsComplete: true);
+        var dispatcher = new RecordingDispatcher { Response = response };
+        var controller = new Microsoft365Controller(dispatcher);
+
+        // When
+        var actionResult = await controller.GetOnboardingStatus(cancellationToken);
+
+        // Then
+        var okResult = Assert.IsType<OkObjectResult>(actionResult.Result);
+        Assert.Same(response, okResult.Value);
+        Assert.IsType<GetMicrosoft365OnboardingStatusCommand>(dispatcher.ReceivedRequest);
+        Assert.Equal(cancellationToken, dispatcher.ReceivedCancellationToken);
+    }
+
+    [Theory, AutoDomainData]
+    public async Task Given_AvailableSites_When_GetSites_Then_DispatchesCommandAndReturnsOk(
+        Microsoft365AvailableSiteResponse site,
+        CancellationToken cancellationToken)
+    {
+        // Given
+        var response = new GetMicrosoft365SitesResponse([site]);
+        var dispatcher = new RecordingDispatcher { Response = response };
+        var controller = new Microsoft365Controller(dispatcher);
+
+        // When
+        var actionResult = await controller.GetSites(cancellationToken);
+
+        // Then
+        var okResult = Assert.IsType<OkObjectResult>(actionResult.Result);
+        Assert.Same(response, okResult.Value);
+        Assert.IsType<GetMicrosoft365SitesCommand>(dispatcher.ReceivedRequest);
+        Assert.Equal(cancellationToken, dispatcher.ReceivedCancellationToken);
+    }
+
     [Theory, AutoDomainData]
     public async Task Given_AnAuthorizationUrl_When_StartConsent_Then_DispatchesCommandAndReturnsOk(
         string authorizationUrl,
@@ -47,7 +96,8 @@ public sealed class Microsoft365ControllerTests
         var response = new CompleteMicrosoft365ConsentResponse(
             connectionId,
             tenantId.ToString("D"),
-            "Active");
+            "Active",
+            "https://app.onpremia.example/microsoft365/consent/success");
         var dispatcher = new RecordingDispatcher { Response = response };
         var controller = new Microsoft365Controller(dispatcher);
 
@@ -60,8 +110,8 @@ public sealed class Microsoft365ControllerTests
             cancellationToken);
 
         // Then
-        var okResult = Assert.IsType<OkObjectResult>(actionResult.Result);
-        Assert.Same(response, okResult.Value);
+        var redirectResult = Assert.IsType<RedirectResult>(actionResult);
+        Assert.Equal(response.RedirectUrl, redirectResult.Url);
         var command = Assert.IsType<CompleteMicrosoft365ConsentCommand>(dispatcher.ReceivedRequest);
         Assert.Equal(tenantId.ToString("D"), command.TenantId);
         Assert.True(command.AdminConsent);

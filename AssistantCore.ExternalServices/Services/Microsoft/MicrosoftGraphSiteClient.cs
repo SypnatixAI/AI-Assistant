@@ -7,6 +7,46 @@ namespace AssistantCore.ExternalServices.Services.Microsoft;
 
 public sealed class MicrosoftGraphSiteClient(HttpClient httpClient)
 {
+    public async Task<IReadOnlyCollection<MicrosoftSite>> ListAsync(
+        string graphBaseUrl,
+        string accessToken,
+        CancellationToken cancellationToken = default)
+    {
+        var graphBaseUri = CreateGraphBaseUri(graphBaseUrl);
+        Uri? nextPageUri = new(graphBaseUri, "v1.0/sites?$select=id,displayName,webUrl");
+        var sites = new List<MicrosoftSite>();
+        var visitedPageUris = new HashSet<string>(StringComparer.Ordinal);
+
+        while (nextPageUri is not null)
+        {
+            EnsureTrustedGraphUri(graphBaseUri, nextPageUri);
+            if (!visitedPageUris.Add(nextPageUri.AbsoluteUri))
+            {
+                throw new MicrosoftExternalException("Microsoft Graph site pagination contained a loop.");
+            }
+
+            using var request = new HttpRequestMessage(HttpMethod.Get, nextPageUri);
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+            using var response = await httpClient.SendAsync(request, cancellationToken);
+            if (!response.IsSuccessStatusCode)
+            {
+                throw new MicrosoftExternalException(
+                    $"Microsoft Graph site listing failed with status {(int)response.StatusCode}.",
+                    statusCode: response.StatusCode);
+            }
+
+            var page = await response.Content.ReadFromJsonAsync<SiteCollectionResponse>(cancellationToken)
+                ?? throw new MicrosoftExternalException("Microsoft Graph returned an empty site collection response.");
+            sites.AddRange(page.Value.Select(site =>
+                new MicrosoftSite(site.Id, site.DisplayName, site.WebUrl)));
+            nextPageUri = string.IsNullOrWhiteSpace(page.NextLink)
+                ? null
+                : new Uri(page.NextLink, UriKind.Absolute);
+        }
+
+        return sites;
+    }
+
     public async Task<MicrosoftSite> GetAsync(
         string graphBaseUrl,
         string accessToken,
@@ -34,4 +74,29 @@ public sealed class MicrosoftGraphSiteClient(HttpClient httpClient)
         [property: JsonPropertyName("id")] string Id,
         [property: JsonPropertyName("displayName")] string DisplayName,
         [property: JsonPropertyName("webUrl")] string WebUrl);
+
+    private sealed record SiteCollectionResponse(
+        [property: JsonPropertyName("value")] IReadOnlyCollection<SiteResponse> Value,
+        [property: JsonPropertyName("@odata.nextLink")] string? NextLink);
+
+    private static Uri CreateGraphBaseUri(string graphBaseUrl)
+    {
+        if (!Uri.TryCreate(graphBaseUrl.TrimEnd('/') + "/", UriKind.Absolute, out var graphBaseUri)
+            || graphBaseUri.Scheme != Uri.UriSchemeHttps)
+        {
+            throw new ArgumentException("Microsoft Graph base URL must use HTTPS.", nameof(graphBaseUrl));
+        }
+
+        return graphBaseUri;
+    }
+
+    private static void EnsureTrustedGraphUri(Uri graphBaseUri, Uri pageUri)
+    {
+        if (pageUri.Scheme != Uri.UriSchemeHttps
+            || !string.Equals(pageUri.Host, graphBaseUri.Host, StringComparison.OrdinalIgnoreCase)
+            || pageUri.Port != graphBaseUri.Port)
+        {
+            throw new MicrosoftExternalException("Microsoft Graph returned an untrusted site pagination URL.");
+        }
+    }
 }

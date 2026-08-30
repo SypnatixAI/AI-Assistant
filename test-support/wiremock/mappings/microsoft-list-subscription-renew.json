@@ -1,0 +1,16 @@
+{
+  "request": {
+    "method": "PATCH",
+    "urlPath": "/graph/v1.0/subscriptions/local-list-subscription"
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "body": "{\"id\":\"local-list-subscription\",\"resource\":\"/sites/local-site/lists/local-list\",\"expirationDateTime\":\"{{jsonPath request.body '$.expirationDateTime'}}\"}",
+    "transformers": [
+      "response-template"
+    ]
+  }
+}

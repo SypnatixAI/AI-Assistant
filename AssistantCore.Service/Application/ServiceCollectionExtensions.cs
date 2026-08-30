@@ -103,9 +103,12 @@ public static class ServiceCollectionExtensions
     {
         services.AddMicrosoft365WorkerApplication();
         services.AddScoped<IMicrosoft365ConnectionService, Microsoft365ConnectionService>();
+        services.AddScoped<IMicrosoft365OnboardingService, Microsoft365OnboardingService>();
         services.AddScoped<IMicrosoft365ListActivationService, Microsoft365ListActivationService>();
         services.AddScoped<IMicrosoft365ListConsultationService, Microsoft365ListConsultationService>();
         services.AddScoped<IMicrosoft365SiteSourcesDiscoveryService, Microsoft365SiteSourcesDiscoveryService>();
+        services.AddScoped<IMicrosoft365SiteDiscoveryService, Microsoft365SiteDiscoveryService>();
+        services.AddScoped<IMicrosoft365SiteSelectionService, Microsoft365SiteSelectionService>();
         services.AddScoped<IMicrosoft365DriveAdministrationService, Microsoft365DriveAdministrationService>();
 
         return services;

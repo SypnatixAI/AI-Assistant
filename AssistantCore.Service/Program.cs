@@ -52,6 +52,7 @@ if (app.Environment.IsDevelopment() || app.Environment.IsEnvironment("Local"))
 }
 
 app.UseMiddleware<ExceptionMiddleware>();
+app.UseMiddleware<Microsoft365ConsentCallbackRedirectMiddleware>();
 
 app.UseHttpsRedirection();
 
