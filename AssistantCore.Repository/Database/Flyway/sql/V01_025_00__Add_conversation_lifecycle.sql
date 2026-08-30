@@ -19,7 +19,13 @@ IF NOT EXISTS (
       AND object_id = OBJECT_ID(N'[dbo].[Conversation]')
 )
 BEGIN
+    -- SET explicite : un index filtre exige ANSI_NULLS et QUOTED_IDENTIFIER a ON
+    -- au moment du CREATE. Le pilote utilise par Flyway ne garantit pas ces
+    -- options, et un defaut different ferait echouer la migration avec l'erreur
+    -- 1934 seulement lors du deploiement.
     EXEC(N'
+        SET ANSI_NULLS ON;
+        SET QUOTED_IDENTIFIER ON;
         CREATE INDEX [IX_Conversation_Owner_Visible]
             ON [dbo].[Conversation]([OrganizationId], [OwnerMemberId], [Status], [UpdatedAt], [Id])
             WHERE [DeletedAt] IS NULL;
