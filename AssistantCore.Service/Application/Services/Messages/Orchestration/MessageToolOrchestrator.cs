@@ -1,6 +1,7 @@
 using AssistantCore.Service.Application.Configuration;
 using AssistantCore.Service.Application.Exceptions;
 using AssistantCore.Service.Application.Models.Messages.AiModels;
+using AssistantCore.Service.Application.Models.Messages.Connectors;
 using AssistantCore.Service.Application.Models.Messages.Lifecycle;
 using AssistantCore.Service.Application.Models.Messages.Orchestration;
 using AssistantCore.Service.Application.Models.Messages.Tools;
@@ -18,8 +19,25 @@ public sealed class MessageToolOrchestrator(
 {
     private readonly MessageOrchestrationOptions _options = options.Value;
 
+    public Task<MessageOrchestrationResult> OrchestrateAsync(
+        StartedMessageProcessing processing,
+        SelectedAiModel selectedModel,
+        IReadOnlyCollection<AiConversationMessage> conversationHistory,
+        IReadOnlyCollection<AiToolDefinition> availableTools,
+        CancellationToken cancellationToken) =>
+        OrchestrateAsync(
+            processing,
+            new ConnectorExecutionContext(
+                processing.OrganizationId,
+                processing.OwnerMemberId),
+            selectedModel,
+            conversationHistory,
+            availableTools,
+            cancellationToken);
+
     public async Task<MessageOrchestrationResult> OrchestrateAsync(
         StartedMessageProcessing processing,
+        ConnectorExecutionContext executionContext,
         SelectedAiModel selectedModel,
         IReadOnlyCollection<AiConversationMessage> conversationHistory,
         IReadOnlyCollection<AiToolDefinition> availableTools,
@@ -27,6 +45,7 @@ public sealed class MessageToolOrchestrator(
     {
         var state = MessageOrchestrationState.Start(
             processing,
+            executionContext,
             selectedModel,
             conversationHistory,
             availableTools,

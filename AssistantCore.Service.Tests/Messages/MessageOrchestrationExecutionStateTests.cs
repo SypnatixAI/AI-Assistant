@@ -1,5 +1,7 @@
 using System.Text.Json;
+using AssistantCore.Repository.Domain.Enums;
 using AssistantCore.Service.Application.Models.Messages.AiModels;
+using AssistantCore.Service.Application.Models.Messages.Connectors;
 using AssistantCore.Service.Application.Models.Messages.Lifecycle;
 using AssistantCore.Service.Application.Models.Messages.Orchestration;
 using AssistantCore.Service.Application.Models.Messages.Tools;
@@ -27,6 +29,12 @@ public sealed class MessageOrchestrationStateTests
             userMessageId,
             question);
         var selectedModel = new SelectedAiModel(provider, modelName);
+        var executionContext = new ConnectorExecutionContext(
+            organizationId,
+            memberId,
+            "tenant-id",
+            Guid.NewGuid(),
+            IdentityProvider.MicrosoftEntraId);
         var conversationHistory = new[]
         {
             new AiConversationMessage(AiConversationRole.User, "Previous question"),
@@ -51,6 +59,7 @@ public sealed class MessageOrchestrationStateTests
         // When
         var state = MessageOrchestrationState.Start(
             processing,
+            executionContext,
             selectedModel,
             conversationHistory,
             tools,
@@ -64,6 +73,7 @@ public sealed class MessageOrchestrationStateTests
         Assert.Equal(conversationHistory, state.ConversationHistory);
         Assert.Equal(organizationId, state.ToolExecutionContext.OrganizationId);
         Assert.Equal(memberId, state.ToolExecutionContext.MemberId);
+        Assert.Equal(executionContext, state.ToolExecutionContext);
         Assert.Same(limits, state.Budget.Limits);
         Assert.Equal(startedAtUtc, state.Budget.StartedAtUtc);
         Assert.Equal(
