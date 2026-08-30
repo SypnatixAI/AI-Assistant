@@ -1,6 +1,7 @@
 using AssistantCore.Service.Application.Configuration;
 using AssistantCore.Service.Application.Services.AuthenticateUser;
 using AssistantCore.Service.Application.Services.Conversations;
+using AssistantCore.Service.Application.Services.Conversations.Audit;
 using AssistantCore.Service.Application.Services.Conversations.Pagination;
 using AssistantCore.Service.Application.Services.Members;
 using AssistantCore.Service.Application.Services.Messages;
@@ -20,6 +21,12 @@ namespace AssistantCore.Service.Application;
 
 public static class ServiceCollectionExtensions
 {
+    /// <summary>
+    /// Longueur de la colonne Conversation.Title en base : la configuration ne peut pas
+    /// autoriser un titre que la persistence refuserait.
+    /// </summary>
+    private const int MaximumPersistedTitleLength = 200;
+
     public static IServiceCollection AddApplication(
         this IServiceCollection services,
         IConfiguration configuration)
@@ -49,11 +56,25 @@ public static class ServiceCollectionExtensions
                 options => options.MaximumPreviewLength > 0,
                 $"{ConversationListingOptions.SectionName}:{nameof(ConversationListingOptions.MaximumPreviewLength)} must be greater than zero.")
             .ValidateOnStart();
+        services.AddOptions<ConversationOptions>()
+            .Bind(configuration.GetSection(ConversationOptions.SectionName))
+            .Validate(
+                options => options.MaximumTitleLength is > 0 and <= MaximumPersistedTitleLength,
+                $"{ConversationOptions.SectionName}:{nameof(ConversationOptions.MaximumTitleLength)} must be between 1 and {MaximumPersistedTitleLength}.")
+            .ValidateOnStart();
+        services.AddOptions<RetentionOptions>()
+            .Bind(configuration.GetSection(RetentionOptions.SectionName))
+            .Validate(
+                options => options.ConversationRecoveryDays > 0,
+                $"{RetentionOptions.SectionName}:{nameof(RetentionOptions.ConversationRecoveryDays)} must be greater than zero.")
+            .ValidateOnStart();
         services.AddScoped<ISendMessageCommandValidator, SendMessageCommandValidator>();
         services.AddSingleton<IConversationCursorCodec, ConversationCursorCodec>();
         services.AddSingleton<IConversationMessageCursorCodec, ConversationMessageCursorCodec>();
         services.AddScoped<IConversationListingService, ConversationListingService>();
         services.AddScoped<IConversationMessageListingService, ConversationMessageListingService>();
+        services.AddScoped<IConversationAuditWriter, LoggingConversationAuditWriter>();
+        services.AddScoped<IConversationLifecycleService, ConversationLifecycleService>();
         services.AddScoped<IMessageUserContextService, MessageUserContextService>();
         services.AddScoped<IAuthenticateUserService, AuthenticateUserService>();
         services.AddScoped<IMemberManagementService, MemberManagementService>();

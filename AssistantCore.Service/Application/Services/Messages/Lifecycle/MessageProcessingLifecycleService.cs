@@ -86,6 +86,13 @@ public sealed class MessageProcessingLifecycleService(
             cancellationToken)
             ?? throw CreateConversationNotFoundException();
 
+        if (conversation.Status == ConversationStatus.Archived)
+        {
+            throw new ConflictException(
+                "The conversation is archived and cannot receive new messages.",
+                ConflictException.ConversationArchived);
+        }
+
         userMessage.ConversationId = conversation.Id;
         var addedMessage = await conversationRepository.AddUserMessageAsync(
             organization.Id,

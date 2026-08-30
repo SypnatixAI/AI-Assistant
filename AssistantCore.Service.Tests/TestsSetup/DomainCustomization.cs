@@ -65,7 +65,8 @@ internal sealed class DomainCustomization : ICustomization
         fixture.Customize<Conversation>(composer => composer
             .Without(conversation => conversation.Organization)
             .Without(conversation => conversation.OwnerMember)
-            .Without(conversation => conversation.Messages));
+            .Without(conversation => conversation.Messages)
+            .Without(conversation => conversation.DeletedAt));
         fixture.Customize<Message>(composer => composer
             .Without(message => message.Conversation)
             .Without(message => message.Sources)

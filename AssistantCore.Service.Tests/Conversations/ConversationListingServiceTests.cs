@@ -95,6 +95,26 @@ public sealed class ConversationListingServiceTests
     private sealed class RecordingConversationRepository(ConversationListPage page)
         : IConversationRepository
     {
+        public Task<ConversationUpdateResult> UpdateConversationAsync(
+            Guid organizationId,
+            Guid ownerMemberId,
+            Guid conversationId,
+            int? expectedVersion,
+            string? title,
+            ConversationStatus? status,
+            DateTimeOffset updatedAt,
+            CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
+        public Task<ConversationDeleteStatus> SoftDeleteConversationAsync(
+            Guid organizationId,
+            Guid ownerMemberId,
+            Guid conversationId,
+            DateTimeOffset deletedAt,
+            DateTimeOffset purgeAfter,
+            CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
         public Guid ReceivedOrganizationId { get; private set; }
 
         public Guid ReceivedOwnerMemberId { get; private set; }
