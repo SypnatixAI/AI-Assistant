@@ -92,9 +92,15 @@ est un no-op : aucune nouvelle version et aucun nouvel audit.
 { "status": "Archived" }
 ```
 
-Une conversation archivée reste visible dans la section Archives, mais
-`POST /api/messages` la refuse avec le code stable
-`conversation_archived`. Pour la restaurer :
+Une conversation archivée quitte la liste des conversations récentes, mais
+reste consultable. Le frontend la retrouve avec
+[`GET /api/conversations?status=Archived`](list-conversations.md#conversations-status-filter),
+ce qui lui permet d'afficher une section Archives et de proposer la
+restauration. Son historique reste lisible, mais `POST /api/messages` refuse
+tout nouveau message avec le code stable `conversation_archived`.
+
+Sans ce filtre, une conversation archivée deviendrait introuvable et la règle
+de restauration ci-dessous serait inapplicable. Pour la restaurer :
 
 ```json
 { "status": "Active" }
