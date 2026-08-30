@@ -7,6 +7,7 @@
 - [Acces](#qui-peut-utiliser-cet-endpoint)
 - [Donnees du frontend](#donnees-envoyees-par-le-frontend)
 - [Pagination](#conversations-pagination)
+- [Filtre de statut](#conversations-status-filter)
 - [Exemple de reponse](#exemple-de-reponse)
 - [Champs retournes](#conversations-summary-fields)
 - [Etapes de traitement](#etapes-de-traitement)
@@ -97,6 +98,34 @@ deux appels decale les resultats et provoque un doublon ou un oubli. Le contrat
 du curseur est defini dans la couche Application; la requete en base applique
 ensuite exactement le meme ordre sur `updatedAt` et `id`.
 
+<a id="conversations-status-filter"></a>
+## Parametre de statut
+
+### `status`
+
+`status` est optionnel et accepte `Active` ou `Archived`.
+
+- absent, l'endpoint retourne uniquement les conversations `Active`
+- `status=Archived` retourne uniquement les conversations archivees
+- une valeur inconnue retourne `400`
+
+Une conversation supprimee logiquement n'est jamais retournee, quelle que soit
+la valeur de `status`. La suppression n'est pas un statut : elle est portee par
+la date `DeletedAt` et retire la conversation de toutes les lectures ordinaires.
+
+```http
+GET /api/conversations?status=Archived&limit=25
+```
+
+Ce parametre existe pour que le frontend puisse afficher une section Archives
+distincte de la liste des conversations recentes. Sans lui, une conversation
+archivee deviendrait introuvable et ne pourrait plus etre restauree, ce que la
+regle de restauration interdit.
+
+Le tri et la pagination sont identiques dans les deux cas. Un curseur reste
+valide uniquement pour la valeur de `status` qui l'a produit : changer de
+statut impose de repartir de la premiere page.
+
 ## Exemple de reponse
 
 ```json
@@ -105,6 +134,8 @@ ensuite exactement le meme ordre sur `updatedAt` et `id`.
     {
       "id": "8d7df699-13f8-4c85-871f-115d049bc697",
       "title": "Politique de teletravail",
+      "status": "Active",
+      "version": 7,
       "createdAt": "2026-08-06T20:15:00Z",
       "updatedAt": "2026-08-06T20:18:32Z",
       "lastMessagePreview": "La politique permet jusqu'a deux jours..."
@@ -112,6 +143,8 @@ ensuite exactement le meme ordre sur `updatedAt` et `id`.
     {
       "id": "2b038fab-0674-46b2-bfd0-ac1cbeb2cb47",
       "title": "Commande 4587",
+      "status": "Active",
+      "version": 1,
       "createdAt": "2026-08-05T15:10:00Z",
       "updatedAt": "2026-08-05T15:15:00Z",
       "lastMessagePreview": "La commande est actuellement..."
@@ -146,6 +179,21 @@ derive du premier message utilisateur. Une generation de titre par IA pourra
 etre ajoutee plus tard.
 
 `GET /api/conversations` ne doit jamais generer ou enregistrer un titre.
+
+### `status`
+
+`status` vaut `Active` ou `Archived`. Il permet au frontend d'afficher la
+conversation dans la bonne section sans deduire son etat de la requete envoyee.
+
+### `version`
+
+`version` est le compteur de modifications de la conversation. Il est
+indispensable au frontend : c'est la valeur qu'il renvoie dans l'en-tete
+`If-Match` d'un `PATCH` pour eviter d'ecraser une modification concurrente.
+
+Sans ce champ dans la liste, le premier renommage d'une conversation partirait
+sans protection de concurrence, ce qui viderait de son sens la verification
+decrite dans [Gerer le cycle de vie d'une conversation](manage-conversation.md#conversation-management-patch).
 
 ### `updatedAt`
 
@@ -200,10 +248,11 @@ La requete doit toujours filtrer avec :
 
 - l'identifiant interne de l'organisation
 - l'identifiant interne du membre proprietaire
-- le statut visible de la conversation
+- le statut demande, `Active` par defaut
+- l'absence de date de suppression
 
-Les conversations archivees ou supprimees ne sont pas retournees dans la
-premiere version.
+Une conversation supprimee logiquement n'est jamais retournee. Une conversation
+archivee est retournee uniquement lorsque `status=Archived` est demande.
 
 ### 5. Construire les resumes
 
@@ -267,17 +316,17 @@ ou tous les messages en memoire.
 
 ## Hors perimetre
 
-Cette premiere version ne couvre pas :
+Cet endpoint ne couvre pas :
 
 - le chargement des messages d'une conversation
 - la recherche par texte
 - les favoris
-- l'archivage
-- le renommage
 - le partage
-- la suppression et la purge
 
-Ces comportements auront leurs propres endpoints et documents.
+Le renommage, l'archivage, la restauration et la suppression appartiennent a
+[Gerer le cycle de vie d'une conversation](manage-conversation.md). Cet
+endpoint reste en lecture seule : il expose le statut et la version, mais ne
+les modifie jamais.
 
 <a id="conversations-acceptance"></a>
 ## Criteres d'acceptation
@@ -286,11 +335,16 @@ Ces comportements auront leurs propres endpoints et documents.
 - Les conversations sont triees par activite recente avec un ordre stable.
 - La pagination ne charge pas toute la table en memoire.
 - Une liste vide retourne `200`.
-- Les conversations archivees ou supprimees sont exclues.
+- Sans `status`, seules les conversations actives sont retournees.
+- Avec `status=Archived`, seules les conversations archivees sont retournees.
+- Une valeur de `status` inconnue retourne `400`.
+- Une conversation supprimee n'apparait sous aucune valeur de `status`.
+- Chaque resume porte son statut et sa version.
 - Le dernier message est retourne sous forme d'apercu limite.
 - Le GET ne modifie aucune donnee.
 - Les tests couvrent plusieurs membres, plusieurs organisations, la
-  pagination, les dates identiques et les curseurs invalides.
+  pagination, les dates identiques, les curseurs invalides et les deux
+  valeurs de `status`.
 
 ## Relation avec les autres endpoints
 
