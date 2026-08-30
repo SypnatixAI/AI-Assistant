@@ -13,6 +13,7 @@ public sealed class AuthenticateUserService(
     IOrganizationMemberQueries organizationMemberQueries,
     IOrganizationQueries organizationQueries,
     IOrganizationRepository organizationRepository,
+    IOrganizationRoleResolver organizationRoleResolver,
     TimeProvider timeProvider) : IAuthenticateUserService
 {
     public async Task<(Organization Organization, OrganizationMember Member)> GetOrganizationAsync(CancellationToken cancellationToken)
@@ -73,6 +74,7 @@ public sealed class AuthenticateUserService(
         AuthenticatedIdentity identity,
         CancellationToken cancellationToken)
     {
+        var resolvedRole = organizationRoleResolver.Resolve(identity.AppRoles);
         var member = await organizationMemberQueries.FindMember(
             organizationId,
             identity.Provider,
@@ -90,9 +92,16 @@ public sealed class AuthenticateUserService(
                     Email = ResolveEmail(identity),
                     IdentityProvider = identity.Provider,
                     ExternalUserId = identity.ExternalUserId,
-                    Role = OrganizationRole.User,
+                    Role = resolvedRole,
                     Status = RecordStatus.Active
                 },
+                cancellationToken);
+        }
+        else if (member.Role != resolvedRole)
+        {
+            member = await organizationMemberQueries.UpdateRole(
+                member,
+                resolvedRole,
                 cancellationToken);
         }
 

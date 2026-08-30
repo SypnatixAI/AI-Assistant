@@ -31,6 +31,65 @@ public sealed class MicrosoftEntraIdentityClaimsMapperTests
         Assert.Equal(userId, identity.ExternalUserId);
         Assert.Equal(displayName, identity.DisplayName);
         Assert.Equal(email, identity.Email);
+        Assert.Empty(identity.AppRoles);
+    }
+
+    [Theory, AutoDomainData]
+    public void Given_MultipleRolesClaims_When_Map_Then_ReturnsAllOfThem(
+        string tenantId,
+        string userId)
+    {
+        // Given
+        var principal = CreatePrincipal(
+            new Claim("tid", tenantId),
+            new Claim("oid", userId),
+            new Claim("roles", "AssistantCore.Access"),
+            new Claim("roles", "tenantAdmin"));
+        var mapper = new MicrosoftEntraIdentityClaimsMapper();
+
+        // When
+        var identity = mapper.Map(principal);
+
+        // Then
+        Assert.Equal(["AssistantCore.Access", "tenantAdmin"], identity.AppRoles.Order(StringComparer.Ordinal));
+    }
+
+    [Theory, AutoDomainData]
+    public void Given_ASpaceSeparatedRolesClaim_When_Map_Then_SplitsIntoIndividualRoles(
+        string tenantId,
+        string userId)
+    {
+        // Given
+        var principal = CreatePrincipal(
+            new Claim("tid", tenantId),
+            new Claim("oid", userId),
+            new Claim("roles", "AssistantCore.Access tenantAdmin"));
+        var mapper = new MicrosoftEntraIdentityClaimsMapper();
+
+        // When
+        var identity = mapper.Map(principal);
+
+        // Then
+        Assert.Equal(["AssistantCore.Access", "tenantAdmin"], identity.AppRoles.Order(StringComparer.Ordinal));
+    }
+
+    [Theory, AutoDomainData]
+    public void Given_ANativeClaimsRoleType_When_Map_Then_ReadsItToo(
+        string tenantId,
+        string userId)
+    {
+        // Given
+        var principal = CreatePrincipal(
+            new Claim("tid", tenantId),
+            new Claim("oid", userId),
+            new Claim(ClaimTypes.Role, "tenantAdmin"));
+        var mapper = new MicrosoftEntraIdentityClaimsMapper();
+
+        // When
+        var identity = mapper.Map(principal);
+
+        // Then
+        Assert.Equal(["tenantAdmin"], identity.AppRoles);
     }
 
     [Theory, AutoDomainData]

@@ -12,6 +12,12 @@ public sealed class MicrosoftEntraIdentityClaimsMapper : IIdentityClaimsMapper
         "https://sts.windows.net/"
     ];
 
+    private static readonly string[] RoleClaimTypes =
+    [
+        "roles",
+        ClaimTypes.Role
+    ];
+
     public bool CanMap(ClaimsPrincipal principal)
     {
         if (principal.HasClaim(claim =>
@@ -40,7 +46,16 @@ public sealed class MicrosoftEntraIdentityClaimsMapper : IIdentityClaimsMapper
             "http://schemas.microsoft.com/identity/claims/objectidentifier"),
         principal.FindFirstValue("name"),
         principal.FindFirstValue("preferred_username")
-            ?? principal.FindFirstValue(ClaimTypes.Email));
+            ?? principal.FindFirstValue(ClaimTypes.Email),
+        ReadAppRoles(principal));
+
+    private static IReadOnlyCollection<string> ReadAppRoles(ClaimsPrincipal principal) =>
+        RoleClaimTypes
+            .SelectMany(principal.FindAll)
+            .SelectMany(claim => claim.Value.Split(
+                ' ',
+                StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            .ToHashSet(StringComparer.Ordinal);
 
     private static string ReadRequiredClaim(
         ClaimsPrincipal principal,

@@ -27,6 +27,7 @@ public sealed class AuthenticateUserServiceTests
             memberQueries,
             organizationQueries,
             new StubOrganizationRepository(),
+            new StubOrganizationRoleResolver(),
             timeProvider);
 
         // When
@@ -58,6 +59,7 @@ public sealed class AuthenticateUserServiceTests
             memberQueries,
             new StubOrganizationQueries(),
             new StubOrganizationRepository(),
+            new StubOrganizationRoleResolver(),
             new StubTimeProvider());
 
         // When
@@ -91,6 +93,7 @@ public sealed class AuthenticateUserServiceTests
             memberQueries,
             organizationQueries,
             new StubOrganizationRepository(),
+            new StubOrganizationRoleResolver(),
             timeProvider);
 
         // When
@@ -130,6 +133,7 @@ public sealed class AuthenticateUserServiceTests
             memberQueries,
             new StubOrganizationQueries { Result = organization },
             new StubOrganizationRepository(),
+            new StubOrganizationRoleResolver(),
             new StubTimeProvider());
 
         // When
@@ -154,6 +158,7 @@ public sealed class AuthenticateUserServiceTests
             memberQueries,
             new StubOrganizationQueries { Result = organization },
             new StubOrganizationRepository(),
+            new StubOrganizationRoleResolver(),
             new StubTimeProvider());
 
         // When
@@ -181,6 +186,7 @@ public sealed class AuthenticateUserServiceTests
             memberQueries,
             new StubOrganizationQueries { Result = organization },
             new StubOrganizationRepository(),
+            new StubOrganizationRoleResolver(),
             new StubTimeProvider());
 
         // When
@@ -209,6 +215,7 @@ public sealed class AuthenticateUserServiceTests
             new StubOrganizationMemberQueries(),
             organizationQueries,
             organizationRepository,
+            new StubOrganizationRoleResolver(),
             new StubTimeProvider());
 
         // When
@@ -222,4 +229,115 @@ public sealed class AuthenticateUserServiceTests
         Assert.Equal(identity.ExternalOrganizationId, organizationRepository.ReceivedAssociationExternalTenantId);
     }
 
+    [Theory, AutoDomainData]
+    public async Task Given_NoExistingMember_When_GetOrganizationAsync_Then_CreatesAnActiveAdminWhenResolverReturnsAdmin(
+        Organization organization,
+        AuthenticatedIdentity authenticatedIdentity)
+    {
+        // Given
+        var identity = new StubCurrentIdentity { Identity = authenticatedIdentity };
+        var organizationQueries = new StubOrganizationQueries { Result = organization };
+        var memberQueries = new StubOrganizationMemberQueries();
+        var roleResolver = new StubOrganizationRoleResolver { Role = OrganizationRole.Admin };
+        var service = new AuthenticateUserService(
+            identity,
+            memberQueries,
+            organizationQueries,
+            new StubOrganizationRepository(),
+            roleResolver,
+            new StubTimeProvider());
+
+        // When
+        await service.GetOrganizationAsync(CancellationToken.None);
+
+        // Then
+        var createdMember = Assert.IsType<OrganizationMember>(memberQueries.CreatedMember);
+        Assert.Equal(OrganizationRole.Admin, createdMember.Role);
+        Assert.Same(authenticatedIdentity.AppRoles, roleResolver.ReceivedAppRoles);
+    }
+
+    [Theory, AutoDomainData]
+    public async Task Given_AnExistingUser_When_ResolverReturnsAdmin_Then_PromotesTheMemberToAdmin(
+        Organization organization,
+        OrganizationMember member,
+        AuthenticatedIdentity authenticatedIdentity)
+    {
+        // Given
+        member.OrganizationId = organization.Id;
+        member.Status = RecordStatus.Active;
+        member.Role = OrganizationRole.User;
+        var memberQueries = new StubOrganizationMemberQueries { FoundMember = member };
+        var roleResolver = new StubOrganizationRoleResolver { Role = OrganizationRole.Admin };
+        var service = new AuthenticateUserService(
+            new StubCurrentIdentity { Identity = authenticatedIdentity },
+            memberQueries,
+            new StubOrganizationQueries { Result = organization },
+            new StubOrganizationRepository(),
+            roleResolver,
+            new StubTimeProvider());
+
+        // When
+        var result = await service.GetOrganizationAsync(CancellationToken.None);
+
+        // Then
+        Assert.Equal(1, memberQueries.UpdateRoleCallCount);
+        Assert.Equal(OrganizationRole.Admin, memberQueries.ReceivedRole);
+        Assert.Equal(OrganizationRole.Admin, result.Member.Role);
+    }
+
+    [Theory, AutoDomainData]
+    public async Task Given_AnExistingAdmin_When_ResolverReturnsUser_Then_DemotesTheMemberToUser(
+        Organization organization,
+        OrganizationMember member,
+        AuthenticatedIdentity authenticatedIdentity)
+    {
+        // Given
+        member.OrganizationId = organization.Id;
+        member.Status = RecordStatus.Active;
+        member.Role = OrganizationRole.Admin;
+        var memberQueries = new StubOrganizationMemberQueries { FoundMember = member };
+        var roleResolver = new StubOrganizationRoleResolver { Role = OrganizationRole.User };
+        var service = new AuthenticateUserService(
+            new StubCurrentIdentity { Identity = authenticatedIdentity },
+            memberQueries,
+            new StubOrganizationQueries { Result = organization },
+            new StubOrganizationRepository(),
+            roleResolver,
+            new StubTimeProvider());
+
+        // When
+        var result = await service.GetOrganizationAsync(CancellationToken.None);
+
+        // Then
+        Assert.Equal(1, memberQueries.UpdateRoleCallCount);
+        Assert.Equal(OrganizationRole.User, memberQueries.ReceivedRole);
+        Assert.Equal(OrganizationRole.User, result.Member.Role);
+    }
+
+    [Theory, AutoDomainData]
+    public async Task Given_AnExistingMemberWithTheSameResolvedRole_When_GetOrganizationAsync_Then_DoesNotWriteToTheDatabase(
+        Organization organization,
+        OrganizationMember member,
+        AuthenticatedIdentity authenticatedIdentity)
+    {
+        // Given
+        member.OrganizationId = organization.Id;
+        member.Status = RecordStatus.Active;
+        member.Role = OrganizationRole.Admin;
+        var memberQueries = new StubOrganizationMemberQueries { FoundMember = member };
+        var roleResolver = new StubOrganizationRoleResolver { Role = OrganizationRole.Admin };
+        var service = new AuthenticateUserService(
+            new StubCurrentIdentity { Identity = authenticatedIdentity },
+            memberQueries,
+            new StubOrganizationQueries { Result = organization },
+            new StubOrganizationRepository(),
+            roleResolver,
+            new StubTimeProvider());
+
+        // When
+        await service.GetOrganizationAsync(CancellationToken.None);
+
+        // Then
+        Assert.Equal(0, memberQueries.UpdateRoleCallCount);
+    }
 }
