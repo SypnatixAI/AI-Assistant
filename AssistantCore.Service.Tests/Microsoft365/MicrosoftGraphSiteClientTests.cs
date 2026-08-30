@@ -46,6 +46,41 @@ public sealed class MicrosoftGraphSiteClientTests
         });
     }
 
+    [Theory, AutoDomainData]
+    public async Task Given_AnEmptySiteListing_When_ListAsync_Then_RetriesWithSearchWildcard(
+        string fallbackSiteId,
+        string accessToken)
+    {
+        // Given
+        var requestUris = new List<Uri?>();
+        var requestCount = 0;
+        using var httpClient = new HttpClient(new StubHttpMessageHandler(request =>
+        {
+            requestUris.Add(request.RequestUri);
+            requestCount++;
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(requestCount == 1
+                    ? """{"value":[]}"""
+                    : $$"""{"value":[{"id":"{{fallbackSiteId}}","displayName":"Fallback","webUrl":"https://contoso.sharepoint.com/sites/fallback"}]}""")
+            };
+        }));
+        var client = new MicrosoftGraphSiteClient(httpClient);
+
+        // When
+        var sites = await client.ListAsync(
+            "https://graph.microsoft.com",
+            accessToken,
+            CancellationToken.None);
+
+        // Then
+        var site = Assert.Single(sites);
+        Assert.Equal(fallbackSiteId, site.SiteId);
+        Assert.Equal(2, requestUris.Count);
+        Assert.Contains("/v1.0/sites?$select=id,displayName,webUrl", requestUris[0]!.AbsoluteUri, StringComparison.Ordinal);
+        Assert.Contains("/v1.0/sites?search=*&$select=id,displayName,webUrl", requestUris[1]!.AbsoluteUri, StringComparison.Ordinal);
+    }
+
     [Theory, InlineAutoDomainData("https://untrusted.example/v1.0/sites")]
     public async Task Given_AnUntrustedNextLink_When_ListAsync_Then_RejectsPaginationUrl(
         string nextLink,

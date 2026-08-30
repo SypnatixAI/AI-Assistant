@@ -1,4 +1,5 @@
 using AssistantCore.Repository.Domain.Entities;
+using AssistantCore.Repository.Domain.Enums;
 using AssistantCore.Repository.Persistence;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
@@ -15,6 +16,48 @@ public sealed class OrganizationRepository(AssistantCoreDbContext dbContext) : I
         CancellationToken cancellationToken = default)
     {
         dbContext.Organizations.Add(organization);
+
+        try
+        {
+            await dbContext.SaveChangesAsync(cancellationToken);
+            return organization;
+        }
+        catch (DbUpdateException exception) when (IsUniqueConstraintViolation(exception))
+        {
+            dbContext.Entry(organization).State = EntityState.Detached;
+            return null;
+        }
+    }
+
+    public async Task<Organization?> AssociateExternalTenantIdAsync(
+        Guid organizationId,
+        IdentityProvider identityProvider,
+        string externalTenantId,
+        CancellationToken cancellationToken = default)
+    {
+        var organization = await dbContext.Organizations.SingleOrDefaultAsync(
+            candidate =>
+                candidate.Id == organizationId
+                && candidate.IdentityProvider == identityProvider
+                && candidate.Status == RecordStatus.Active,
+            cancellationToken);
+
+        if (organization is null)
+        {
+            return null;
+        }
+
+        if (!string.IsNullOrWhiteSpace(organization.ExternalTenantId))
+        {
+            return string.Equals(
+                organization.ExternalTenantId,
+                externalTenantId,
+                StringComparison.OrdinalIgnoreCase)
+                ? organization
+                : null;
+        }
+
+        organization.ExternalTenantId = externalTenantId;
 
         try
         {

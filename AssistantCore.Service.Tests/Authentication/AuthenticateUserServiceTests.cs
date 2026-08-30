@@ -22,7 +22,12 @@ public sealed class AuthenticateUserServiceTests
         var organizationQueries = new StubOrganizationQueries { Result = organization };
         var memberQueries = new StubOrganizationMemberQueries { FoundMember = member };
         var timeProvider = new StubTimeProvider();
-        var service = new AuthenticateUserService(identity, memberQueries, organizationQueries, timeProvider);
+        var service = new AuthenticateUserService(
+            identity,
+            memberQueries,
+            organizationQueries,
+            new StubOrganizationRepository(),
+            timeProvider);
 
         // When
         var result = await service.GetOrganizationAsync(cancellationToken);
@@ -52,6 +57,7 @@ public sealed class AuthenticateUserServiceTests
             new StubCurrentIdentity { Identity = authenticatedIdentity },
             memberQueries,
             new StubOrganizationQueries(),
+            new StubOrganizationRepository(),
             new StubTimeProvider());
 
         // When
@@ -59,7 +65,9 @@ public sealed class AuthenticateUserServiceTests
             () => service.GetOrganizationAsync(CancellationToken.None));
 
         // Then
-        Assert.Equal("Organization access denied.", exception.Message);
+        Assert.Equal(
+            $"No active organization is registered for tenant '{authenticatedIdentity.ExternalOrganizationId}'.",
+            exception.Message);
         Assert.Equal(0, memberQueries.FindMemberCallCount);
         Assert.Equal(0, memberQueries.RecordSuccessfulAuthenticationCallCount);
     }
@@ -78,7 +86,12 @@ public sealed class AuthenticateUserServiceTests
         var organizationQueries = new StubOrganizationQueries { Result = organization };
         var memberQueries = new StubOrganizationMemberQueries();
         var timeProvider = new StubTimeProvider();
-        var service = new AuthenticateUserService(identity, memberQueries, organizationQueries, timeProvider);
+        var service = new AuthenticateUserService(
+            identity,
+            memberQueries,
+            organizationQueries,
+            new StubOrganizationRepository(),
+            timeProvider);
 
         // When
         var result = await service.GetOrganizationAsync(cancellationToken);
@@ -116,6 +129,7 @@ public sealed class AuthenticateUserServiceTests
             identity,
             memberQueries,
             new StubOrganizationQueries { Result = organization },
+            new StubOrganizationRepository(),
             new StubTimeProvider());
 
         // When
@@ -139,6 +153,7 @@ public sealed class AuthenticateUserServiceTests
             },
             memberQueries,
             new StubOrganizationQueries { Result = organization },
+            new StubOrganizationRepository(),
             new StubTimeProvider());
 
         // When
@@ -165,6 +180,7 @@ public sealed class AuthenticateUserServiceTests
             new StubCurrentIdentity { Identity = authenticatedIdentity },
             memberQueries,
             new StubOrganizationQueries { Result = organization },
+            new StubOrganizationRepository(),
             new StubTimeProvider());
 
         // When
@@ -174,6 +190,36 @@ public sealed class AuthenticateUserServiceTests
         // Then
         Assert.Equal("Organization member access denied.", exception.Message);
         Assert.Equal(0, memberQueries.RecordSuccessfulAuthenticationCallCount);
+    }
+
+    [Theory, AutoDomainData]
+    public async Task Given_AnOrganizationRegisteredByDomain_When_GetOrganizationAsync_Then_AssociatesTenantAndReturnsOrganization(
+        CancellationToken cancellationToken,
+        Organization organization,
+        AuthenticatedIdentity authenticatedIdentity)
+    {
+        // Given
+        organization.Domain = "contoso.com";
+        organization.ExternalTenantId = null;
+        var identity = authenticatedIdentity with { Email = "admin@contoso.com" };
+        var organizationQueries = new StubOrganizationQueries { DomainResult = organization };
+        var organizationRepository = new StubOrganizationRepository { AssociatedOrganization = organization };
+        var service = new AuthenticateUserService(
+            new StubCurrentIdentity { Identity = identity },
+            new StubOrganizationMemberQueries(),
+            organizationQueries,
+            organizationRepository,
+            new StubTimeProvider());
+
+        // When
+        var result = await service.GetOrganizationAsync(cancellationToken);
+
+        // Then
+        Assert.Same(organization, result.Organization);
+        Assert.Equal("contoso.com", organizationQueries.ReceivedDomain);
+        Assert.Equal(organization.Id, organizationRepository.ReceivedAssociationOrganizationId);
+        Assert.Equal(identity.Provider, organizationRepository.ReceivedAssociationIdentityProvider);
+        Assert.Equal(identity.ExternalOrganizationId, organizationRepository.ReceivedAssociationExternalTenantId);
     }
 
 }

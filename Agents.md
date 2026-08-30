@@ -2,9 +2,11 @@
 
 ## Règles de modification
 
-* Ne modifie jamais les fichiers directement sans me montrer un diff clair.
+* Ne modifie jamais les fichiers directement sans me résumer un plan court.
+* Le diff complet n'est pas requis avant modification, sauf si je le demande explicitement.
 * Propose d’abord un plan court.
 * Attends mon approbation avant d’appliquer les changements.
+* Pour une modification minime, tu peux appliquer le changement sans demander une nouvelle approbation.
 * Garde les changements petits et ciblés.
 * Ne touche pas aux fichiers non liés à la demande.
 * Explique les impacts avant de modifier plusieurs fichiers.
@@ -49,9 +51,10 @@
 * Nommer les tests avec la convention Gherkin `Given_<contexte>_When_<methode_testee>_Then_<resultat>`.
 * La partie `When` du nom d'un test doit toujours contenir le nom exact de la méthode testée.
 * Structurer le corps des tests avec les sections `// Given`, `// When` et `// Then`.
-* Après chaque ajout ou modification de fonctionnalité, exécuter la suite complète avec `dotnet test Solution.sln`.
-* Vérifier qu’aucun test existant n’est cassé avant de considérer le travail comme terminé.
-* Si les tests ne peuvent pas être exécutés, expliquer clairement la raison et ne pas présenter la fonctionnalité comme entièrement validée.
+* Ne jamais lancer les tests, qu'ils soient ciblés ou complets.
+* Exécuter uniquement le build avec `dotnet build Solution.sln` lorsqu'une modification importante implique plusieurs fichiers.
+* Pour une correction ponctuelle ou une modification ciblée, ne lancer ni test ni build.
+* Ne jamais présenter les tests comme validés puisqu'ils ne sont pas exécutés par Codex.
 * Gérer les erreurs proprement sans masquer les exceptions importantes.
 * Utiliser async/await correctement pour les appels I/O.
 * Ne pas introduire de dépendances inutiles.
@@ -99,7 +102,7 @@
 * Chaque ticket doit contenir une section `Documentation de référence` avec un lien vers la section exacte du document concerné.
 * Pour les issues GitHub, utiliser une URL vers le dépôt et la branche par défaut avec l’ancre de section, pas seulement un chemin de fichier.
 * Avant de creer ou mettre a jour un ticket GitHub, ajouter ou mettre a jour la documentation de reference correspondante.
-* Presenter la documentation ou son diff a l'utilisateur et attendre son approbation avant de creer ou modifier le ticket GitHub.
+* Presenter un résumé de la documentation a l'utilisateur et attendre son approbation avant de creer ou modifier le ticket GitHub. Presenter le diff seulement si je le demande explicitement.
 * Ne pas creer un ticket dont les decisions fonctionnelles importantes ne sont pas encore documentees.
 
 

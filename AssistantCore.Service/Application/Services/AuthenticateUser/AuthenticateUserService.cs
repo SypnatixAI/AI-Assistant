@@ -2,6 +2,7 @@ using AssistantCore.Repository.Abstractions;
 using AssistantCore.Repository.Domain.Entities;
 using AssistantCore.Repository.Domain.Enums;
 using AssistantCore.Repository.Queries;
+using AssistantCore.Repository.Repositories;
 using AssistantCore.Service.Application.Abstractions;
 using AssistantCore.Service.Application.Models.Authentication;
 
@@ -11,6 +12,7 @@ public sealed class AuthenticateUserService(
     ICurrentIdentity currentIdentity,
     IOrganizationMemberQueries organizationMemberQueries,
     IOrganizationQueries organizationQueries,
+    IOrganizationRepository organizationRepository,
     TimeProvider timeProvider) : IAuthenticateUserService
 {
     public async Task<(Organization Organization, OrganizationMember Member)> GetOrganizationAsync(CancellationToken cancellationToken)
@@ -20,7 +22,9 @@ public sealed class AuthenticateUserService(
             identity.Provider,
             identity.ExternalOrganizationId,
             cancellationToken)
-            ?? throw new ForbiddenException("Organization access denied.");
+            ?? await ResolveOrganizationFromEmailDomainAsync(identity, cancellationToken)
+            ?? throw new ForbiddenException(
+                $"No active organization is registered for tenant '{identity.ExternalOrganizationId}'.");
 
         var member = await GetOrCreateActiveMemberAsync(
             organization.Id,
@@ -28,6 +32,40 @@ public sealed class AuthenticateUserService(
             cancellationToken);
 
         return (organization, member);
+    }
+
+    private async Task<Organization?> ResolveOrganizationFromEmailDomainAsync(
+        AuthenticatedIdentity identity,
+        CancellationToken cancellationToken)
+    {
+        var email = ResolveEmail(identity);
+        var separatorIndex = email.LastIndexOf('@');
+        if (separatorIndex < 0 || separatorIndex == email.Length - 1)
+        {
+            return null;
+        }
+
+        var domain = email[(separatorIndex + 1)..].Trim().ToLowerInvariant();
+        var organization = await organizationQueries.FindOrganizationByDomain(
+            identity.Provider,
+            domain,
+            cancellationToken);
+
+        if (organization is null)
+        {
+            return null;
+        }
+
+        if (!string.IsNullOrWhiteSpace(organization.ExternalTenantId))
+        {
+            return organization;
+        }
+
+        return await organizationRepository.AssociateExternalTenantIdAsync(
+            organization.Id,
+            identity.Provider,
+            identity.ExternalOrganizationId,
+            cancellationToken);
     }
 
     private async Task<OrganizationMember> GetOrCreateActiveMemberAsync(

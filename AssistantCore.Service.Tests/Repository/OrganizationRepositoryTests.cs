@@ -13,6 +13,7 @@ public sealed class OrganizationRepositoryTests
         int _)
     {
         // Given
+        organization.Domain = string.IsNullOrWhiteSpace(organization.Domain) ? "contoso.com" : organization.Domain;
         var options = new DbContextOptionsBuilder<AssistantCoreDbContext>()
             .UseInMemoryDatabase(Guid.NewGuid().ToString())
             .Options;
@@ -27,6 +28,7 @@ public sealed class OrganizationRepositoryTests
         var persistedOrganization = await dbContext.Organizations.SingleAsync();
         Assert.Equal(organization.Id, persistedOrganization.Id);
         Assert.Equal(organization.Name, persistedOrganization.Name);
+        Assert.Equal(organization.Domain, persistedOrganization.Domain);
         Assert.Equal(organization.IdentityProvider, persistedOrganization.IdentityProvider);
         Assert.Equal(organization.ExternalTenantId, persistedOrganization.ExternalTenantId);
         Assert.Equal(organization.Status, persistedOrganization.Status);

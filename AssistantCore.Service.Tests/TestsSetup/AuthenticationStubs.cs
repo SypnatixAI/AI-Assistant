@@ -23,9 +23,13 @@ internal sealed class StubOrganizationQueries : IOrganizationQueries
 {
     public Organization? Result { get; set; }
 
+    public Organization? DomainResult { get; set; }
+
     public IdentityProvider? ReceivedIdentityProvider { get; private set; }
 
     public string? ReceivedExternalTenantId { get; private set; }
+
+    public string? ReceivedDomain { get; private set; }
 
     public CancellationToken ReceivedCancellationToken { get; private set; }
 
@@ -46,6 +50,17 @@ internal sealed class StubOrganizationQueries : IOrganizationQueries
         ReceivedExternalTenantId = externalTenantId;
         ReceivedCancellationToken = cancellationToken;
         return Task.FromResult(Result);
+    }
+
+    public Task<Organization?> FindOrganizationByDomain(
+        IdentityProvider identityProvider,
+        string domain,
+        CancellationToken cancellationToken = default)
+    {
+        ReceivedIdentityProvider = identityProvider;
+        ReceivedDomain = domain;
+        ReceivedCancellationToken = cancellationToken;
+        return Task.FromResult(DomainResult);
     }
 }
 

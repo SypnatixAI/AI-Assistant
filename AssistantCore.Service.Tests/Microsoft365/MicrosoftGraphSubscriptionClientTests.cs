@@ -30,7 +30,7 @@ public sealed class MicrosoftGraphSubscriptionClientTests
                 new
                 {
                     id = subscriptionId,
-                    resource = "/sites/site-id/lists/list-id",
+                    resource = "/drives/drive-id/root",
                     expirationDateTime = expiresAt
                 });
         }));
@@ -40,7 +40,7 @@ public sealed class MicrosoftGraphSubscriptionClientTests
         var result = await client.CreateAsync(
             "https://graph.microsoft.com",
             accessToken,
-            "/sites/site-id/lists/list-id",
+            "/drives/drive-id/root",
             "https://assistant.example/webhooks/microsoft-graph",
             expiresAt,
             clientState,
@@ -55,6 +55,82 @@ public sealed class MicrosoftGraphSubscriptionClientTests
         using var json = JsonDocument.Parse(requestBody!);
         Assert.Equal(clientState, json.RootElement.GetProperty("clientState").GetString());
         Assert.Equal("updated", json.RootElement.GetProperty("changeType").GetString());
+    }
+
+    [Theory, AutoDomainData]
+    public async Task Given_AListSubscriptionRequest_When_CreateAsync_Then_SecurityWebhookPreferenceIsNotSent(
+        string subscriptionId,
+        string accessToken,
+        string clientState,
+        DateTimeOffset expiresAt)
+    {
+        // Given
+        bool? hasPreferHeader = null;
+        using var httpClient = new HttpClient(new StubHttpMessageHandler(request =>
+        {
+            hasPreferHeader = request.Headers.Contains("Prefer");
+            return JsonResponse(
+                HttpStatusCode.Created,
+                new
+                {
+                    id = subscriptionId,
+                    resource = "/sites/site-id/lists/list-id",
+                    expirationDateTime = expiresAt
+                });
+        }));
+        var client = new MicrosoftGraphSubscriptionClient(httpClient);
+
+        // When
+        await client.CreateAsync(
+            "https://graph.microsoft.com",
+            accessToken,
+            "/sites/site-id/lists/list-id",
+            "https://assistant.example/webhooks/microsoft-graph",
+            expiresAt,
+            clientState,
+            CancellationToken.None);
+
+        // Then
+        Assert.False(hasPreferHeader);
+    }
+
+    [Theory, AutoDomainData]
+    public async Task Given_AGraphErrorResponse_When_CreateAsync_Then_ThrowsSanitizedGraphDetails(
+        string accessToken,
+        string clientState,
+        DateTimeOffset expiresAt)
+    {
+        // Given
+        using var httpClient = new HttpClient(new StubHttpMessageHandler(_ =>
+            JsonResponse(
+                HttpStatusCode.BadRequest,
+                new
+                {
+                    error = new
+                    {
+                        code = "InvalidRequest",
+                        message = "Webhook validation\r\nfailed."
+                    }
+                })));
+        var client = new MicrosoftGraphSubscriptionClient(httpClient);
+
+        // When
+        var action = () => client.CreateAsync(
+            "https://graph.microsoft.com",
+            accessToken,
+            "/sites/site-id/lists/list-id",
+            "https://assistant.example/webhooks/microsoft-graph",
+            expiresAt,
+            clientState,
+            CancellationToken.None);
+
+        // Then
+        var exception = await Assert.ThrowsAsync<MicrosoftExternalException>(action);
+        Assert.Equal("InvalidRequest", exception.ErrorCode);
+        Assert.Contains("Graph error InvalidRequest:", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("Webhook validation  failed.", exception.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain('\r', exception.Message);
+        Assert.DoesNotContain('\n', exception.Message);
     }
 
     [Theory, AutoDomainData]

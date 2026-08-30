@@ -1,6 +1,7 @@
 using AssistantCore.Repository.Persistence;
 using AssistantCore.Service.Application;
 using AssistantCore.Service.Infrastructure.Microsoft365;
+using System.Reflection;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -12,6 +13,10 @@ public static class WorkerProgram
     public static async Task Main(string[] args)
     {
         var builder = Host.CreateApplicationBuilder(args);
+        if (builder.Environment.IsEnvironment("Certif"))
+        {
+            builder.Configuration.AddUserSecrets(Assembly.GetExecutingAssembly());
+        }
 
         if (string.IsNullOrWhiteSpace(
                 builder.Configuration.GetConnectionString("AssistantCoreDatabase")))

@@ -143,9 +143,14 @@ le parcours OAuth 2.0 configuré dans la collection.
 bash scripts/start-local-live.sh
 ```
 
+Le script vérifie l'URL webhook publique avant de démarrer le Worker. Si elle
+ne répond pas correctement, il démarre automatiquement ngrok avec l'URL
+réservée de l'environnement Certif. L'agent ngrok doit donc être authentifié
+localement et cette URL doit appartenir au compte utilisé.
+
 Pour tester également le vrai parcours Microsoft dans la SPA locale, renseigner
 ses identifiants publics Entra dans
-`public/assets/config/config.local-entra.json` du dépôt `Assistant.SPA`, puis
+`public/assets/config/config.certification.json` du dépôt `Assistant.SPA`, puis
 lancer `npm run start:entra`. Aucun client secret n'est utilisé par la SPA.
 
 ## Tester un DOCX localement

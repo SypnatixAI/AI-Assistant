@@ -13,9 +13,7 @@ public sealed class CreateOrganizationCommandHandler(
         CancellationToken cancellationToken)
     {
         var organization = await organizationManagementService.CreateOrganizationAsync(
-            request.Name,
-            request.IdentityProvider,
-            request.ExternalTenantId,
+            request.Domain,
             cancellationToken);
 
         return OrganizationResponse.FromOrganization(organization);

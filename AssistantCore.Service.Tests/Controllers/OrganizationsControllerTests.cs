@@ -20,9 +20,10 @@ public sealed class OrganizationsControllerTests
         // Given
         var response = new OrganizationResponse(
             organizationId,
-            request.Name,
+            request.Domain,
+            request.Domain,
             IdentityProvider.MicrosoftEntraId.ToString(),
-            request.ExternalTenantId,
+            null,
             RecordStatus.Active.ToString());
         var dispatcher = new RecordingDispatcher { Response = response };
         var controller = new OrganizationsController(dispatcher);
@@ -35,9 +36,7 @@ public sealed class OrganizationsControllerTests
         Assert.Equal(StatusCodes.Status201Created, createdResult.StatusCode);
         Assert.Same(response, createdResult.Value);
         var command = Assert.IsType<CreateOrganizationCommand>(dispatcher.ReceivedRequest);
-        Assert.Equal(request.Name, command.Name);
-        Assert.Equal(request.IdentityProvider, command.IdentityProvider);
-        Assert.Equal(request.ExternalTenantId, command.ExternalTenantId);
+        Assert.Equal(request.Domain, command.Domain);
         Assert.Equal(cancellationToken, dispatcher.ReceivedCancellationToken);
     }
 
