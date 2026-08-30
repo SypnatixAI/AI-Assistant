@@ -203,6 +203,70 @@ public sealed class ConversationRepositoryListMessagesTests
         Assert.Empty(withoutSources.Sources);
     }
 
+    [Theory, AutoDomainData]
+    public async Task Given_AnArchivedConversation_When_FindThenListMessages_Then_MessagesRemainAccessible(
+        Guid organizationId,
+        Guid ownerMemberId,
+        Conversation archivedConversation)
+    {
+        // Given
+        archivedConversation.OrganizationId = organizationId;
+        archivedConversation.OwnerMemberId = ownerMemberId;
+        archivedConversation.Status = ConversationStatus.Archived;
+        archivedConversation.DeletedAt = null;
+
+        await using var dbContext = CreateDbContext();
+        dbContext.Conversations.Add(archivedConversation);
+        dbContext.Messages.Add(CreateMessage(archivedConversation.Id, DateTimeOffset.UtcNow));
+        await dbContext.SaveChangesAsync();
+        var repository = new ConversationRepository(dbContext);
+
+        // When
+        var conversation = await repository.FindConversationAsync(
+            organizationId, ownerMemberId, archivedConversation.Id);
+        var page = await repository.ListMessagesAsync(
+            archivedConversation.Id, limit: 50, cursorCreatedAt: null, cursorId: null);
+
+        // Then
+        Assert.NotNull(conversation);
+        Assert.Equal(ConversationStatus.Archived, conversation.Status);
+        Assert.Single(page.Items);
+    }
+
+    [Fact]
+    public async Task Given_MessagesInEveryProcessingStatus_When_ListMessagesAsync_Then_AllStatusesRemainVisible()
+    {
+        // Given
+        var conversationId = Guid.NewGuid();
+        var baseTime = DateTimeOffset.UtcNow;
+        var statuses = new[]
+        {
+            MessageProcessingStatus.Pending,
+            MessageProcessingStatus.InProgress,
+            MessageProcessingStatus.Completed,
+            MessageProcessingStatus.Failed,
+            MessageProcessingStatus.Cancelled
+        };
+
+        await using var dbContext = CreateDbContext();
+        for (var i = 0; i < statuses.Length; i++)
+        {
+            var message = CreateMessage(conversationId, baseTime.AddMinutes(i));
+            message.ProcessingStatus = statuses[i];
+            dbContext.Messages.Add(message);
+        }
+
+        await dbContext.SaveChangesAsync();
+        var repository = new ConversationRepository(dbContext);
+
+        // When
+        var page = await repository.ListMessagesAsync(
+            conversationId, limit: 50, cursorCreatedAt: null, cursorId: null);
+
+        // Then
+        Assert.Equal(statuses, page.Items.Select(item => item.ProcessingStatus));
+    }
+
     private static Message CreateMessage(
         Guid conversationId,
         DateTimeOffset createdAt,
