@@ -26,6 +26,8 @@ public static class Microsoft365ServiceCollectionExtensions
                     && clientId != Guid.Empty
                     && !string.IsNullOrWhiteSpace(options.ClientSecret)
                     && IsHttpsUrl(options.ConsentCallbackUrl)
+                    && IsSecureOrLoopbackUrl(options.ConsentSuccessRedirectUrl)
+                    && IsSecureOrLoopbackUrl(options.ConsentErrorRedirectUrl)
                     && IsHttpsUrl(options.WebhookBaseUrl)
                     && options.ConsentStateLifetimeMinutes is > 0 and <= 60
                     && options.SubscriptionLifetimeHours is > 1 and <= 48
@@ -132,6 +134,11 @@ public static class Microsoft365ServiceCollectionExtensions
     private static bool IsHttpsUrl(string value) =>
         Uri.TryCreate(value, UriKind.Absolute, out var uri)
         && uri.Scheme == Uri.UriSchemeHttps;
+
+    private static bool IsSecureOrLoopbackUrl(string value) =>
+        Uri.TryCreate(value, UriKind.Absolute, out var uri)
+        && (uri.Scheme == Uri.UriSchemeHttps
+            || (uri.Scheme == Uri.UriSchemeHttp && uri.IsLoopback));
 
     private static bool IsServiceBusNamespace(string value) =>
         Uri.CheckHostName(value) == UriHostNameType.Dns

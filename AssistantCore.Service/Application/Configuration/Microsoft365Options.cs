@@ -14,6 +14,10 @@ public sealed class Microsoft365Options
 
     public string ConsentCallbackUrl { get; init; } = string.Empty;
 
+    public string ConsentSuccessRedirectUrl { get; init; } = string.Empty;
+
+    public string ConsentErrorRedirectUrl { get; init; } = string.Empty;
+
     public int ConsentStateLifetimeMinutes { get; init; } = 10;
 
     public string WebhookBaseUrl { get; init; } = string.Empty;

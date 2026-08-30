@@ -8,6 +8,26 @@ namespace AssistantCore.Repository.Repositories;
 public sealed class Microsoft365SourceDiscoveryRepository(AssistantCoreDbContext dbContext)
     : IMicrosoft365SourceDiscoveryRepository
 {
+    public async Task<IReadOnlyCollection<string>> GetSiteIdsAsync(
+        Guid organizationId,
+        CancellationToken cancellationToken = default) =>
+        await dbContext.Microsoft365Sites
+            .AsNoTracking()
+            .Where(site => site.OrganizationId == organizationId)
+            .Select(site => site.SiteId)
+            .ToArrayAsync(cancellationToken);
+
+    public Task<bool> HasIndexedSourceAsync(
+        Guid organizationId,
+        CancellationToken cancellationToken = default) =>
+        dbContext.Microsoft365Sources
+            .AsNoTracking()
+            .AnyAsync(source =>
+                source.Microsoft365Connection.OrganizationId == organizationId
+                && source.IsIndexed
+                && source.Kind != Microsoft365SourceKind.SharePointSite,
+                cancellationToken);
+
     public async Task<Microsoft365Site> SaveSiteAsync(
         Microsoft365Connection connection,
         string siteId,

@@ -6,7 +6,7 @@ public interface IMicrosoft365ConnectionService
 {
     Task<Uri> StartConsentAsync(CancellationToken cancellationToken = default);
 
-    Task<Microsoft365ConnectionResult> CompleteConsentAsync(
+    Task<Microsoft365ConsentCompletionResult> CompleteConsentAsync(
         string tenantId,
         bool adminConsent,
         string state,

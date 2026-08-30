@@ -1,0 +1,21 @@
+{
+  "request": {
+    "method": "POST",
+    "urlPath": "/graph/v1.0/subscriptions",
+    "bodyPatterns": [
+      {
+        "matchesJsonPath": "$[?(@.resource == '/sites/local-site/lists/local-list')]"
+      }
+    ]
+  },
+  "response": {
+    "status": 201,
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "body": "{\"id\":\"local-list-subscription\",\"resource\":\"{{jsonPath request.body '$.resource'}}\",\"expirationDateTime\":\"{{jsonPath request.body '$.expirationDateTime'}}\"}",
+    "transformers": [
+      "response-template"
+    ]
+  }
+}

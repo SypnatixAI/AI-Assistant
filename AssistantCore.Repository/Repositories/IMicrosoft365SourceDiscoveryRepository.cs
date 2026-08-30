@@ -4,6 +4,14 @@ namespace AssistantCore.Repository.Repositories;
 
 public interface IMicrosoft365SourceDiscoveryRepository
 {
+    Task<IReadOnlyCollection<string>> GetSiteIdsAsync(
+        Guid organizationId,
+        CancellationToken cancellationToken = default);
+
+    Task<bool> HasIndexedSourceAsync(
+        Guid organizationId,
+        CancellationToken cancellationToken = default) => Task.FromResult(false);
+
     Task<Microsoft365Site?> FindSiteAsync(
         Guid organizationId,
         string siteId,

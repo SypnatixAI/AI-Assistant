@@ -46,7 +46,7 @@ public sealed class Microsoft365ConnectionService(
         return consentClient.CreateAdminConsentUri(state);
     }
 
-    public async Task<Microsoft365ConnectionResult> CompleteConsentAsync(
+    public async Task<Microsoft365ConsentCompletionResult> CompleteConsentAsync(
         string tenantId,
         bool adminConsent,
         string state,
@@ -153,10 +153,11 @@ public sealed class Microsoft365ConnectionService(
             throw;
         }
 
-        return new Microsoft365ConnectionResult(
+        return new Microsoft365ConsentCompletionResult(
             connection.Id,
             validatedTenantId,
-            connection.Status);
+            connection.Status,
+            new Uri(options.Value.ConsentSuccessRedirectUrl, UriKind.Absolute));
     }
 
     public async Task<Microsoft365ConnectionResult> RevokeAsync(

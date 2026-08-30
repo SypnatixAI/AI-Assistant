@@ -113,7 +113,8 @@ valider l'identité locale.
 La SPA utilise ce mode par défaut. Après le démarrage du présent script,
 démarrer le dépôt `Assistant.SPA` avec `npm start`, ouvrir `/login`, puis choisir
 `Continuer comme administrateur local`. La SPA récupère alors le JWT auprès de
-WireMock et ne le conserve qu'en mémoire.
+WireMock et le conserve dans le `sessionStorage` de l'onglet. Le JWT disparaît
+à la déconnexion ou lorsque l'onglet est fermé.
 
 Dans Postman, importer la collection et l'environnement local du dossier
 `postman`, puis sélectionner l'environnement `AssistantCore Local`. Aucune copie

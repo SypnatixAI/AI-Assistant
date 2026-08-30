@@ -7,6 +7,8 @@ using AssistantCore.Service.Application.Commands.RevokeMicrosoft365Connection;
 using AssistantCore.Service.Application.Commands.RevokeMicrosoft365Connection.Models;
 using AssistantCore.Service.Application.Commands.GetMicrosoft365SiteLists;
 using AssistantCore.Service.Application.Commands.GetMicrosoft365SiteLists.Models;
+using AssistantCore.Service.Application.Commands.GetMicrosoft365Sites;
+using AssistantCore.Service.Application.Commands.GetMicrosoft365Sites.Models;
 using AssistantCore.Service.Application.Commands.EnableMicrosoft365List;
 using AssistantCore.Service.Application.Commands.EnableMicrosoft365List.Models;
 using AssistantCore.Service.Application.Models.Microsoft365;
@@ -14,6 +16,8 @@ using AssistantCore.Service.Application.Commands.RegisterMicrosoft365Site;
 using AssistantCore.Service.Application.Commands.GetMicrosoft365SiteDrives;
 using AssistantCore.Service.Application.Commands.EnableMicrosoft365Drive;
 using AssistantCore.Service.Application.Commands.EnableMicrosoft365Drive.Models;
+using AssistantCore.Service.Application.Commands.GetMicrosoft365OnboardingStatus;
+using AssistantCore.Service.Application.Commands.GetMicrosoft365OnboardingStatus.Models;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Swashbuckle.AspNetCore.Annotations;
@@ -25,6 +29,32 @@ namespace AssistantCore.Service.Controllers;
 [Authorize]
 public sealed class Microsoft365Controller(IDispatcher dispatcher) : ControllerBase
 {
+    [HttpGet("onboarding")]
+    [SwaggerOperation(Summary = "Obtenir la progression de la configuration Microsoft 365")]
+    [SwaggerResponse(StatusCodes.Status200OK, "Microsoft 365 onboarding status returned.", typeof(GetMicrosoft365OnboardingStatusResponse))]
+    public async Task<ActionResult<GetMicrosoft365OnboardingStatusResponse>> GetOnboardingStatus(
+        CancellationToken cancellationToken)
+    {
+        var response = await dispatcher.SendAsync(
+            new GetMicrosoft365OnboardingStatusCommand(),
+            cancellationToken);
+        return Ok(response);
+    }
+
+    [HttpGet("sites")]
+    [SwaggerOperation(Summary = "Lister les sites SharePoint disponibles")]
+    [SwaggerResponse(StatusCodes.Status200OK, "Microsoft 365 sites returned.", typeof(GetMicrosoft365SitesResponse))]
+    [SwaggerResponse(StatusCodes.Status403Forbidden, "Administrator access required.")]
+    [SwaggerResponse(StatusCodes.Status404NotFound, "Active Microsoft 365 connection not found.")]
+    public async Task<ActionResult<GetMicrosoft365SitesResponse>> GetSites(
+        CancellationToken cancellationToken)
+    {
+        var response = await dispatcher.SendAsync(
+            new GetMicrosoft365SitesCommand(),
+            cancellationToken);
+        return Ok(response);
+    }
+
     [HttpPost("sites/{siteId}")]
     public async Task<ActionResult<Microsoft365SiteResponse>> RegisterSite(
         string siteId,
@@ -76,9 +106,8 @@ public sealed class Microsoft365Controller(IDispatcher dispatcher) : ControllerB
     [AllowAnonymous]
     [HttpGet("consent/callback")]
     [SwaggerOperation(Summary = "Traiter le retour du consentement Microsoft 365")]
-    [SwaggerResponse(StatusCodes.Status200OK, "Microsoft 365 tenant connected.", typeof(CompleteMicrosoft365ConsentResponse))]
-    [SwaggerResponse(StatusCodes.Status400BadRequest, "Consent callback is invalid.")]
-    public async Task<ActionResult<CompleteMicrosoft365ConsentResponse>> CompleteConsent(
+    [SwaggerResponse(StatusCodes.Status302Found, "Microsoft 365 consent completed and browser redirected.")]
+    public async Task<IActionResult> CompleteConsent(
         [FromQuery] string? tenant,
         [FromQuery(Name = "admin_consent")] bool? adminConsent,
         [FromQuery] string? state,
@@ -92,7 +121,7 @@ public sealed class Microsoft365Controller(IDispatcher dispatcher) : ControllerB
                 state ?? string.Empty,
                 microsoftError),
             cancellationToken);
-        return Ok(response);
+        return Redirect(response.RedirectUrl);
     }
 
     [HttpDelete("connections/{connectionId:guid}")]

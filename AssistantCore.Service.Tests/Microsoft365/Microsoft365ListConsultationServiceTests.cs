@@ -97,6 +97,11 @@ public sealed class Microsoft365ListConsultationServiceTests
         public int FindSiteCallCount { get; private set; }
         public int GetListsCallCount { get; private set; }
 
+        public Task<IReadOnlyCollection<string>> GetSiteIdsAsync(
+            Guid organizationId,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult<IReadOnlyCollection<string>>([]);
+
         public Task<Microsoft365Site?> FindSiteAsync(
             Guid organizationId,
             string siteId,

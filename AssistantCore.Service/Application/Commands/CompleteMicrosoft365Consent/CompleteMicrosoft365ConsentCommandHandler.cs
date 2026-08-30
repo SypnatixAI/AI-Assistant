@@ -22,6 +22,7 @@ public sealed class CompleteMicrosoft365ConsentCommandHandler(
         return new CompleteMicrosoft365ConsentResponse(
             result.ConnectionId,
             result.TenantId,
-            result.Status.ToString());
+            result.Status.ToString(),
+            result.FrontendRedirectUri.AbsoluteUri);
     }
 }

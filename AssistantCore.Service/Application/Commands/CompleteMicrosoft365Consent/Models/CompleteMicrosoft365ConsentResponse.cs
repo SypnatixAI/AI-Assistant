@@ -3,4 +3,5 @@ namespace AssistantCore.Service.Application.Commands.CompleteMicrosoft365Consent
 public sealed record CompleteMicrosoft365ConsentResponse(
     Guid ConnectionId,
     string TenantId,
-    string Status);
+    string Status,
+    string RedirectUrl);
