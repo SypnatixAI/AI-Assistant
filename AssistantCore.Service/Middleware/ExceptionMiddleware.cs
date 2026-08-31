@@ -37,7 +37,8 @@ public sealed class ExceptionMiddleware(
 
             var response = new ExceptionResponse(
                 exception.Message,
-                environment.IsDevelopment() ? exception.Message : null);
+                environment.IsDevelopment() ? exception.Message : null,
+                (exception as IErrorCodeException)?.ErrorCode);
 
             await context.Response.WriteAsync(JsonSerializer.Serialize(response));
         }

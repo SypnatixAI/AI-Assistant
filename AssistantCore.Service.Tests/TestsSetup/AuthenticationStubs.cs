@@ -4,6 +4,7 @@ using AssistantCore.Repository.Queries;
 using AssistantCore.Service.Application.Abstractions;
 using AssistantCore.Service.Application.Models.Authentication;
 using AssistantCore.Service.Application.Services.AuthenticateUser;
+using AssistantCore.Service.Application.Services.Microsoft365;
 
 namespace AssistantCore.Service.Tests;
 
@@ -18,6 +19,21 @@ internal sealed class StubCurrentIdentity : ICurrentIdentity
         []);
 
     public AuthenticatedIdentity GetIdentity() => Identity;
+}
+
+internal sealed class StubMicrosoft365OnboardingCompletionChecker : IMicrosoft365OnboardingCompletionChecker
+{
+    public bool IsComplete { get; set; } = true;
+
+    public Guid? ReceivedOrganizationId { get; private set; }
+
+    public Task<bool> IsCompleteAsync(
+        Guid organizationId,
+        CancellationToken cancellationToken = default)
+    {
+        ReceivedOrganizationId = organizationId;
+        return Task.FromResult(IsComplete);
+    }
 }
 
 internal sealed class StubOrganizationRoleResolver : IOrganizationRoleResolver
