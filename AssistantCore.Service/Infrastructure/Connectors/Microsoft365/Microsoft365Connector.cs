@@ -11,8 +11,6 @@ using AssistantCore.Service.Application.Services.Messages.Evidence;
 namespace AssistantCore.Service.Infrastructure.Connectors.Microsoft365;
 
 public sealed class Microsoft365Connector(
-    IOrganizationMemberQueries memberQueries,
-    IOrganizationQueries organizationQueries,
     IMicrosoft365UserGroupResolver groupResolver,
     IMicrosoft365SearchRepository searchRepository,
     Microsoft365ConnectorOptions options,
@@ -26,33 +24,20 @@ public sealed class Microsoft365Connector(
         ArgumentNullException.ThrowIfNull(request);
         ArgumentNullException.ThrowIfNull(context);
 
-        var member = await memberQueries.FindMember(
-            context.OrganizationId,
-            context.MemberId,
-            cancellationToken);
-        if (member is null
-            || member.Status != RecordStatus.Active
-            || member.IdentityProvider != IdentityProvider.MicrosoftEntraId
-            || !Guid.TryParse(member.ExternalUserId, out var entraUserId)
-            || entraUserId == Guid.Empty)
+        if (context.OrganizationId == Guid.Empty
+            || context.MemberId == Guid.Empty
+            || context.IdentityProvider != IdentityProvider.MicrosoftEntraId
+            || string.IsNullOrWhiteSpace(context.ExternalTenantId)
+            || context.EntraUserId is null
+            || context.EntraUserId == Guid.Empty)
         {
             throw new InvalidOperationException(
                 "The authenticated member cannot be resolved to a Microsoft Entra identity.");
         }
 
-        var organization = await organizationQueries.FindOrganization(
-            context.OrganizationId,
-            cancellationToken)
-            ?? throw new InvalidOperationException("The authenticated organization was not found.");
-        if (organization.IdentityProvider != IdentityProvider.MicrosoftEntraId)
-        {
-            throw new InvalidOperationException(
-                "The authenticated organization is not connected to Microsoft Entra.");
-        }
-
-        var normalizedUserId = entraUserId.ToString("D");
+        var normalizedUserId = context.EntraUserId.Value.ToString("D");
         var groupIds = await groupResolver.ResolveGroupIdsAsync(
-            organization,
+            context.ExternalTenantId!,
             normalizedUserId,
             cancellationToken);
         var searchParameters = new Microsoft365SearchParameters(

@@ -15,6 +15,7 @@ using AssistantCore.Service.Application.Services.Messages.Tools;
 using AssistantCore.Service.Application.Services.Messages.Validation;
 using AssistantCore.Service.Application.Services.Microsoft365;
 using AssistantCore.Service.Application.Services.Organizations;
+using AssistantCore.Service.Application.Services.TenantAdmission;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -69,6 +70,13 @@ public static class ServiceCollectionExtensions
                 options => options.ConversationRecoveryDays > 0,
                 $"{RetentionOptions.SectionName}:{nameof(RetentionOptions.ConversationRecoveryDays)} must be greater than zero.")
             .ValidateOnStart();
+        services.AddOptions<OrganizationRoleOptions>()
+            .Bind(configuration.GetSection(OrganizationRoleOptions.SectionName))
+            .Validate(
+                options => !string.IsNullOrWhiteSpace(options.RequiredAdmissionRole)
+                    && !string.IsNullOrWhiteSpace(options.TenantAdminRole),
+                $"{OrganizationRoleOptions.SectionName}:{nameof(OrganizationRoleOptions.RequiredAdmissionRole)} and {nameof(OrganizationRoleOptions.TenantAdminRole)} are required.")
+            .ValidateOnStart();
         services.AddScoped<ISendMessageCommandValidator, SendMessageCommandValidator>();
         services.AddSingleton<IConversationCursorCodec, ConversationCursorCodec>();
         services.AddSingleton<IConversationMessageCursorCodec, ConversationMessageCursorCodec>();
@@ -76,8 +84,11 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IConversationMessageListingService, ConversationMessageListingService>();
         services.AddScoped<IConversationAuditWriter, LoggingConversationAuditWriter>();
         services.AddScoped<IConversationLifecycleService, ConversationLifecycleService>();
+        services.AddSingleton<ITenantAdmissionPolicy, TenantAdmissionPolicy>();
+        services.AddScoped<IMicrosoft365OnboardingCompletionChecker, Microsoft365OnboardingCompletionChecker>();
         services.AddScoped<IMessageUserContextService, MessageUserContextService>();
         services.AddScoped<IAuthenticateUserService, AuthenticateUserService>();
+        services.AddScoped<IOrganizationRoleResolver, OrganizationRoleResolver>();
         services.AddScoped<IMemberManagementService, MemberManagementService>();
         services.AddScoped<IOrganizationManagementService, OrganizationManagementService>();
         services.AddMicrosoft365Application();

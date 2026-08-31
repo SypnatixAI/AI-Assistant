@@ -1,10 +1,8 @@
-namespace AssistantCore.Service.Infrastructure.Authentication.Configuration;
+namespace AssistantCore.Service.Application.Configuration;
 
-public sealed class ApiAccessOptions
+public sealed class OrganizationRoleOptions
 {
     public const string SectionName = "AzureAd";
-
-    public string RequiredScope { get; init; } = string.Empty;
 
     public string RequiredAdmissionRole { get; init; } = string.Empty;
 

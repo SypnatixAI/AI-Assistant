@@ -2,14 +2,19 @@ using AssistantCore.Repository.Abstractions;
 using AssistantCore.Repository.Domain.Enums;
 using AssistantCore.Repository.Queries;
 using AssistantCore.Service.Application.Abstractions;
+using AssistantCore.Service.Application.Exceptions;
 using AssistantCore.Service.Application.Models.Messages;
+using AssistantCore.Service.Application.Services.Microsoft365;
+using AssistantCore.Service.Application.Services.TenantAdmission;
 
 namespace AssistantCore.Service.Application.Services.Messages.Authorization;
 
 public sealed class MessageUserContextService(
     ICurrentIdentity currentIdentity,
     IOrganizationQueries organizationQueries,
-    IOrganizationMemberQueries memberQueries) : IMessageUserContextService
+    IOrganizationMemberQueries memberQueries,
+    IMicrosoft365OnboardingCompletionChecker onboardingCompletionChecker,
+    ITenantAdmissionPolicy tenantAdmissionPolicy) : IMessageUserContextService
 {
     public async Task<MessageUserContext> GetCurrentAsync(
         CancellationToken cancellationToken)
@@ -36,6 +41,18 @@ public sealed class MessageUserContextService(
             || member.Role is not (OrganizationRole.Admin or OrganizationRole.User))
         {
             throw new ForbiddenException("Organization member access denied.");
+        }
+
+        var isOnboardingComplete = await onboardingCompletionChecker.IsCompleteAsync(
+            organization.Id,
+            cancellationToken);
+        var admissionResult = tenantAdmissionPolicy.Evaluate(member.Role, isOnboardingComplete);
+
+        if (admissionResult != TenantAdmissionResult.Allowed)
+        {
+            throw new TenantAdmissionException(
+                "A tenant administrator must finish the Microsoft 365 setup before other members can access AssistantCore.",
+                TenantAdmissionException.TenantAdminRequired);
         }
 
         return new MessageUserContext(organization, member);

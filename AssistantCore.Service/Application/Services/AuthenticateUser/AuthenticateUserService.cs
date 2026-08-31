@@ -4,7 +4,10 @@ using AssistantCore.Repository.Domain.Enums;
 using AssistantCore.Repository.Queries;
 using AssistantCore.Repository.Repositories;
 using AssistantCore.Service.Application.Abstractions;
+using AssistantCore.Service.Application.Exceptions;
 using AssistantCore.Service.Application.Models.Authentication;
+using AssistantCore.Service.Application.Services.Microsoft365;
+using AssistantCore.Service.Application.Services.TenantAdmission;
 
 namespace AssistantCore.Service.Application.Services.AuthenticateUser;
 
@@ -13,6 +16,9 @@ public sealed class AuthenticateUserService(
     IOrganizationMemberQueries organizationMemberQueries,
     IOrganizationQueries organizationQueries,
     IOrganizationRepository organizationRepository,
+    IOrganizationRoleResolver organizationRoleResolver,
+    IMicrosoft365OnboardingCompletionChecker onboardingCompletionChecker,
+    ITenantAdmissionPolicy tenantAdmissionPolicy,
     TimeProvider timeProvider) : IAuthenticateUserService
 {
     public async Task<(Organization Organization, OrganizationMember Member)> GetOrganizationAsync(CancellationToken cancellationToken)
@@ -73,6 +79,7 @@ public sealed class AuthenticateUserService(
         AuthenticatedIdentity identity,
         CancellationToken cancellationToken)
     {
+        var resolvedRole = organizationRoleResolver.Resolve(identity.AppRoles);
         var member = await organizationMemberQueries.FindMember(
             organizationId,
             identity.Provider,
@@ -90,15 +97,34 @@ public sealed class AuthenticateUserService(
                     Email = ResolveEmail(identity),
                     IdentityProvider = identity.Provider,
                     ExternalUserId = identity.ExternalUserId,
-                    Role = OrganizationRole.User,
+                    Role = resolvedRole,
                     Status = RecordStatus.Active
                 },
+                cancellationToken);
+        }
+        else if (member.Role != resolvedRole)
+        {
+            member = await organizationMemberQueries.UpdateRole(
+                member,
+                resolvedRole,
                 cancellationToken);
         }
 
         if (member.Status != RecordStatus.Active)
         {
             throw new ForbiddenException("Organization member access denied.");
+        }
+
+        var isOnboardingComplete = await onboardingCompletionChecker.IsCompleteAsync(
+            organizationId,
+            cancellationToken);
+        var admissionResult = tenantAdmissionPolicy.Evaluate(member.Role, isOnboardingComplete);
+
+        if (admissionResult != TenantAdmissionResult.Allowed)
+        {
+            throw new TenantAdmissionException(
+                "A tenant administrator must finish the Microsoft 365 setup before other members can access AssistantCore.",
+                TenantAdmissionException.TenantAdminRequired);
         }
 
         await organizationMemberQueries.RecordSuccessfulAuthenticationAsync(

@@ -4,6 +4,7 @@ using AssistantCore.Service.Application.Commands.SendMessage.Models;
 using AssistantCore.Service.Application.Exceptions;
 using AssistantCore.Service.Application.Models.Messages;
 using AssistantCore.Service.Application.Models.Messages.AiModels;
+using AssistantCore.Service.Application.Models.Messages.Connectors;
 using AssistantCore.Service.Application.Models.Messages.Lifecycle;
 using AssistantCore.Service.Application.Models.Messages.Orchestration;
 using AssistantCore.Service.Application.Models.Messages.Tools;
@@ -69,6 +70,9 @@ public sealed class SendMessageCommandHandlerTests
             ],
             operations);
         Assert.Equal([historyMessage], orchestrator.ReceivedConversationHistory);
+        Assert.Equal(userContext.Organization.Id, orchestrator.ReceivedExecutionContext!.OrganizationId);
+        Assert.Equal(userContext.Member.Id, orchestrator.ReceivedExecutionContext.MemberId);
+        Assert.Equal(userContext.Organization.ExternalTenantId, orchestrator.ReceivedExecutionContext.ExternalTenantId);
         Assert.Same(processing, lifecycle.ReceivedCompletionProcessing);
         Assert.Same(orchestrationResult, lifecycle.ReceivedOrchestrationResult);
     }
@@ -393,14 +397,18 @@ public sealed class SendMessageCommandHandlerTests
         public IReadOnlyCollection<AiConversationMessage> ReceivedConversationHistory { get; private set; }
             = [];
 
+        public ConnectorExecutionContext? ReceivedExecutionContext { get; private set; }
+
         public Task<MessageOrchestrationResult> OrchestrateAsync(
             StartedMessageProcessing processing,
+            ConnectorExecutionContext executionContext,
             SelectedAiModel selectedModel,
             IReadOnlyCollection<AiConversationMessage> conversationHistory,
             IReadOnlyCollection<AiToolDefinition> availableTools,
             CancellationToken cancellationToken)
         {
             operations.Add("Orchestrate");
+            ReceivedExecutionContext = executionContext;
             ReceivedConversationHistory = conversationHistory;
             return exception is null
                 ? Task.FromResult(result)

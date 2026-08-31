@@ -1,5 +1,4 @@
 using AssistantCore.ExternalServices.Services.Microsoft;
-using AssistantCore.Repository.Domain.Entities;
 using AssistantCore.Service.Application.Configuration;
 using AssistantCore.Service.Application.Services.Messages.Connectors.Microsoft365;
 using Microsoft.Extensions.Options;
@@ -12,12 +11,11 @@ public sealed class Microsoft365UserGroupResolverAdapter(
     IOptions<Microsoft365Options> options) : IMicrosoft365UserGroupResolver
 {
     public async Task<IReadOnlyCollection<string>> ResolveGroupIdsAsync(
-        Organization organization,
+        string externalTenantId,
         string entraUserId,
         CancellationToken cancellationToken)
     {
-        ArgumentNullException.ThrowIfNull(organization);
-        if (string.IsNullOrWhiteSpace(organization.ExternalTenantId))
+        if (string.IsNullOrWhiteSpace(externalTenantId))
         {
             throw new InvalidOperationException(
                 "The authenticated organization has no Microsoft Entra tenant identifier.");
@@ -26,7 +24,7 @@ public sealed class Microsoft365UserGroupResolverAdapter(
         var configuration = options.Value;
         var token = await identityClient.AcquireApplicationTokenAsync(
             configuration.AuthorityBaseUrl,
-            organization.ExternalTenantId,
+            externalTenantId,
             configuration.ClientId,
             configuration.ClientSecret,
             cancellationToken);
