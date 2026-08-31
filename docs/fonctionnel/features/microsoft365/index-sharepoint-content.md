@@ -567,6 +567,16 @@ configurée arrive directement dans le chat. Un membre non administrateur voit
 un écran d'attente clair tant que la configuration doit encore être terminée
 par un administrateur.
 
+Cette règle n'est pas seulement une présentation frontend : tant que
+l'onboarding n'est pas terminé (consentement valide et au moins un site
+sélectionné), le backend refuse `403 Forbidden` avec le code métier
+`tenant_admin_required` à tout appel d'un membre qui ne possède pas le rôle
+Entra `tenantAdmin`, y compris `authenticateUser` lui-même. Un membre avec
+`tenantAdmin` reste toujours admis, que la configuration soit terminée ou non.
+Une fois l'onboarding termine, `tenantAdmin` cesse d'etre requis pour les
+membres standards : voir [Authenticate User](../authentification/authenticate-user.md#auth-admission-policy)
+pour la regle complete de derivation du role et de la politique d'admission.
+
 Après l'onboarding, un membre possédant le rôle `Admin` retrouve le même écran
 depuis le menu de la SPA pour retirer ou ajouter des contenus. Ce réglage est
 facultatif et ne bloque pas le chat. Le backend continue de refuser les actions

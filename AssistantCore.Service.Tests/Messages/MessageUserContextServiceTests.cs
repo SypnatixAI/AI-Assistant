@@ -2,8 +2,10 @@ using AssistantCore.Repository.Abstractions;
 using AssistantCore.Repository.Domain.Entities;
 using AssistantCore.Repository.Domain.Enums;
 using AssistantCore.Service.Application.Abstractions;
+using AssistantCore.Service.Application.Exceptions;
 using AssistantCore.Service.Application.Models.Authentication;
 using AssistantCore.Service.Application.Services.Messages.Authorization;
+using AssistantCore.Service.Application.Services.TenantAdmission;
 
 namespace AssistantCore.Service.Tests.Messages;
 
@@ -29,7 +31,9 @@ public sealed class MessageUserContextServiceTests
         var service = new MessageUserContextService(
             new StubCurrentIdentity { Identity = identity },
             organizationQueries,
-            memberQueries);
+            memberQueries,
+            new StubMicrosoft365OnboardingCompletionChecker(),
+            new TenantAdmissionPolicy());
 
         // When
         var result = await service.GetCurrentAsync(cancellationToken);
@@ -55,7 +59,9 @@ public sealed class MessageUserContextServiceTests
         var service = new MessageUserContextService(
             new StubCurrentIdentity { Identity = identity },
             new StubOrganizationQueries(),
-            memberQueries);
+            memberQueries,
+            new StubMicrosoft365OnboardingCompletionChecker(),
+            new TenantAdmissionPolicy());
 
         // When
         var exception = await Assert.ThrowsAsync<ForbiddenException>(() =>
@@ -77,7 +83,9 @@ public sealed class MessageUserContextServiceTests
         var service = new MessageUserContextService(
             new StubCurrentIdentity { Identity = identity },
             new StubOrganizationQueries { Result = organization },
-            memberQueries);
+            memberQueries,
+            new StubMicrosoft365OnboardingCompletionChecker(),
+            new TenantAdmissionPolicy());
 
         // When
         var exception = await Assert.ThrowsAsync<ForbiddenException>(() =>
@@ -99,7 +107,9 @@ public sealed class MessageUserContextServiceTests
         var service = new MessageUserContextService(
             new StubCurrentIdentity { Identity = identity },
             new StubOrganizationQueries { Result = organization },
-            memberQueries);
+            memberQueries,
+            new StubMicrosoft365OnboardingCompletionChecker(),
+            new TenantAdmissionPolicy());
 
         // When
         var exception = await Assert.ThrowsAsync<ForbiddenException>(() =>
@@ -129,7 +139,9 @@ public sealed class MessageUserContextServiceTests
         var service = new MessageUserContextService(
             new StubCurrentIdentity { Identity = identity },
             new StubOrganizationQueries { Result = organization },
-            memberQueries);
+            memberQueries,
+            new StubMicrosoft365OnboardingCompletionChecker(),
+            new TenantAdmissionPolicy());
 
         // When
         var exception = await Assert.ThrowsAsync<ForbiddenException>(() =>
@@ -150,7 +162,9 @@ public sealed class MessageUserContextServiceTests
         var service = new MessageUserContextService(
             new ThrowingCurrentIdentity(expectedException),
             organizationQueries,
-            memberQueries);
+            memberQueries,
+            new StubMicrosoft365OnboardingCompletionChecker(),
+            new TenantAdmissionPolicy());
 
         // When
         var exception = await Record.ExceptionAsync(() =>
@@ -160,6 +174,90 @@ public sealed class MessageUserContextServiceTests
         Assert.Same(expectedException, exception);
         Assert.Null(organizationQueries.ReceivedIdentityProvider);
         Assert.Equal(0, memberQueries.FindMemberCallCount);
+    }
+
+    [Theory, AutoDomainData]
+    public async Task Given_AnIncompleteSetupAndAStandardUser_When_GetCurrentAsync_Then_ThrowsTenantAdmissionException(
+        Organization organization,
+        OrganizationMember member,
+        AuthenticatedIdentity identity)
+    {
+        // Given
+        organization.Status = RecordStatus.Active;
+        member.OrganizationId = organization.Id;
+        member.Status = RecordStatus.Active;
+        member.Role = OrganizationRole.User;
+        var memberQueries = new StubOrganizationMemberQueries { FoundMember = member };
+        var onboardingCompletionChecker = new StubMicrosoft365OnboardingCompletionChecker
+        {
+            IsComplete = false
+        };
+        var service = new MessageUserContextService(
+            new StubCurrentIdentity { Identity = identity },
+            new StubOrganizationQueries { Result = organization },
+            memberQueries,
+            onboardingCompletionChecker,
+            new TenantAdmissionPolicy());
+
+        // When
+        var exception = await Assert.ThrowsAsync<TenantAdmissionException>(() =>
+            service.GetCurrentAsync(CancellationToken.None));
+
+        // Then
+        Assert.Equal(TenantAdmissionException.TenantAdminRequired, exception.ErrorCode);
+        Assert.Equal(organization.Id, onboardingCompletionChecker.ReceivedOrganizationId);
+    }
+
+    [Theory, AutoDomainData]
+    public async Task Given_AnIncompleteSetupAndAnAdmin_When_GetCurrentAsync_Then_ReturnsUserContext(
+        Organization organization,
+        OrganizationMember member,
+        AuthenticatedIdentity identity)
+    {
+        // Given
+        organization.Status = RecordStatus.Active;
+        member.OrganizationId = organization.Id;
+        member.Status = RecordStatus.Active;
+        member.Role = OrganizationRole.Admin;
+        var memberQueries = new StubOrganizationMemberQueries { FoundMember = member };
+        var service = new MessageUserContextService(
+            new StubCurrentIdentity { Identity = identity },
+            new StubOrganizationQueries { Result = organization },
+            memberQueries,
+            new StubMicrosoft365OnboardingCompletionChecker { IsComplete = false },
+            new TenantAdmissionPolicy());
+
+        // When
+        var result = await service.GetCurrentAsync(CancellationToken.None);
+
+        // Then
+        Assert.Same(member, result.Member);
+    }
+
+    [Theory, AutoDomainData]
+    public async Task Given_ACompleteSetupAndAStandardUser_When_GetCurrentAsync_Then_ReturnsUserContext(
+        Organization organization,
+        OrganizationMember member,
+        AuthenticatedIdentity identity)
+    {
+        // Given
+        organization.Status = RecordStatus.Active;
+        member.OrganizationId = organization.Id;
+        member.Status = RecordStatus.Active;
+        member.Role = OrganizationRole.User;
+        var memberQueries = new StubOrganizationMemberQueries { FoundMember = member };
+        var service = new MessageUserContextService(
+            new StubCurrentIdentity { Identity = identity },
+            new StubOrganizationQueries { Result = organization },
+            memberQueries,
+            new StubMicrosoft365OnboardingCompletionChecker { IsComplete = true },
+            new TenantAdmissionPolicy());
+
+        // When
+        var result = await service.GetCurrentAsync(CancellationToken.None);
+
+        // Then
+        Assert.Same(member, result.Member);
     }
 
     private sealed class ThrowingCurrentIdentity(Exception exception) : ICurrentIdentity

@@ -39,6 +39,48 @@ public sealed class ExceptionMiddlewareTests
     }
 
     [Fact]
+    public async Task Given_ATenantAdmissionException_When_InvokingMiddleware_Then_ReturnsForbiddenWithCode()
+    {
+        // Given
+        const string message = "A tenant administrator must finish the Microsoft 365 setup.";
+        var exception = new TenantAdmissionException(message, TenantAdmissionException.TenantAdminRequired);
+        var context = CreateHttpContext();
+        var middleware = CreateMiddleware(
+            _ => Task.FromException(exception),
+            Environments.Development);
+
+        // When
+        await middleware.InvokeAsync(context);
+
+        // Then
+        using var response = await ReadResponse(context);
+        Assert.Equal(StatusCodes.Status403Forbidden, context.Response.StatusCode);
+        Assert.Equal(message, response.RootElement.GetProperty("Message").GetString());
+        Assert.Equal(
+            TenantAdmissionException.TenantAdminRequired,
+            response.RootElement.GetProperty("Code").GetString());
+    }
+
+    [Fact]
+    public async Task Given_APlainForbiddenException_When_InvokingMiddleware_Then_ReturnsNullCode()
+    {
+        // Given
+        var exception = new ForbiddenException("Organization access denied.");
+        var context = CreateHttpContext();
+        var middleware = CreateMiddleware(
+            _ => Task.FromException(exception),
+            Environments.Development);
+
+        // When
+        await middleware.InvokeAsync(context);
+
+        // Then
+        using var response = await ReadResponse(context);
+        Assert.Equal(StatusCodes.Status403Forbidden, context.Response.StatusCode);
+        Assert.Equal(JsonValueKind.Null, response.RootElement.GetProperty("Code").ValueKind);
+    }
+
+    [Fact]
     public async Task Given_AnUnexpectedExceptionInDevelopment_When_InvokingMiddleware_Then_ReturnsGenericErrorWithDetail()
     {
         // Given

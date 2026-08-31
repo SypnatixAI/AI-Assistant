@@ -2,7 +2,9 @@ using AssistantCore.Repository.Abstractions;
 using AssistantCore.Repository.Domain.Entities;
 using AssistantCore.Repository.Domain.Enums;
 using AssistantCore.Service.Application.Services.AuthenticateUser;
+using AssistantCore.Service.Application.Exceptions;
 using AssistantCore.Service.Application.Models.Authentication;
+using AssistantCore.Service.Application.Services.TenantAdmission;
 
 namespace AssistantCore.Service.Tests.Authentication;
 
@@ -28,6 +30,8 @@ public sealed class AuthenticateUserServiceTests
             organizationQueries,
             new StubOrganizationRepository(),
             new StubOrganizationRoleResolver(),
+            new StubMicrosoft365OnboardingCompletionChecker(),
+            new TenantAdmissionPolicy(),
             timeProvider);
 
         // When
@@ -60,6 +64,8 @@ public sealed class AuthenticateUserServiceTests
             new StubOrganizationQueries(),
             new StubOrganizationRepository(),
             new StubOrganizationRoleResolver(),
+            new StubMicrosoft365OnboardingCompletionChecker(),
+            new TenantAdmissionPolicy(),
             new StubTimeProvider());
 
         // When
@@ -94,6 +100,8 @@ public sealed class AuthenticateUserServiceTests
             organizationQueries,
             new StubOrganizationRepository(),
             new StubOrganizationRoleResolver(),
+            new StubMicrosoft365OnboardingCompletionChecker(),
+            new TenantAdmissionPolicy(),
             timeProvider);
 
         // When
@@ -134,6 +142,8 @@ public sealed class AuthenticateUserServiceTests
             new StubOrganizationQueries { Result = organization },
             new StubOrganizationRepository(),
             new StubOrganizationRoleResolver(),
+            new StubMicrosoft365OnboardingCompletionChecker(),
+            new TenantAdmissionPolicy(),
             new StubTimeProvider());
 
         // When
@@ -159,6 +169,8 @@ public sealed class AuthenticateUserServiceTests
             new StubOrganizationQueries { Result = organization },
             new StubOrganizationRepository(),
             new StubOrganizationRoleResolver(),
+            new StubMicrosoft365OnboardingCompletionChecker(),
+            new TenantAdmissionPolicy(),
             new StubTimeProvider());
 
         // When
@@ -187,6 +199,8 @@ public sealed class AuthenticateUserServiceTests
             new StubOrganizationQueries { Result = organization },
             new StubOrganizationRepository(),
             new StubOrganizationRoleResolver(),
+            new StubMicrosoft365OnboardingCompletionChecker(),
+            new TenantAdmissionPolicy(),
             new StubTimeProvider());
 
         // When
@@ -216,6 +230,8 @@ public sealed class AuthenticateUserServiceTests
             organizationQueries,
             organizationRepository,
             new StubOrganizationRoleResolver(),
+            new StubMicrosoft365OnboardingCompletionChecker(),
+            new TenantAdmissionPolicy(),
             new StubTimeProvider());
 
         // When
@@ -245,6 +261,8 @@ public sealed class AuthenticateUserServiceTests
             organizationQueries,
             new StubOrganizationRepository(),
             roleResolver,
+            new StubMicrosoft365OnboardingCompletionChecker(),
+            new TenantAdmissionPolicy(),
             new StubTimeProvider());
 
         // When
@@ -274,6 +292,8 @@ public sealed class AuthenticateUserServiceTests
             new StubOrganizationQueries { Result = organization },
             new StubOrganizationRepository(),
             roleResolver,
+            new StubMicrosoft365OnboardingCompletionChecker(),
+            new TenantAdmissionPolicy(),
             new StubTimeProvider());
 
         // When
@@ -303,6 +323,8 @@ public sealed class AuthenticateUserServiceTests
             new StubOrganizationQueries { Result = organization },
             new StubOrganizationRepository(),
             roleResolver,
+            new StubMicrosoft365OnboardingCompletionChecker(),
+            new TenantAdmissionPolicy(),
             new StubTimeProvider());
 
         // When
@@ -332,6 +354,8 @@ public sealed class AuthenticateUserServiceTests
             new StubOrganizationQueries { Result = organization },
             new StubOrganizationRepository(),
             roleResolver,
+            new StubMicrosoft365OnboardingCompletionChecker(),
+            new TenantAdmissionPolicy(),
             new StubTimeProvider());
 
         // When
@@ -339,5 +363,98 @@ public sealed class AuthenticateUserServiceTests
 
         // Then
         Assert.Equal(0, memberQueries.UpdateRoleCallCount);
+    }
+
+    [Theory, AutoDomainData]
+    public async Task Given_AnIncompleteSetupAndAStandardUser_When_GetOrganizationAsync_Then_ThrowsTenantAdmissionException(
+        Organization organization,
+        OrganizationMember member,
+        AuthenticatedIdentity authenticatedIdentity)
+    {
+        // Given
+        member.OrganizationId = organization.Id;
+        member.Status = RecordStatus.Active;
+        member.Role = OrganizationRole.User;
+        var memberQueries = new StubOrganizationMemberQueries { FoundMember = member };
+        var onboardingCompletionChecker = new StubMicrosoft365OnboardingCompletionChecker
+        {
+            IsComplete = false
+        };
+        var service = new AuthenticateUserService(
+            new StubCurrentIdentity { Identity = authenticatedIdentity },
+            memberQueries,
+            new StubOrganizationQueries { Result = organization },
+            new StubOrganizationRepository(),
+            new StubOrganizationRoleResolver { Role = OrganizationRole.User },
+            onboardingCompletionChecker,
+            new TenantAdmissionPolicy(),
+            new StubTimeProvider());
+
+        // When
+        var exception = await Assert.ThrowsAsync<TenantAdmissionException>(() =>
+            service.GetOrganizationAsync(CancellationToken.None));
+
+        // Then
+        Assert.Equal(TenantAdmissionException.TenantAdminRequired, exception.ErrorCode);
+        Assert.Equal(organization.Id, onboardingCompletionChecker.ReceivedOrganizationId);
+        Assert.Equal(0, memberQueries.RecordSuccessfulAuthenticationCallCount);
+    }
+
+    [Theory, AutoDomainData]
+    public async Task Given_AnIncompleteSetupAndATenantAdmin_When_GetOrganizationAsync_Then_Succeeds(
+        Organization organization,
+        OrganizationMember member,
+        AuthenticatedIdentity authenticatedIdentity)
+    {
+        // Given
+        member.OrganizationId = organization.Id;
+        member.Status = RecordStatus.Active;
+        member.Role = OrganizationRole.Admin;
+        var memberQueries = new StubOrganizationMemberQueries { FoundMember = member };
+        var service = new AuthenticateUserService(
+            new StubCurrentIdentity { Identity = authenticatedIdentity },
+            memberQueries,
+            new StubOrganizationQueries { Result = organization },
+            new StubOrganizationRepository(),
+            new StubOrganizationRoleResolver { Role = OrganizationRole.Admin },
+            new StubMicrosoft365OnboardingCompletionChecker { IsComplete = false },
+            new TenantAdmissionPolicy(),
+            new StubTimeProvider());
+
+        // When
+        var result = await service.GetOrganizationAsync(CancellationToken.None);
+
+        // Then
+        Assert.Same(member, result.Member);
+        Assert.Equal(1, memberQueries.RecordSuccessfulAuthenticationCallCount);
+    }
+
+    [Theory, AutoDomainData]
+    public async Task Given_ACompleteSetupAndAStandardUser_When_GetOrganizationAsync_Then_Succeeds(
+        Organization organization,
+        OrganizationMember member,
+        AuthenticatedIdentity authenticatedIdentity)
+    {
+        // Given
+        member.OrganizationId = organization.Id;
+        member.Status = RecordStatus.Active;
+        member.Role = OrganizationRole.User;
+        var memberQueries = new StubOrganizationMemberQueries { FoundMember = member };
+        var service = new AuthenticateUserService(
+            new StubCurrentIdentity { Identity = authenticatedIdentity },
+            memberQueries,
+            new StubOrganizationQueries { Result = organization },
+            new StubOrganizationRepository(),
+            new StubOrganizationRoleResolver { Role = OrganizationRole.User },
+            new StubMicrosoft365OnboardingCompletionChecker { IsComplete = true },
+            new TenantAdmissionPolicy(),
+            new StubTimeProvider());
+
+        // When
+        var result = await service.GetOrganizationAsync(CancellationToken.None);
+
+        // Then
+        Assert.Same(member, result.Member);
+        Assert.Equal(1, memberQueries.RecordSuccessfulAuthenticationCallCount);
     }
 }

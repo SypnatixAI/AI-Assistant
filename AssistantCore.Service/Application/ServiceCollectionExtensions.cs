@@ -14,6 +14,7 @@ using AssistantCore.Service.Application.Services.Messages.Tools;
 using AssistantCore.Service.Application.Services.Messages.Validation;
 using AssistantCore.Service.Application.Services.Microsoft365;
 using AssistantCore.Service.Application.Services.Organizations;
+using AssistantCore.Service.Application.Services.TenantAdmission;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -82,6 +83,8 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IConversationMessageListingService, ConversationMessageListingService>();
         services.AddScoped<IConversationAuditWriter, LoggingConversationAuditWriter>();
         services.AddScoped<IConversationLifecycleService, ConversationLifecycleService>();
+        services.AddSingleton<ITenantAdmissionPolicy, TenantAdmissionPolicy>();
+        services.AddScoped<IMicrosoft365OnboardingCompletionChecker, Microsoft365OnboardingCompletionChecker>();
         services.AddScoped<IMessageUserContextService, MessageUserContextService>();
         services.AddScoped<IAuthenticateUserService, AuthenticateUserService>();
         services.AddScoped<IOrganizationRoleResolver, OrganizationRoleResolver>();

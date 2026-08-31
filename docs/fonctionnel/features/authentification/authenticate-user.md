@@ -289,6 +289,15 @@ Le membre cree automatiquement recoit toujours :
 
 A chaque authentification suivante d'un membre deja existant, son role interne est recompare au role derive du token courant et resynchronise si necessaire (promotion `User` -> `Admin` si `tenantAdmin` est ajoute, retrogradation `Admin` -> `User` s'il est retire). Cette synchronisation est idempotente : elle n'ecrit en base que lorsque le role derive differe du role deja enregistre.
 
+### Admission conditionnee a la configuration Microsoft 365
+
+`tenantAdmin` sert a demarrer la configuration Microsoft 365 d'une organisation, pas a rester une autorisation obligatoire pour tous les membres. La regle d'admission generale distingue donc deux periodes :
+
+- **Configuration incomplete** (consentement Microsoft 365 non valide ou aucun site selectionne) : `AssistantCore.Access` reste obligatoire pour tous, et `tenantAdmin` est en plus exige. Un membre standard qui ne l'a pas ne peut ni ouvrir le chat ni utiliser les endpoints Microsoft 365 ; le backend retourne `403 Forbidden` avec le code metier `tenant_admin_required`, y compris sur `authenticateUser` lui-meme, pour que le frontend puisse afficher qu'un administrateur doit terminer la configuration.
+- **Configuration terminee** : `AssistantCore.Access` reste obligatoire, mais `tenantAdmin` n'est plus une condition d'admission. Un membre standard accede normalement au SaaS et au chat. Un `tenantAdmin` reste `Admin` (voir la synchronisation de role ci-dessus), mais ce role n'est plus impose comme condition d'entree pour les autres.
+
+Cette regle s'applique a chaque point d'entree qui resout l'organisation et le membre courants (`authenticateUser`, les endpoints Microsoft 365, et les endpoints de messages/conversations), pas seulement dans le frontend. La definition de "configuration terminee" est unique dans tout le systeme : `IsConsentComplete && HasSelectedSite`, la meme que celle exposee par `GET /api/microsoft365/onboarding` (voir [Indexer les documents SharePoint dans Azure AI Search](../microsoft365/index-sharepoint-content.md)).
+
 Les utilisateurs invites peuvent être autorisés dans la première version
 seulement s’ils possèdent un objet invité dans le tenant Microsoft Entra du
 client et sont affectés explicitement à `AssistantCore.Access`.
@@ -600,6 +609,7 @@ A retourner si :
 - l'entreprise est suspendue
 - l'utilisateur est suspendu
 - l'utilisateur ne peut pas etre utilise localement
+- la configuration Microsoft 365 n'est pas terminee et l'utilisateur n'a pas `tenantAdmin` (code metier `tenant_admin_required`)
 
 ### 500 Internal Server Error
 
