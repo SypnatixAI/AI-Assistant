@@ -18,6 +18,7 @@ public interface IMessageToolOrchestrator
 
     Task<MessageOrchestrationResult> OrchestrateStreamingAsync(
         StartedMessageProcessing processing,
+        ConnectorExecutionContext executionContext,
         SelectedAiModel selectedModel,
         IReadOnlyCollection<AiConversationMessage> conversationHistory,
         IReadOnlyCollection<AiToolDefinition> availableTools,

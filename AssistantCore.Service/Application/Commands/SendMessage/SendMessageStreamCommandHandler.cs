@@ -8,9 +8,9 @@ using AssistantCore.Service.Application.Services.Messages.Authorization;
 using AssistantCore.Service.Application.Services.Messages.Lifecycle;
 using AssistantCore.Service.Application.Services.Messages.Orchestration;
 using AssistantCore.Service.Application.Services.Messages.Responses;
+using AssistantCore.Service.Application.Services.Messages.Streaming;
 using AssistantCore.Service.Application.Services.Messages.Tools;
 using AssistantCore.Service.Application.Services.Messages.Validation;
-using Microsoft.Extensions.Logging;
 
 namespace AssistantCore.Service.Application.Commands.SendMessage;
 
@@ -22,7 +22,7 @@ public sealed class SendMessageStreamCommandHandler(
     IAiToolRegistry toolRegistry,
     IMessageToolOrchestrator orchestrator,
     ISendMessageResponseFactory responseFactory,
-    ILogger<SendMessageStreamCommandHandler> logger)
+    IMessageStreamErrorReporter errorReporter)
     : IRequestHandler<SendMessageStreamCommand, IAsyncEnumerable<SendMessageStreamEvent>>
 {
     public Task<IAsyncEnumerable<SendMessageStreamEvent>> HandleAsync(
@@ -75,6 +75,7 @@ public sealed class SendMessageStreamCommandHandler(
                 cancellationToken);
             var orchestrationResult = await orchestrator.OrchestrateStreamingAsync(
                 processing,
+                userContext.CreateConnectorExecutionContext(),
                 selectedModel,
                 processing.ConversationHistory,
                 availableTools,
@@ -110,9 +111,8 @@ public sealed class SendMessageStreamCommandHandler(
         catch (Exception exception)
         {
             var errorCode = GetErrorCode(exception);
-            logger.LogError(
+            errorReporter.Report(
                 exception,
-                "Message generation failed for conversation {ConversationId}, user message {UserMessageId}. Error code: {ErrorCode}",
                 processing?.ConversationId ?? request.ConversationId,
                 processing?.UserMessageId,
                 errorCode);

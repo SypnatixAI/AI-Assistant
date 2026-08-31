@@ -13,9 +13,9 @@ using AssistantCore.Service.Application.Services.Messages.Authorization;
 using AssistantCore.Service.Application.Services.Messages.Lifecycle;
 using AssistantCore.Service.Application.Services.Messages.Orchestration;
 using AssistantCore.Service.Application.Services.Messages.Responses;
+using AssistantCore.Service.Application.Services.Messages.Streaming;
 using AssistantCore.Service.Application.Services.Messages.Tools;
 using AssistantCore.Service.Application.Services.Messages.Validation;
-using Microsoft.Extensions.Logging.Abstractions;
 
 namespace AssistantCore.Service.Tests.Messages;
 
@@ -100,7 +100,7 @@ public sealed class SendMessageCommandHandlerTests
             new StubToolRegistry(operations),
             orchestrator,
             new StubResponseFactory(operations, response),
-            NullLogger<SendMessageStreamCommandHandler>.Instance);
+            new StubMessageStreamErrorReporter());
 
         // When
         var events = await handler.HandleAsync(
@@ -112,6 +112,11 @@ public sealed class SendMessageCommandHandlerTests
 
         // Then
         Assert.Equal([historyMessage], orchestrator.ReceivedConversationHistory);
+        Assert.Equal(userContext.Organization.Id, orchestrator.ReceivedExecutionContext!.OrganizationId);
+        Assert.Equal(userContext.Member.Id, orchestrator.ReceivedExecutionContext.MemberId);
+        Assert.Equal(
+            userContext.Organization.ExternalTenantId,
+            orchestrator.ReceivedExecutionContext.ExternalTenantId);
     }
 
     [Theory, AutoDomainData]
@@ -135,7 +140,7 @@ public sealed class SendMessageCommandHandlerTests
             new StubToolRegistry(operations),
             new StubOrchestrator(operations, orchestrationResult, progressMessage: progressMessage),
             new StubResponseFactory(operations, response),
-            NullLogger<SendMessageStreamCommandHandler>.Instance);
+            new StubMessageStreamErrorReporter());
 
         // When
         var events = await handler.HandleAsync(
@@ -168,6 +173,7 @@ public sealed class SendMessageCommandHandlerTests
         // Given
         var operations = new List<string>();
         var lifecycle = new StubLifecycleService(operations, processing, completedProcessing);
+        var errorReporter = new StubMessageStreamErrorReporter();
         var handler = new SendMessageStreamCommandHandler(
             new StubCommandValidator(operations),
             new StubUserContextService(operations, userContext),
@@ -179,7 +185,7 @@ public sealed class SendMessageCommandHandlerTests
                 orchestrationResult,
                 new AiProviderTimeoutException(selectedModel.Provider)),
             new StubResponseFactory(operations, response),
-            NullLogger<SendMessageStreamCommandHandler>.Instance);
+            errorReporter);
 
         // When
         var events = await handler.HandleAsync(
@@ -198,6 +204,8 @@ public sealed class SendMessageCommandHandlerTests
             "ai_provider_timeout",
             errorEvent.Data.GetType().GetProperty("Code")?.GetValue(errorEvent.Data));
         Assert.False(lifecycle.ReceivedFailure?.WasCancelled);
+        Assert.IsType<AiProviderTimeoutException>(errorReporter.ReceivedException);
+        Assert.Equal("ai_provider_timeout", errorReporter.ReceivedErrorCode);
     }
 
     [Theory, AutoDomainData]
@@ -417,6 +425,7 @@ public sealed class SendMessageCommandHandlerTests
 
         public async Task<MessageOrchestrationResult> OrchestrateStreamingAsync(
             StartedMessageProcessing processing,
+            ConnectorExecutionContext executionContext,
             SelectedAiModel selectedModel,
             IReadOnlyCollection<AiConversationMessage> conversationHistory,
             IReadOnlyCollection<AiToolDefinition> availableTools,
@@ -431,10 +440,28 @@ public sealed class SendMessageCommandHandlerTests
 
             return await OrchestrateAsync(
                 processing,
+                executionContext,
                 selectedModel,
                 conversationHistory,
                 availableTools,
                 cancellationToken);
+        }
+    }
+
+    private sealed class StubMessageStreamErrorReporter : IMessageStreamErrorReporter
+    {
+        public Exception? ReceivedException { get; private set; }
+
+        public string? ReceivedErrorCode { get; private set; }
+
+        public void Report(
+            Exception exception,
+            Guid? conversationId,
+            Guid? userMessageId,
+            string errorCode)
+        {
+            ReceivedException = exception;
+            ReceivedErrorCode = errorCode;
         }
     }
 

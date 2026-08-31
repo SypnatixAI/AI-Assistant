@@ -97,6 +97,7 @@ public sealed class MessageToolOrchestrator(
 
     public async Task<MessageOrchestrationResult> OrchestrateStreamingAsync(
         StartedMessageProcessing processing,
+        ConnectorExecutionContext executionContext,
         SelectedAiModel selectedModel,
         IReadOnlyCollection<AiConversationMessage> conversationHistory,
         IReadOnlyCollection<AiToolDefinition> availableTools,
@@ -110,6 +111,7 @@ public sealed class MessageToolOrchestrator(
         using var activity = StartActivity(selectedModel, streaming: true);
         var state = MessageOrchestrationState.Start(
             processing,
+            executionContext,
             selectedModel,
             conversationHistory,
             availableTools,

@@ -11,6 +11,7 @@ using AssistantCore.Service.Application.Services.Messages.Lifecycle;
 using AssistantCore.Service.Application.Services.Messages.Memory;
 using AssistantCore.Service.Application.Services.Messages.Orchestration;
 using AssistantCore.Service.Application.Services.Messages.Responses;
+using AssistantCore.Service.Application.Services.Messages.Streaming;
 using AssistantCore.Service.Application.Services.Messages.Tools;
 using AssistantCore.Service.Application.Services.Messages.Validation;
 using AssistantCore.Service.Application.Services.Microsoft365;
@@ -96,6 +97,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IConversationMemorySummaryService, ConversationMemorySummaryService>();
         services.AddScoped<IMessageToolOrchestrator, MessageToolOrchestrator>();
         services.AddSingleton<ISendMessageResponseFactory, SendMessageResponseFactory>();
+        services.AddScoped<IMessageStreamErrorReporter, MessageStreamErrorReporter>();
         services.AddScoped<IAiModelTurnService, AiModelTurnService>();
         services.AddScoped<IToolCallBatchExecutor, ToolCallBatchExecutor>();
         services.AddScoped<IOrchestrationContinuationPolicy, OrchestrationContinuationPolicy>();

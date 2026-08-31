@@ -1,6 +1,7 @@
 using AssistantCore.Service.Application.Configuration;
 using AssistantCore.Service.Application.Exceptions;
 using AssistantCore.Service.Application.Models.Messages.AiModels;
+using AssistantCore.Service.Application.Models.Messages.Connectors;
 using AssistantCore.Service.Application.Models.Messages.Lifecycle;
 using AssistantCore.Service.Application.Models.Messages.Orchestration;
 using AssistantCore.Service.Application.Models.Messages.Tools;
@@ -86,6 +87,7 @@ public sealed class MessageToolOrchestratorTests
     [Theory, AutoDomainData]
     public async Task Given_AFinalStreamingAnswer_When_OrchestrateStreamingAsync_Then_ForwardsAnswerDeltasAndBuildsResult(
         StartedMessageProcessing processing,
+        ConnectorExecutionContext executionContext,
         SelectedAiModel selectedModel,
         MessageOrchestrationResult generatedResult,
         DateTimeOffset now)
@@ -109,6 +111,7 @@ public sealed class MessageToolOrchestratorTests
         // When
         var result = await orchestrator.OrchestrateStreamingAsync(
             processing,
+            executionContext,
             selectedModel,
             [],
             [],
@@ -129,6 +132,7 @@ public sealed class MessageToolOrchestratorTests
     [Theory, AutoDomainData]
     public async Task Given_AnUnsafeFinalStreamingAnswer_When_OrchestrateStreamingAsync_Then_ForwardsTheSanitizedBuiltAnswer(
         StartedMessageProcessing processing,
+        ConnectorExecutionContext executionContext,
         SelectedAiModel selectedModel,
         MessageOrchestrationResult generatedResult,
         DateTimeOffset now)
@@ -152,6 +156,7 @@ public sealed class MessageToolOrchestratorTests
         // When
         var result = await orchestrator.OrchestrateStreamingAsync(
             processing,
+            executionContext,
             selectedModel,
             [],
             [],
@@ -172,11 +177,13 @@ public sealed class MessageToolOrchestratorTests
     [Theory, AutoDomainData]
     public async Task Given_AnIntermediateToolTurn_When_OrchestrateStreamingAsync_Then_ReportsProgressWithoutForwardingItsAnswer(
         StartedMessageProcessing processing,
+        ConnectorExecutionContext executionContext,
         SelectedAiModel selectedModel,
-        MessageOrchestrationResult expectedResult,
+        MessageOrchestrationResult generatedResult,
         DateTimeOffset now)
     {
         // Given
+        var expectedResult = generatedResult with { Answer = "Réponse finale" };
         var operations = new List<string>();
         var receivedProgress = new List<string>();
         var receivedDeltas = new List<string>();
@@ -204,6 +211,7 @@ public sealed class MessageToolOrchestratorTests
         // When
         var result = await orchestrator.OrchestrateStreamingAsync(
             processing,
+            executionContext,
             selectedModel,
             [],
             [],
