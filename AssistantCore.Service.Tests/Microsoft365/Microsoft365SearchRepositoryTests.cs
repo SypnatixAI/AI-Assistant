@@ -55,11 +55,13 @@ public sealed class Microsoft365SearchRepositoryTests
                 ApiKey = apiKey
             }),
             new StubEmbeddingGenerator(queryVector));
+        var dateFrom = new DateOnly(2026, 1, 2);
+        var dateTo = new DateOnly(2026, 2, 3);
         var parameters = new Microsoft365SearchParameters(
             query,
             ["sharepoint"],
-            null,
-            null,
+            dateFrom,
+            dateTo,
             new Microsoft365SearchSecurityContext(
                 organizationId,
                 userId.ToString("D"),
@@ -78,13 +80,19 @@ public sealed class Microsoft365SearchRepositoryTests
         Assert.Contains($"allowedUserIds/any(id: id eq '{userId:D}')", filter, StringComparison.Ordinal);
         Assert.Contains(firstGroupId.ToString("D"), filter, StringComparison.Ordinal);
         Assert.Contains(secondGroupId.ToString("D"), filter, StringComparison.Ordinal);
+        Assert.Contains("sourceType eq 'sharepoint'", filter, StringComparison.Ordinal);
+        Assert.Contains("modifiedAt ge 2026-01-02T00:00:00Z", filter, StringComparison.Ordinal);
+        Assert.Contains("modifiedAt lt 2026-02-04T00:00:00Z", filter, StringComparison.Ordinal);
         Assert.Equal(
             "chunkId,title,content,url,modifiedAt",
             document.RootElement.GetProperty("select").GetString());
         Assert.DoesNotContain("allowedUserIds", document.RootElement.GetProperty("select").GetString());
         var vectorQuery = document.RootElement.GetProperty("vectorQueries")[0];
         Assert.Equal("contentVector", vectorQuery.GetProperty("fields").GetString());
+        Assert.Equal(50, vectorQuery.GetProperty("k").GetInt32());
         Assert.Equal(queryVector, vectorQuery.GetProperty("vector").EnumerateArray().Select(value => value.GetSingle()));
+        Assert.Equal("semantic", document.RootElement.GetProperty("queryType").GetString());
+        Assert.Equal("m365-semantic", document.RootElement.GetProperty("semanticConfiguration").GetString());
     }
 
     private sealed class StubEmbeddingGenerator(IReadOnlyList<float> vector)

@@ -15,4 +15,14 @@ public interface IMessageToolOrchestrator
         IReadOnlyCollection<AiConversationMessage> conversationHistory,
         IReadOnlyCollection<AiToolDefinition> availableTools,
         CancellationToken cancellationToken);
+
+    Task<MessageOrchestrationResult> OrchestrateStreamingAsync(
+        StartedMessageProcessing processing,
+        ConnectorExecutionContext executionContext,
+        SelectedAiModel selectedModel,
+        IReadOnlyCollection<AiConversationMessage> conversationHistory,
+        IReadOnlyCollection<AiToolDefinition> availableTools,
+        Func<string, CancellationToken, ValueTask> onProgress,
+        Func<string, CancellationToken, ValueTask> onAnswerDelta,
+        CancellationToken cancellationToken);
 }

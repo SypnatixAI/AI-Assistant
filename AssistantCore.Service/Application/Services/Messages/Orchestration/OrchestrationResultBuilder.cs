@@ -1,4 +1,6 @@
+using System.Text.RegularExpressions;
 using AssistantCore.Service.Application.Exceptions;
+using AssistantCore.Service.Application.Models.Messages;
 using AssistantCore.Service.Application.Models.Messages.AiModels;
 using AssistantCore.Service.Application.Models.Messages.Orchestration;
 using AssistantCore.Service.Application.Models.Messages.Tools;
@@ -6,12 +8,9 @@ using AssistantCore.Service.Application.Services.Messages.Evidence;
 
 namespace AssistantCore.Service.Application.Services.Messages.Orchestration;
 
-public sealed class OrchestrationResultBuilder(
+public sealed partial class OrchestrationResultBuilder(
     IEvidenceCitationResolver citationResolver) : IOrchestrationResultBuilder
 {
-    public const string InsufficientInformationAnswer =
-        "The available information is insufficient to answer with confidence.";
-
     public MessageOrchestrationResult Build(
         MessageOrchestrationState state,
         AiModelResponse finalResponse)
@@ -25,6 +24,8 @@ public sealed class OrchestrationResultBuilder(
         var citedEvidence = citationResolver.Resolve(
             finalResponse.Decision.CitedEvidenceIds,
             state.CollectedEvidence);
+        ThrowWhenAnyCitationIsUnknown(state, finalResponse.Decision, citedEvidence);
+        ThrowWhenGroundedAnswerHasNoCitation(state, finalResponse.Decision, citedEvidence);
 
         return new MessageOrchestrationResult(
             answer,
@@ -36,16 +37,49 @@ public sealed class OrchestrationResultBuilder(
 
     private static string BuildAnswer(
         MessageOrchestrationState state,
-        AiModelDecision decision) =>
-        decision.Type switch
+        AiModelDecision decision)
+    {
+        var answer = decision.Type switch
         {
-            AiModelDecisionType.Answer
+            AiModelDecisionType.Answer or
+            AiModelDecisionType.AskClarification or
+            AiModelDecisionType.InsufficientInformation
                 when !string.IsNullOrWhiteSpace(decision.Answer) =>
                 decision.Answer.Trim(),
-            AiModelDecisionType.InsufficientInformation => InsufficientInformationAnswer,
             _ => throw new AiProviderInvalidResponseException(
                 state.SelectedModel.Provider)
         };
+
+        var sanitizedAnswer = EvidenceIdentifierPattern()
+            .Replace(answer, string.Empty)
+            .Trim();
+
+        return !string.IsNullOrWhiteSpace(sanitizedAnswer)
+            ? sanitizedAnswer
+            : throw new AiProviderInvalidResponseException(state.SelectedModel.Provider);
+    }
+
+    [GeneratedRegex(
+        @"[ \t]*\[?evidence-[a-f0-9]{24}\]?",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    private static partial Regex EvidenceIdentifierPattern();
+
+    private static void ThrowWhenAnyCitationIsUnknown(
+        MessageOrchestrationState state,
+        AiModelDecision decision,
+        IReadOnlyCollection<RetrievedEvidence> citedEvidence)
+    {
+        var requestedEvidenceIds = decision.CitedEvidenceIds
+            .Where(evidenceId => !string.IsNullOrWhiteSpace(evidenceId))
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+
+        if (requestedEvidenceIds.Length != decision.CitedEvidenceIds.Count
+            || citedEvidence.Count != requestedEvidenceIds.Length)
+        {
+            throw new AiProviderInvalidResponseException(state.SelectedModel.Provider);
+        }
+    }
 
     private static void ThrowWhenAllSourcesFailed(MessageOrchestrationState state)
     {
@@ -55,6 +89,19 @@ public sealed class OrchestrationResultBuilder(
             && state.CollectedEvidence.Count == 0)
         {
             throw new ExternalSourcesUnavailableException();
+        }
+    }
+
+    private static void ThrowWhenGroundedAnswerHasNoCitation(
+        MessageOrchestrationState state,
+        AiModelDecision decision,
+        IReadOnlyCollection<RetrievedEvidence> citedEvidence)
+    {
+        if (decision.Type == AiModelDecisionType.Answer
+            && state.CollectedEvidence.Count > 0
+            && citedEvidence.Count == 0)
+        {
+            throw new AiProviderInvalidResponseException(state.SelectedModel.Provider);
         }
     }
 }

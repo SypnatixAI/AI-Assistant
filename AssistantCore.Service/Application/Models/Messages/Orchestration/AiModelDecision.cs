@@ -7,4 +7,5 @@ public sealed record AiModelDecision(
     string Explanation,
     IReadOnlyCollection<AiRequestedToolCall> ToolCalls,
     string? Answer,
-    IReadOnlyCollection<string> CitedEvidenceIds);
+    IReadOnlyCollection<string> CitedEvidenceIds,
+    string? ProgressMessage = null);

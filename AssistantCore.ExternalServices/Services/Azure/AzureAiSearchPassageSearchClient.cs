@@ -11,6 +11,8 @@ namespace AssistantCore.ExternalServices.Services.Azure;
 public sealed class AzureAiSearchPassageSearchClient
 {
     private const string ApiVersion = "2025-09-01";
+    private const string SemanticConfigurationName = "m365-semantic";
+    private const int SemanticCandidateCount = 50;
     private static readonly string[] SearchScopes = ["https://search.azure.com/.default"];
     private readonly HttpClient httpClient;
     private readonly TokenCredential credential;
@@ -68,6 +70,8 @@ public sealed class AzureAiSearchPassageSearchClient
             ["search"] = query,
             ["filter"] = filter,
             ["select"] = "chunkId,title,content,url,modifiedAt",
+            ["queryType"] = "semantic",
+            ["semanticConfiguration"] = SemanticConfigurationName,
             ["top"] = maximumResults
         };
         if (queryVector is { Count: > 0 })
@@ -79,7 +83,7 @@ public sealed class AzureAiSearchPassageSearchClient
                     kind = "vector",
                     vector = queryVector,
                     fields = "contentVector",
-                    k = maximumResults
+                    k = Math.Max(maximumResults, SemanticCandidateCount)
                 }
             };
         }
@@ -144,7 +148,7 @@ public sealed class AzureAiSearchPassageSearchClient
             document.ChunkId,
             document.Title,
             document.Content,
-            document.Score,
+            document.RerankerScore ?? document.Score,
             document.Url,
             document.ModifiedAt);
     }
@@ -172,5 +176,6 @@ public sealed class AzureAiSearchPassageSearchClient
         [property: JsonPropertyName("content")] string? Content,
         [property: JsonPropertyName("url")] string? Url,
         [property: JsonPropertyName("modifiedAt")] DateTimeOffset? ModifiedAt,
-        [property: JsonPropertyName("@search.score")] double? Score);
+        [property: JsonPropertyName("@search.score")] double? Score,
+        [property: JsonPropertyName("@search.rerankerScore")] double? RerankerScore);
 }

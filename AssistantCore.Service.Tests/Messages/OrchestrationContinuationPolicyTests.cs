@@ -28,7 +28,7 @@ public sealed class OrchestrationContinuationPolicyTests
     }
 
     [Theory, AutoDomainData]
-    public void Given_TheLastToolRoundAddedNoEvidence_When_Evaluate_Then_Stops(
+    public void Given_TheLastToolRoundAddedNoEvidence_When_EvaluateWithADifferentSearch_Then_Continues(
         StartedMessageProcessing processing,
         DateTimeOffset now)
     {
@@ -44,8 +44,8 @@ public sealed class OrchestrationContinuationPolicyTests
         var decision = policy.Evaluate(state, modelDecision);
 
         // Then
-        Assert.False(decision.CanContinue);
-        Assert.Equal(OrchestrationStopReason.NoNewEvidence, decision.StopReason);
+        Assert.True(decision.CanContinue);
+        Assert.Null(decision.StopReason);
     }
 
     [Theory, AutoDomainData]

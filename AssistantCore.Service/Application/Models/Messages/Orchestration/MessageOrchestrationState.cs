@@ -25,7 +25,9 @@ public sealed class MessageOrchestrationState
     {
         MessageProcessing = messageProcessing;
         SelectedModel = selectedModel;
-        ConversationHistory = conversationHistory.ToArray();
+        ConversationHistory = LimitConversationHistory(
+            conversationHistory,
+            limits.MaximumContextSize);
         AllowedTools = allowedTools.ToArray();
         ToolExecutionContext = toolExecutionContext;
         Budget = new OrchestrationBudgetTracker(limits, startedAtUtc);
@@ -60,6 +62,37 @@ public sealed class MessageOrchestrationState
     public bool HasExecutedToolCalls { get; private set; }
 
     public bool LastToolRoundAddedEvidence { get; private set; }
+
+    public bool FinalResponseRequired { get; private set; }
+
+    public OrchestrationBudgetType? FinalResponseBudget { get; private set; }
+
+    private static IReadOnlyCollection<AiConversationMessage> LimitConversationHistory(
+        IReadOnlyCollection<AiConversationMessage> history,
+        int maximumContextSize)
+    {
+        // Keep a conservative character budget for history so the current question,
+        // tools and evidence still have room in the model context.
+        var maximumHistoryCharacters = Math.Max(1, maximumContextSize * 3 / 4);
+        var selected = new List<AiConversationMessage>();
+        var characterCount = 0;
+
+        foreach (var message in history.Reverse())
+        {
+            var messageCharacters = message.Content.Length;
+            if (selected.Count > 0
+                && characterCount + messageCharacters > maximumHistoryCharacters)
+            {
+                break;
+            }
+
+            selected.Add(message);
+            characterCount += messageCharacters;
+        }
+
+        selected.Reverse();
+        return selected;
+    }
 
     public void RecordModelResponse(
         AiModelResponse response,
@@ -105,6 +138,12 @@ public sealed class MessageOrchestrationState
         HasExecutedToolCalls = true;
         LastToolRoundAddedEvidence =
             _collectedEvidence.Count > evidenceCountBeforeToolRound;
+    }
+
+    public void RequireFinalResponse(OrchestrationBudgetType exceededBudget)
+    {
+        FinalResponseRequired = true;
+        FinalResponseBudget = exceededBudget;
     }
 
     private void CollectNewEvidence(IReadOnlyCollection<RetrievedEvidence> evidence)

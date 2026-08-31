@@ -2,6 +2,7 @@ using AssistantCore.Repository.Domain.Entities;
 using AssistantCore.Repository.Domain.Enums;
 using AssistantCore.Repository.Repositories;
 using AssistantCore.Service.Application.Configuration;
+using AssistantCore.Service.Application.Models.Microsoft365;
 using AssistantCore.Service.Application.Models.Microsoft365.ContentExtraction;
 using AssistantCore.Service.Application.Models.Microsoft365.Permissions;
 using Microsoft.Extensions.Options;
@@ -128,6 +129,9 @@ public sealed class Microsoft365DocumentProcessingService(
             throw new InvalidDataException($"Document extraction ended with {extraction.Status}.");
         }
 
+        var sourceType = source.Kind == Microsoft365SourceKind.OneDrive
+            ? "onedrive"
+            : "sharepoint";
         var passages = chunkingService.CreateChunks(
             work.OrganizationId,
             source.Id,
@@ -138,14 +142,16 @@ public sealed class Microsoft365DocumentProcessingService(
             Path.GetFileNameWithoutExtension(work.Name),
             work.WebUrl,
             work.LastModifiedDateTime,
-            extraction.Units);
-        if (passages.Count == 0)
+            extraction.Units)
+            .Select(passage => passage with { SourceType = sourceType })
+            .ToArray();
+        if (passages.Length == 0)
         {
             throw new InvalidDataException("Document extraction did not produce indexable passages.");
         }
 
         var vectors = await embeddingGenerator.CreateAsync(
-            passages.Select(passage => passage.Content).ToArray(),
+            passages.Select(BuildEmbeddingContent).ToArray(),
             cancellationToken);
         var embeddedPassages = passages
             .Select((passage, index) => passage with { ContentVector = vectors[index] })
@@ -191,6 +197,9 @@ public sealed class Microsoft365DocumentProcessingService(
         indexed.LastModifiedAt = work.LastModifiedDateTime;
         await indexedContentRepository.SaveAsync(indexed, cancellationToken);
     }
+
+    private static string BuildEmbeddingContent(Microsoft365SearchPassage passage) =>
+        $"Document: {passage.Title}\n\n{passage.Content}";
 
     private async Task DeleteAsync(
         Microsoft365DocumentWork work,

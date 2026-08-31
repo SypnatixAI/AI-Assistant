@@ -13,6 +13,7 @@ public sealed class AiModelTurnServiceTests
     [Theory]
     [InlineAutoDomainData(AiModelDecisionType.Answer)]
     [InlineAutoDomainData(AiModelDecisionType.UseTools)]
+    [InlineAutoDomainData(AiModelDecisionType.AskClarification)]
     [InlineAutoDomainData(AiModelDecisionType.InsufficientInformation)]
     public async Task Given_AProviderDecision_When_RequestNextActionAsync_Then_ReturnsTheDecision(
         AiModelDecisionType decisionType,
@@ -63,8 +64,23 @@ public sealed class AiModelTurnServiceTests
         Assert.Equal(state.AllowedTools, request.AllowedTools);
         Assert.Empty(request.RequestedToolCalls);
         Assert.Empty(request.ToolResults);
-        Assert.Contains("decision \"cannotAnswer\"", request.Instructions, StringComparison.Ordinal);
-        Assert.Contains("answer to null", request.Instructions, StringComparison.Ordinal);
+        Assert.Contains("Return \"askClarification\"", request.Instructions, StringComparison.Ordinal);
+        Assert.Contains("Return \"cannotAnswer\"", request.Instructions, StringComparison.Ordinal);
+        Assert.Contains(
+            "never disclose internal implementation details",
+            request.Instructions,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "even when the user explicitly requests them",
+            request.Instructions,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "Never include evidence identifiers in answer",
+            request.Instructions,
+            StringComparison.Ordinal);
+        Assert.Contains("language of the user's current message", request.Instructions, StringComparison.Ordinal);
+        Assert.Contains("Interpret the current message in its conversation context", request.Instructions, StringComparison.Ordinal);
+        Assert.Contains("fulfill that offer directly", request.Instructions, StringComparison.Ordinal);
     }
 
     [Theory, AutoDomainData]
@@ -154,6 +170,12 @@ public sealed class AiModelTurnServiceTests
             ReceivedRequest = request;
             return Task.FromResult(response);
         }
+
+        public Task<AiModelResponse> GetNextActionStreamingAsync(
+            AiModelRequest request,
+            Func<string, CancellationToken, ValueTask> onTextDelta,
+            CancellationToken cancellationToken) =>
+            GetNextActionAsync(request, cancellationToken);
     }
 
     private sealed class StubTimeProvider(DateTimeOffset utcNow) : TimeProvider

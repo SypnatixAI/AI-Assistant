@@ -115,6 +115,91 @@ public sealed class ConversationRepository(AssistantCoreDbContext dbContext)
             oldest?.Id);
     }
 
+    public async Task<IReadOnlyList<ConversationMessageItem>> GetConversationHistoryAsync(
+        Guid organizationId,
+        Guid ownerMemberId,
+        Guid conversationId,
+        CancellationToken cancellationToken = default)
+    {
+        var summary = await dbContext.Conversations
+            .AsNoTracking()
+            .Where(conversation =>
+                conversation.Id == conversationId
+                && conversation.OrganizationId == organizationId
+                && conversation.OwnerMemberId == ownerMemberId
+                && conversation.DeletedAt == null)
+            .Select(conversation => conversation.ContextSummary)
+            .SingleOrDefaultAsync(cancellationToken);
+
+        var messages = await dbContext.Messages
+            .AsNoTracking()
+            .Where(message =>
+                message.ConversationId == conversationId
+                && message.Conversation.OrganizationId == organizationId
+                && message.Conversation.OwnerMemberId == ownerMemberId
+                && message.Conversation.DeletedAt == null
+                && message.ProcessingStatus == MessageProcessingStatus.Completed)
+            .OrderBy(message => message.CreatedAt)
+            .ThenBy(message => message.Id)
+            .Select(message => new ConversationMessageItem(
+                message.Id,
+                message.Role,
+                message.Content,
+                message.ProcessingStatus,
+                message.Model,
+                message.CreatedAt,
+                message.UpdatedAt,
+                Array.Empty<ConversationMessageSourceItem>()))
+            .ToListAsync(cancellationToken);
+
+        if (string.IsNullOrWhiteSpace(summary))
+        {
+            return messages;
+        }
+
+        return
+        [
+            new ConversationMessageItem(
+                Guid.Empty,
+                MessageRole.Assistant,
+                $"[Conversation summary]\n{summary}",
+                MessageProcessingStatus.Completed,
+                null,
+                DateTimeOffset.MinValue,
+                DateTimeOffset.MinValue,
+                Array.Empty<ConversationMessageSourceItem>()),
+            .. messages.TakeLast(20)
+        ];
+    }
+
+    public async Task<bool> UpdateConversationContextSummaryAsync(
+        Guid organizationId,
+        Guid ownerMemberId,
+        Guid conversationId,
+        string summary,
+        DateTimeOffset updatedAt,
+        CancellationToken cancellationToken = default)
+    {
+        var conversation = await dbContext.Conversations.SingleOrDefaultAsync(
+            candidate => candidate.Id == conversationId
+                && candidate.OrganizationId == organizationId
+                && candidate.OwnerMemberId == ownerMemberId
+                && candidate.DeletedAt == null,
+            cancellationToken);
+
+        if (conversation is null)
+        {
+            return false;
+        }
+
+        conversation.ContextSummary = summary.Length <= 12000
+            ? summary
+            : summary[..12000];
+        conversation.ContextSummaryUpdatedAt = updatedAt;
+        await dbContext.SaveChangesAsync(cancellationToken);
+        return true;
+    }
+
     public async Task<ConversationListPage> ListConversationsAsync(
         Guid organizationId,
         Guid ownerMemberId,
