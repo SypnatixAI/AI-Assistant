@@ -36,13 +36,14 @@ public sealed class SendMessageCommandHandler(
             userContext.Organization,
             userContext.Member,
             cancellationToken);
+        processing.SelectedModel = selectedModel;
         var availableTools = await toolRegistry.GetAvailableToolsAsync(
             userContext.Organization.Id,
             cancellationToken);
         var orchestrationResult = await orchestrator.OrchestrateAsync(
             processing,
             selectedModel,
-            [],
+            processing.ConversationHistory,
             availableTools,
             cancellationToken);
         var completedProcessing = await lifecycleService.CompleteAsync(

@@ -8,6 +8,7 @@ using AssistantCore.Service.Application.Services.Messages;
 using AssistantCore.Service.Application.Services.Messages.Authorization;
 using AssistantCore.Service.Application.Services.Messages.Evidence;
 using AssistantCore.Service.Application.Services.Messages.Lifecycle;
+using AssistantCore.Service.Application.Services.Messages.Memory;
 using AssistantCore.Service.Application.Services.Messages.Orchestration;
 using AssistantCore.Service.Application.Services.Messages.Responses;
 using AssistantCore.Service.Application.Services.Messages.Tools;
@@ -81,6 +82,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IOrganizationManagementService, OrganizationManagementService>();
         services.AddMicrosoft365Application();
         services.AddScoped<IMessageProcessingLifecycleService, MessageProcessingLifecycleService>();
+        services.AddScoped<IConversationMemorySummaryService, ConversationMemorySummaryService>();
         services.AddScoped<IMessageToolOrchestrator, MessageToolOrchestrator>();
         services.AddSingleton<ISendMessageResponseFactory, SendMessageResponseFactory>();
         services.AddScoped<IAiModelTurnService, AiModelTurnService>();

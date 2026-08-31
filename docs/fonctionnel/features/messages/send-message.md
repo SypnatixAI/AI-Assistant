@@ -20,6 +20,8 @@
 - [Connecteurs directs](#messages-direct-connectors)
 - [Normalisation des preuves](#messages-evidence)
 - [Orchestration modele-outils](#messages-orchestration)
+- [Clarification et langue](#messages-clarification-language)
+- [Evaluation corrective des preuves](#messages-corrective-evidence)
 - [Construction et validation de la reponse](#17-construire-la-reponse-finale)
 - [Finalisation atomique](#messages-completion)
 - [Gestion des echecs](#messages-resilience)
@@ -794,10 +796,12 @@ contenu d'un message.
 
 Apres chaque resultat d'outil, le modele doit evaluer si les preuves sont suffisantes.
 
-Il retourne une decision structuree parmi trois valeurs :
+Il retourne une decision structuree parmi quatre valeurs :
 
 - `continue` : une nouvelle recherche utile est encore possible
 - `answer` : les preuves disponibles permettent de repondre
+- `askClarification` : une information que seul l'utilisateur peut fournir
+  manque pour poursuivre utilement
 - `cannotAnswer` : aucune recherche supplementaire raisonnable ne permettra de repondre
 
 #### Decision `continue`
@@ -876,6 +880,47 @@ Le modele choisit `cannotAnswer` lorsque :
 
 Cette reponse est enregistree normalement. Elle indique clairement la limite des informations trouvees sans inventer une explication.
 
+<a id="messages-clarification-language"></a>
+#### Decision `askClarification` et langue de la reponse
+
+Le modele choisit `askClarification` uniquement lorsqu'il ne peut pas resoudre
+le sujet ou la contrainte manquante depuis le message courant, l'historique ou
+les preuves deja collectees. Il pose la plus petite question permettant de
+reprendre le travail. Il ne demande pas a l'utilisateur une information qu'un
+outil autorise peut raisonnablement retrouver.
+
+Chaque decision terminale contient un message destine a l'utilisateur. Ce
+message est produit dans la langue du message utilisateur courant. Le backend
+ne remplace jamais ce texte par un fallback anglais, francais ou propre a une
+autre langue. Une reponse insuffisante explique ce qui a ete consulte, ce qui
+manque et, lorsque pertinent, la prochaine information utile.
+
+La clarification est enregistree comme un message Assistant normal. La reponse
+suivante de l'utilisateur reprend la meme conversation et beneficie du contexte
+precedent.
+
+<a id="messages-corrective-evidence"></a>
+#### Evaluation corrective des preuves
+
+Apres chaque recherche, l'orchestrateur evalue separement :
+
+- la pertinence des passages pour la question courante;
+- la couverture des faits demandes;
+- les informations encore manquantes;
+- les contradictions entre sources;
+- l'existence d'une recherche differente et raisonnablement utile.
+
+Une recherche vide ou faible ne termine pas automatiquement le traitement. Le
+modele peut reformuler la requete, decomposer la question ou choisir une autre
+source, dans les limites du budget. Une nouvelle recherche doit viser un manque
+precis et ne doit pas seulement accumuler plus de passages.
+
+Le backend accepte `cannotAnswer` seulement apres avoir verifie que la decision
+est compatible avec l'etat reel de l'orchestration. Lorsqu'un budget technique
+est atteint, il interdit les nouveaux outils et demande un dernier tour de
+synthese avec les preuves deja disponibles au lieu de transformer la limite en
+erreur fournisseur.
+
 #### Comment le modele decide d'arreter
 
 Les instructions d'orchestration doivent demander au modele de verifier :
@@ -939,7 +984,10 @@ Avant de retourner la reponse :
 
 - verifier que la reponse n'est pas vide
 - verifier que les sources citees existent dans les resultats recuperes
-- retirer les references inconnues
+- rejeter une decision qui repose sur des references inconnues
+- verifier que les affirmations importantes sont soutenues par les preuves citees
+- verifier que toutes les parties essentielles de la question sont traitees ou signalees comme manquantes
+- verifier que la reponse utilise la langue du message utilisateur courant
 - construire la liste finale `sources`
 
 Si les informations sont insuffisantes, la reponse doit le dire clairement, par exemple :

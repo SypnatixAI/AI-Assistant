@@ -25,6 +25,20 @@ public interface IConversationRepository
         Guid? cursorId,
         CancellationToken cancellationToken = default);
 
+    Task<IReadOnlyList<ConversationMessageItem>> GetConversationHistoryAsync(
+        Guid organizationId,
+        Guid ownerMemberId,
+        Guid conversationId,
+        CancellationToken cancellationToken = default);
+
+    Task<bool> UpdateConversationContextSummaryAsync(
+        Guid organizationId,
+        Guid ownerMemberId,
+        Guid conversationId,
+        string summary,
+        DateTimeOffset updatedAt,
+        CancellationToken cancellationToken = default);
+
     /// <summary>
     /// Retourne une page de resumes de conversations visibles (statut Active),
     /// triees par UpdatedAt puis Id decroissants. Lit toujours limit + 1 elements

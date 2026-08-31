@@ -30,7 +30,7 @@ public sealed class Microsoft365SearchRepositoryAdapter(
                 "AzureSearch endpoint and index name are required for Microsoft 365 search.");
         }
 
-        var filter = BuildSecurityFilter(parameters.SecurityContext);
+        var filter = BuildFilter(parameters);
         IReadOnlyList<float>? queryVector = null;
         if (embeddingGenerator is not null)
         {
@@ -90,6 +90,34 @@ public sealed class Microsoft365SearchRepositoryAdapter(
         return $"organizationId eq '{organizationId}' and isAvailable eq true and ({string.Join(" or ", accessClauses)})";
     }
 
+    internal static string BuildFilter(Microsoft365SearchParameters parameters)
+    {
+        var clauses = new List<string>
+        {
+            BuildSecurityFilter(parameters.SecurityContext)
+        };
+        if (parameters.SourceTypes is { Count: > 0 })
+        {
+            var sourceTypes = parameters.SourceTypes
+                .Select(sourceType => sourceType.ToLowerInvariant())
+                .Distinct(StringComparer.Ordinal)
+                .OrderBy(sourceType => sourceType, StringComparer.Ordinal);
+            clauses.Add($"sourceType eq '{string.Join("' or sourceType eq '", sourceTypes)}'");
+        }
+
+        if (parameters.DateFrom is { } dateFrom)
+        {
+            clauses.Add($"modifiedAt ge {FormatDate(dateFrom)}");
+        }
+
+        if (parameters.DateTo is { } dateTo)
+        {
+            clauses.Add($"modifiedAt lt {FormatDate(dateTo.AddDays(1))}");
+        }
+
+        return string.Join(" and ", clauses.Select(clause => $"({clause})"));
+    }
+
     private static void ValidateParameters(Microsoft365SearchParameters parameters)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(parameters.Query);
@@ -120,4 +148,7 @@ public sealed class Microsoft365SearchRepositoryAdapter(
 
         return identifier.ToString("D");
     }
+
+    private static string FormatDate(DateOnly date) =>
+        $"{date:yyyy-MM-dd}T00:00:00Z";
 }

@@ -38,12 +38,7 @@ public sealed class AzureAiSearchIndexClient
         using var get = new HttpRequestMessage(HttpMethod.Get, uri);
         await AuthorizeAsync(get, apiKey, cancellationToken);
         using var existing = await httpClient.SendAsync(get, cancellationToken);
-        if (existing.IsSuccessStatusCode)
-        {
-            return;
-        }
-
-        if (existing.StatusCode != HttpStatusCode.NotFound)
+        if (!existing.IsSuccessStatusCode && existing.StatusCode != HttpStatusCode.NotFound)
         {
             throw new AzureAiSearchExternalException(
                 $"Azure AI Search index validation failed with status {(int)existing.StatusCode}.");
@@ -62,6 +57,22 @@ public sealed class AzureAiSearchIndexClient
                 {
                     algorithms = new[] { new { name = "m365-hnsw", kind = "hnsw" } },
                     profiles = new[] { new { name = "m365-vector-profile", algorithm = "m365-hnsw" } }
+                },
+                semantic = new
+                {
+                    configurations = new[]
+                    {
+                        new
+                        {
+                            name = "m365-semantic",
+                            prioritizedFields = new
+                            {
+                                titleField = new { fieldName = "title" },
+                                prioritizedContentFields = new[] { new { fieldName = "content" } },
+                                prioritizedKeywordsFields = Array.Empty<object>()
+                            }
+                        }
+                    }
                 }
             })
         };

@@ -24,9 +24,9 @@ public sealed class Microsoft365DocumentChunkingService(IOptions<Microsoft365Opt
     {
         var maximumCharacters = checked(options.Value.ChunkMaximumTokens * 4);
         var overlapCharacters = checked(options.Value.ChunkOverlapTokens * 4);
-        var text = string.Join(
-            Environment.NewLine,
-            units.OrderBy(unit => unit.Order).Select(unit => unit.Text));
+        var orderedUnits = units.OrderBy(unit => unit.Order).ToArray();
+        var text = string.Join(Environment.NewLine, orderedUnits.Select(unit => unit.Text));
+        var sectionPositions = FindSectionPositions(orderedUnits);
         if (string.IsNullOrWhiteSpace(text))
         {
             return [];
@@ -49,7 +49,10 @@ public sealed class Microsoft365DocumentChunkingService(IOptions<Microsoft365Opt
                 }
             }
 
-            var content = text.Substring(position, length).Trim();
+            var content = AddSectionContext(
+                text.Substring(position, length).Trim(),
+                sectionPositions.LastOrDefault(section => section.Position <= position).Title,
+                maximumCharacters);
             if (content.Length > 0)
             {
                 var chunkNumber = chunks.Count;
@@ -75,6 +78,45 @@ public sealed class Microsoft365DocumentChunkingService(IOptions<Microsoft365Opt
         }
 
         return chunks;
+    }
+
+    private static IReadOnlyList<(int Position, string Title)> FindSectionPositions(
+        IReadOnlyCollection<Microsoft365ExtractedContentUnit> units)
+    {
+        var sections = new List<(int Position, string Title)>();
+        var position = 0;
+        foreach (var unit in units)
+        {
+            if (unit.Kind is Microsoft365ExtractedContentUnitKind.Header
+                or Microsoft365ExtractedContentUnitKind.Title)
+            {
+                sections.Add((position, unit.Text.Trim()));
+            }
+
+            position += unit.Text.Length + Environment.NewLine.Length;
+        }
+
+        return sections;
+    }
+
+    private static string AddSectionContext(
+        string content,
+        string? sectionTitle,
+        int maximumCharacters)
+    {
+        if (string.IsNullOrWhiteSpace(sectionTitle)
+            || content.StartsWith(sectionTitle, StringComparison.OrdinalIgnoreCase))
+        {
+            return content;
+        }
+
+        var prefix = $"Section: {sectionTitle}{Environment.NewLine}";
+        if (prefix.Length >= maximumCharacters)
+        {
+            return content;
+        }
+
+        return prefix + content[..Math.Min(content.Length, maximumCharacters - prefix.Length)];
     }
 
     private static string CreateChunkId(

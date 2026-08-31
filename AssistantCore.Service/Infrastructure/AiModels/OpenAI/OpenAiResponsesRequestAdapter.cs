@@ -34,6 +34,18 @@ public sealed class OpenAiResponsesRequestAdapter
             previousResponseId);
     }
 
+    public OpenAiConversationSummaryRequest Map(AiConversationSummaryRequest request)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        return new OpenAiConversationSummaryRequest(
+            request.Model.ModelName,
+            request.Instructions,
+            request.CurrentUserMessage,
+            request.CurrentAssistantMessage,
+            request.ConversationHistory.Select(MapConversationMessage).ToArray());
+    }
+
     private static string? MapPreviousResponseId(
         AiModelContinuationContext? continuationContext)
     {

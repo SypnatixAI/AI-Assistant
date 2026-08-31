@@ -18,12 +18,6 @@ public sealed class OrchestrationContinuationPolicy(
             return Stop(OrchestrationStopReason.ModelCompleted);
         }
 
-        if (state.HasExecutedToolCalls
-            && !state.LastToolRoundAddedEvidence)
-        {
-            return Stop(OrchestrationStopReason.NoNewEvidence);
-        }
-
         var requestedToolCalls = decision.ToolCalls;
         if (requestedToolCalls.Count == 0)
         {

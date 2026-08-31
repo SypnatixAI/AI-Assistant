@@ -27,6 +27,8 @@
 - [Structure de l’index Azure AI Search](#m365-sharepoint-search-index)
 - [Mise à jour et suppression](#m365-sharepoint-index-updates)
 - [Respect des permissions](#m365-sharepoint-document-security)
+- [Groupes SharePoint locaux](#m365-sharepoint-local-groups)
+- [Tester les groupes SharePoint locaux](#m365-sharepoint-local-groups-testing)
 - [Connecteur de recherche Microsoft 365](#m365-sharepoint-search-connector)
 - [Gestion des erreurs](#m365-sharepoint-errors)
 - [Configuration et secrets](#m365-sharepoint-configuration)
@@ -96,7 +98,6 @@ La première version couvre :
 - la recherche textuelle et vectorielle;
 - les permissions accordées à des utilisateurs Microsoft Entra;
 - les permissions accordées à des groupes Microsoft Entra;
-- les groupes SharePoint qui ne correspondent pas à un groupe Microsoft Entra;
 - les utilisateurs invités externes autorisés dans le tenant du client;
 - les liens « Toute personne disposant du lien »;
 - les tests avec le tenant Microsoft 365 fictif.
@@ -106,6 +107,8 @@ La première version ne couvre pas :
 - les fichiers audio;
 - les fichiers vidéo;
 - les exécutables et fichiers binaires sans texte ou image extractible;
+- les groupes créés directement dans SharePoint qui ne correspondent pas à un
+  groupe Microsoft Entra;
 - le OneDrive grand public d’un compte Outlook.com ou Hotmail;
 - Outlook et les messages Teams.
 
@@ -1559,7 +1562,49 @@ Si les groupes du membre ne peuvent pas être obtenus, la recherche Microsoft
 Une tâche planifiée vérifie périodiquement les permissions afin de couvrir les
 changements hérités qui pourraient ne pas produire une notification fiable.
 
-### Groupes SharePoint
+<a id="m365-sharepoint-local-groups"></a>
+### Groupes SharePoint locaux
+
+Cette capacité est documentée pour une livraison ultérieure. Elle ne fait pas
+partie du périmètre actuel. Tant qu’elle n’est pas implémentée, un contenu dont
+le seul accès passe par un groupe SharePoint local reste invisible dans les
+résultats AssistantCore.
+
+Un groupe SharePoint local est créé dans un site SharePoint précis. Les groupes
+par défaut `Membres`, `Visiteurs` et `Propriétaires` du site sont des exemples
+courants. Un administrateur peut aussi créer un groupe personnalisé. Ces
+groupes peuvent contenir des utilisateurs sans posséder d’identifiant de groupe
+Microsoft Entra exploitable par Microsoft Graph.
+
+Exemple :
+
+```text
+Site Opérations
+  -> groupe SharePoint local « Lecteurs des procédures »
+       -> Alice
+  -> document « Procédure de fermeture.docx »
+       -> lecture accordée au groupe « Lecteurs des procédures »
+```
+
+Alice peut ouvrir le document dans SharePoint. Pour reproduire correctement ce
+droit dans AssistantCore, le système doit conserver le groupe autorisé pendant
+l’ingestion, puis vérifier au moment de la recherche qu’Alice appartient encore
+à ce groupe.
+
+#### État avant et après l’opération
+
+Avant la prise en charge de cette capacité, AssistantCore peut reconnaître le
+groupe dans les permissions du document, mais ne peut pas confirmer
+l’appartenance du membre au moment de la recherche. Le comportement sécurisé
+consiste donc à ne pas retourner le document.
+
+Après son implémentation, AssistantCore peut retrouver les groupes SharePoint
+locaux du membre pour chaque site autorisé et inclure ces groupes dans le filtre
+de sécurité Azure AI Search. Cette opération ne change pas le score textuel, le
+score vectoriel ou le reranking. Elle décide seulement quels passages peuvent
+être présentés au moteur de recherche et au modèle.
+
+#### Identifiant stable
 
 Un groupe SharePoint reçoit un identifiant stable composé du site et de
 l’identifiant du groupe :
@@ -1568,7 +1613,78 @@ l’identifiant du groupe :
 spg:<siteId>:<sharePointGroupId>
 ```
 
-Le système conserve les groupes SharePoint autorisés sur chaque contenu.
+L’identifiant du site est obligatoire, car deux sites différents peuvent
+utiliser le même identifiant numérique de groupe. Le système conserve ces
+identifiants dans `allowedSharePointGroupIds` pour chaque passage concerné.
+
+#### Flow détaillé d’ingestion
+
+1. Le Worker synchronise un fichier ou un élément de liste appartenant à une
+   source explicitement autorisée par l’organisation.
+2. Le flow applicatif passe par le handler et le service de traitement du
+   document. L’adapter Infrastructure lit ensuite les permissions avec Graph
+   ou avec l’API REST SharePoint selon le type de contenu.
+3. Lorsqu’une permission vise un groupe SharePoint local, l’adapter récupère
+   l’identifiant numérique du principal et le combine avec l’identifiant du
+   site.
+4. Le passage envoyé à Azure AI Search reçoit la valeur normalisée
+   `spg:<siteId>:<sharePointGroupId>` dans `allowedSharePointGroupIds`.
+5. Une permission incomplète, ambiguë ou impossible à rattacher au site rend
+   le contenu non résolu. Elle ne doit jamais transformer le contenu en document
+   public.
+
+#### Flow détaillé de recherche
+
+1. Un membre authentifié envoie un message. Le backend déduit son organisation,
+   son identifiant Entra et son adresse de connexion depuis le contexte
+   authentifié; le frontend et le modèle ne fournissent aucun identifiant de
+   sécurité.
+2. Le flow reste `Controller -> IDispatcher -> CommandHandler -> service
+   applicatif`. Lorsque le modèle choisit l’outil Microsoft 365, le connecteur
+   Infrastructure reçoit le contexte d’exécution déjà validé.
+3. Le connecteur récupère d’abord les groupes Microsoft Entra du membre avec
+   Microsoft Graph.
+4. Pour chaque site SharePoint autorisé dans l’organisation, un adapter
+   Infrastructure demande un token limité à l’origine
+   `https://<tenant>.sharepoint.com/.default`.
+5. L’API REST SharePoint recherche l’utilisateur du site par son adresse de
+   connexion et retourne les groupes SharePoint locaux auxquels il appartient.
+6. Chaque groupe retourné est normalisé avec l’identifiant du site. Les valeurs
+   sont dédupliquées, triées et mises en cache pendant cinq minutes afin de ne
+   pas appeler SharePoint pour chaque recherche.
+7. Le repository de recherche construit un filtre combinant obligatoirement
+   l’organisation, l’utilisateur, ses groupes Entra et ses groupes SharePoint
+   locaux.
+8. Azure AI Search applique le filtre avant de retourner les candidats. Le
+   reranking travaille uniquement sur ces candidats déjà autorisés.
+
+Exemple conceptuel :
+
+```text
+organizationId correspond à l’organisation courante
+ET
+(
+  allowedUserIds contient l’utilisateur
+  OU allowedGroupIds contient un de ses groupes Entra
+  OU allowedSharePointGroupIds contient un de ses groupes SharePoint locaux
+)
+```
+
+#### Authentification SharePoint
+
+Microsoft Graph continue d’utiliser le secret client existant. L’API REST
+SharePoint utilise une authentification Entra App-Only par certificat. La
+configuration attendue comprend le chemin absolu du PFX et son mot de passe.
+La partie publique du certificat est téléversée dans l’App Registration et la
+permission d’application `SharePoint -> Sites.Read.All` reçoit le consentement
+administrateur. La permission Microsoft Graph portant le même nom ne remplace
+pas cette permission SharePoint.
+
+Le PFX et sa clé privée restent hors du dépôt. Ils doivent être fournis par un
+gestionnaire de secrets ou un volume sécurisé, renouvelés avant expiration et
+ne jamais apparaître dans les logs.
+
+#### Échecs et changements d’appartenance
 
 Lors d’une recherche, il détermine les groupes SharePoint auxquels appartient
 le membre pour le site concerné. Cette résolution doit être mise en cache
@@ -1577,6 +1693,11 @@ l’accès.
 
 Les modifications de membres d’un groupe SharePoint doivent être détectées par
 une réconciliation planifiée et testées séparément.
+
+Un token refusé, un certificat absent ou expiré, une permission SharePoint
+manquante, une réponse partielle ou une indisponibilité de SharePoint fait
+échouer la recherche Microsoft 365 de manière contrôlée. Le backend ne retire
+jamais le filtre pour maintenir artificiellement la disponibilité.
 
 ### Utilisateurs invités externes
 
@@ -1617,6 +1738,10 @@ recherche.
 <a id="m365-sharepoint-search-connector"></a>
 ## Connecteur de recherche Microsoft 365
 
+> Portee du chantier RAG agentique : les ameliorations de recherche decrites
+> dans cette section s'appliquent aux contenus deja extractibles. L'ajout de
+> nouveaux formats documentaires appartient a un ticket distinct.
+
 Le registre contient déjà la définition logique de
 `search_microsoft_365`, mais son exécution complète doit être ajoutée.
 
@@ -1626,12 +1751,30 @@ Le connecteur :
 2. obtient l’organisation et l’utilisateur courants;
 3. obtient les groupes autorisés;
 4. crée l’embedding de la question;
-5. effectue une recherche hybride textuelle et vectorielle;
-6. ajoute les filtres d’organisation et de permissions;
-7. limite le nombre de résultats;
-8. normalise les preuves;
-9. retourne le titre, le passage, l’URL et la provenance;
-10. ne retourne jamais les ACL au modèle.
+5. decompose une question complexe en sous-requetes bornees lorsque cela
+   ameliore la couverture;
+6. effectue une recherche hybride textuelle et vectorielle;
+7. ajoute les filtres d’organisation, de permissions, de source et de date;
+8. classe semantiquement un ensemble de candidats suffisamment large;
+9. conserve les meilleurs passages et leur contexte de document ou de section;
+10. normalise les preuves;
+11. retourne le titre, le passage, l’URL et la provenance;
+12. ne retourne jamais les ACL au modèle.
+
+La résolution des groupes SharePoint locaux ne fait pas partie du périmètre
+actuel. Elle sera ajoutée dans le chantier décrit à la section
+[Groupes SharePoint locaux](#m365-sharepoint-local-groups). Le connecteur actuel
+limite donc son contexte de recherche à l’utilisateur et aux groupes Microsoft
+Entra.
+
+Le nombre de candidats, le nombre final de passages, la configuration du
+classement semantique et les seuils de pertinence sont configurables. Ils sont
+calibres avec le jeu d'evaluation du produit et non avec une seule question.
+
+Le passage indexe conserve un contexte court qui permet d'identifier le
+document, la section, l'entite et la periode lorsque ces informations sont
+definies hors du fragment. Le contenu original reste disponible pour la
+citation et n'est pas remplace par ce contexte genere.
 
 Une recherche sans résultat retourne une collection vide. Une panne du
 connecteur retourne un échec contrôlé pouvant devenir un avertissement dans la
@@ -1984,14 +2127,110 @@ Ne jamais utiliser de données réelles dans ce test.
 5. révoquer le lien;
 6. vérifier que l’accès disparaît.
 
-### Test 20 — Groupe SharePoint
+<a id="m365-sharepoint-local-groups-testing"></a>
+### Test 20 — Guide détaillé des groupes SharePoint locaux
 
-1. créer un groupe SharePoint sans groupe Entra correspondant;
-2. y ajouter Alice;
-3. lui accorder un document;
-4. vérifier qu’Alice trouve le document et que Bob ne le trouve pas;
-5. remplacer Alice par Bob;
-6. vérifier que les accès sont inversés après réconciliation.
+Ce scénario sera exécuté lorsque la capacité sortira du backlog. Il exige un
+tenant de certification, deux utilisateurs de test, un site sans données
+sensibles, un index Azure AI Search dédié et un certificat App-Only valide.
+
+#### Préparer Entra ID et AssistantCore
+
+1. créer ou sélectionner un certificat de test dont la clé privée est exportée
+   dans un PFX protégé par mot de passe;
+2. téléverser uniquement la partie publique du certificat dans l’App
+   Registration utilisée par AssistantCore;
+3. ajouter la permission d’application `SharePoint -> Sites.Read.All`, puis
+   accorder le consentement administrateur;
+4. configurer le chemin absolu du PFX et son mot de passe dans le magasin de
+   secrets utilisé par l’API et le Worker;
+5. redémarrer l’API et le Worker afin qu’ils relisent la configuration;
+6. vérifier qu’aucun PFX, mot de passe, token ou en-tête `Authorization`
+   n’apparaît dans les logs.
+
+#### Préparer les utilisateurs et le contenu
+
+1. créer ou sélectionner deux utilisateurs de certification, Alice et Bob;
+2. leur attribuer l’accès à AssistantCore et créer leurs membres internes;
+3. créer dans SharePoint un site de test explicitement autorisé dans
+   AssistantCore;
+4. créer dans ce site un groupe local `AssistantCore - Lecteurs locaux` sans
+   créer de groupe Microsoft Entra correspondant;
+5. ajouter Alice au groupe et vérifier que Bob n’en fait pas partie;
+6. créer un document dont le titre et le contenu contiennent une valeur unique,
+   par exemple `SPLOCAL-ALPHA-2026`;
+7. retirer les droits hérités du document si nécessaire et accorder la lecture
+   uniquement au groupe local de test;
+8. lancer la synchronisation et attendre que le document et ses ACL soient
+   publiés dans l’index de certification.
+
+#### Vérifier l’indexation
+
+1. inspecter le document dans l’outil d’administration de l’index;
+2. vérifier que `organizationId` correspond à l’organisation de test;
+3. vérifier que `allowedSharePointGroupIds` contient une valeur au format
+   `spg:<siteId>:<groupId>`;
+4. vérifier que le champ ne contient ni le nom du groupe, ni une adresse
+   courriel, ni une valeur provenant du frontend;
+5. vérifier qu’un groupe portant le même identifiant numérique dans un autre
+   site produit une valeur différente grâce au `siteId`.
+
+#### Vérifier les recherches autorisées et interdites
+
+1. se connecter comme Alice et rechercher `SPLOCAL-ALPHA-2026`;
+2. vérifier que le document apparaît et que sa citation pointe vers la bonne
+   URL SharePoint;
+3. se connecter comme Bob et lancer exactement la même recherche;
+4. vérifier que le document est absent des résultats, preuves, citations et
+   réponses du modèle;
+5. vérifier dans les traces techniques que le filtre d’organisation reste
+   présent et que le reranking n’a reçu aucun passage interdit pour Bob.
+
+#### Vérifier un changement d’appartenance
+
+1. retirer Alice du groupe SharePoint local et ajouter Bob;
+2. attendre au moins la durée du cache configurée ou invalider le cache par le
+   mécanisme prévu pour l’environnement de test;
+3. relancer la réconciliation des permissions si le document ou son ACL a été
+   modifié;
+4. répéter la recherche comme Alice et vérifier que le document est maintenant
+   absent;
+5. répéter la recherche comme Bob et vérifier que le document est maintenant
+   visible;
+6. mesurer et consigner le délai entre la modification SharePoint et son effet
+   dans AssistantCore.
+
+#### Vérifier les erreurs de sécurité
+
+1. retirer temporairement le chemin du certificat et vérifier que la recherche
+   échoue explicitement sans appeler Azure AI Search avec un filtre incomplet;
+2. utiliser un certificat expiré ou non enregistré et vérifier un échec
+   contrôlé sans donnée sensible dans les logs;
+3. retirer le consentement `SharePoint -> Sites.Read.All` et vérifier que le
+   `401` ou `403` SharePoint ferme l’accès;
+4. simuler une réponse SharePoint invalide ou une interruption réseau et
+   vérifier qu’aucun contenu protégé uniquement par un groupe local ne devient
+   visible;
+5. restaurer le certificat et la permission, puis vérifier le retour au
+   fonctionnement normal sans modifier les ACL de l’index.
+
+#### Tests automatisés attendus
+
+- le client d’identité utilise une assertion signée par certificat pour le
+  scope SharePoint et n’envoie pas de `client_secret`;
+- le client SharePoint encode correctement l’adresse et lit les identifiants
+  des groupes;
+- le résolveur limite les appels aux sites autorisés, normalise les identifiants
+  avec le site, déduplique les résultats et respecte le cache;
+- le filtre Azure AI Search combine utilisateur, groupes Entra et groupes
+  SharePoint sans accepter de valeurs fournies par le modèle;
+- Alice obtient le document et Bob ne l’obtient pas;
+- deux groupes numériques identiques provenant de sites différents ne se
+  confondent jamais;
+- toute erreur de certificat, de permission, de cache ou de réponse externe
+  produit un refus fermé;
+- les tests d’architecture confirment que les SDK et appels réseau restent dans
+  `AssistantCore.ExternalServices` et leurs adapters Infrastructure.
 
 <a id="m365-sharepoint-test-tickets"></a>
 ## Stratégie des tickets et des tests

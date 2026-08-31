@@ -3,17 +3,30 @@ using AssistantCore.Repository.Domain.Enums;
 using AssistantCore.Repository.Repositories;
 using AssistantCore.Service.Application.Exceptions;
 using AssistantCore.Service.Application.Models.Messages;
+using AssistantCore.Service.Application.Models.Messages.AiModels;
 using AssistantCore.Service.Application.Models.Messages.Lifecycle;
 using AssistantCore.Service.Application.Models.Messages.Orchestration;
 using AssistantCore.Service.Application.Services.Conversations;
+using AssistantCore.Service.Application.Services.Messages.Memory;
 
 namespace AssistantCore.Service.Application.Services.Messages.Lifecycle;
 
 public sealed class MessageProcessingLifecycleService(
     IConversationRepository conversationRepository,
+    IConversationMemorySummaryService conversationMemorySummaryService,
     TimeProvider timeProvider) : IMessageProcessingLifecycleService
 {
     private const int MaximumProcessingErrorCodeLength = 100;
+
+    public MessageProcessingLifecycleService(
+        IConversationRepository conversationRepository,
+        TimeProvider timeProvider)
+        : this(
+            conversationRepository,
+            new DeterministicConversationMemorySummaryService(),
+            timeProvider)
+    {
+    }
 
     public async Task<StartedMessageProcessing> StartAsync(
         Guid? conversationId,
@@ -26,26 +39,40 @@ public sealed class MessageProcessingLifecycleService(
 
         var now = timeProvider.GetUtcNow();
         var userMessage = CreateUserMessage(message, now);
-        var conversation = conversationId is null
-            ? await CreateConversationWithFirstMessageAsync(
+        Conversation conversation;
+        IReadOnlyCollection<AiConversationMessage> conversationHistory;
+
+        if (conversationId is null)
+        {
+            conversation = await CreateConversationWithFirstMessageAsync(
                 organization,
                 member,
                 userMessage,
                 now,
-                cancellationToken)
-            : await AddMessageToExistingConversationAsync(
+                cancellationToken);
+            conversationHistory = Array.Empty<AiConversationMessage>();
+        }
+        else
+        {
+            var existingConversation = await AddMessageToExistingConversationAsync(
                 conversationId.Value,
                 organization,
                 member,
                 userMessage,
                 cancellationToken);
+            conversation = existingConversation.Conversation;
+            conversationHistory = existingConversation.History;
+        }
 
         var processing = new StartedMessageProcessing(
             organization.Id,
             member.Id,
             conversation.Id,
             userMessage.Id,
-            userMessage.Content);
+            userMessage.Content)
+        {
+            ConversationHistory = conversationHistory
+        };
 
         await MarkAsInProgressAsync(processing, cancellationToken);
 
@@ -72,7 +99,8 @@ public sealed class MessageProcessingLifecycleService(
         return conversation;
     }
 
-    private async Task<Conversation> AddMessageToExistingConversationAsync(
+    private async Task<(Conversation Conversation, IReadOnlyCollection<AiConversationMessage> History)>
+        AddMessageToExistingConversationAsync(
         Guid conversationId,
         Organization organization,
         OrganizationMember member,
@@ -93,6 +121,12 @@ public sealed class MessageProcessingLifecycleService(
                 ConflictException.ConversationArchived);
         }
 
+        var history = await conversationRepository.GetConversationHistoryAsync(
+            organization.Id,
+            member.Id,
+            conversationId,
+            cancellationToken);
+
         userMessage.ConversationId = conversation.Id;
         var addedMessage = await conversationRepository.AddUserMessageAsync(
             organization.Id,
@@ -106,7 +140,15 @@ public sealed class MessageProcessingLifecycleService(
             throw CreateConversationNotFoundException();
         }
 
-        return conversation;
+        return (
+            conversation,
+            history
+                .Select(message => new AiConversationMessage(
+                    message.Role == MessageRole.User
+                        ? AiConversationRole.User
+                        : AiConversationRole.Assistant,
+                    message.Content))
+                .ToArray());
     }
 
     public async Task MarkAsInProgressAsync(
@@ -150,6 +192,24 @@ public sealed class MessageProcessingLifecycleService(
                 completedAt,
                 cancellationToken)
             ?? throw CreateConversationNotFoundException();
+
+        var summary = processing.SelectedModel is { } selectedModel
+            ? await conversationMemorySummaryService.CreateAsync(
+                selectedModel,
+                processing.ConversationHistory,
+                processing.UserMessage,
+                result.Answer,
+                cancellationToken)
+            : null;
+        summary ??= CreateContextSummaryEntry(processing.UserMessage, result.Answer);
+
+        await conversationRepository.UpdateConversationContextSummaryAsync(
+            processing.OrganizationId,
+            processing.OwnerMemberId,
+            processing.ConversationId,
+            summary,
+            completedAt,
+            cancellationToken);
 
         return new CompletedMessageProcessing(
             completedMessage.Id,
@@ -249,6 +309,21 @@ public sealed class MessageProcessingLifecycleService(
                 Content = warning.Trim()
             })
             .ToArray();
+
+    private static string CreateContextSummaryEntry(string userMessage, string answer) =>
+        $"User: {userMessage}\nAssistant: {answer}";
+
+    private sealed class DeterministicConversationMemorySummaryService
+        : IConversationMemorySummaryService
+    {
+        public Task<string?> CreateAsync(
+            SelectedAiModel model,
+            IReadOnlyCollection<AiConversationMessage> conversationHistory,
+            string currentUserMessage,
+            string currentAssistantMessage,
+            CancellationToken cancellationToken) =>
+            Task.FromResult<string?>(null);
+    }
 
     private static string ValidateErrorCode(string errorCode)
     {

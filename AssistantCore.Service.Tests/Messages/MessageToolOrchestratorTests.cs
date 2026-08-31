@@ -49,35 +49,185 @@ public sealed class MessageToolOrchestratorTests
     }
 
     [Theory, AutoDomainData]
-    public async Task Given_AnExceededBudget_When_OrchestrateAsync_Then_ThrowsBudgetException(
+    public async Task Given_AnExceededBudget_When_OrchestrateAsync_Then_RequestsAFinalResponse(
         StartedMessageProcessing processing,
         SelectedAiModel selectedModel,
+        MessageOrchestrationResult expectedResult,
         DateTimeOffset now)
     {
         // Given
         var operations = new List<string>();
         var responses = new Queue<AiModelResponse>(
-            [CreateResponse(AiModelDecisionType.UseTools)]);
+        [
+            CreateResponse(AiModelDecisionType.UseTools),
+            CreateResponse(AiModelDecisionType.Answer)
+        ]);
         var orchestrator = new MessageToolOrchestrator(
             new StubModelTurnService(operations, responses),
             new StubBudgetExceededPolicy(),
             new StubToolCallBatchExecutor(operations),
-            new StubResultBuilder(operations, null),
+            new StubResultBuilder(operations, expectedResult),
             Options.Create(CreateOptions()),
             new StubTimeProvider(now));
 
         // When
-        var exception = await Assert.ThrowsAsync<OrchestrationBudgetExceededException>(() =>
-            orchestrator.OrchestrateAsync(
-                processing,
-                selectedModel,
-                [],
-                [],
-                CancellationToken.None));
+        var result = await orchestrator.OrchestrateAsync(
+            processing,
+            selectedModel,
+            [],
+            [],
+            CancellationToken.None);
 
         // Then
-        Assert.Equal(OrchestrationBudgetType.ToolCalls, exception.ExceededBudget);
-        Assert.Equal(["ModelTurn"], operations);
+        Assert.Same(expectedResult, result);
+        Assert.Equal(["ModelTurn", "ModelTurn", "BuildResult"], operations);
+    }
+
+    [Theory, AutoDomainData]
+    public async Task Given_AFinalStreamingAnswer_When_OrchestrateStreamingAsync_Then_ForwardsAnswerDeltasAndBuildsResult(
+        StartedMessageProcessing processing,
+        SelectedAiModel selectedModel,
+        MessageOrchestrationResult generatedResult,
+        DateTimeOffset now)
+    {
+        // Given
+        var expectedResult = generatedResult with { Answer = "Bonjour monde" };
+        var operations = new List<string>();
+        var receivedDeltas = new List<string>();
+        var modelTurnService = new StubModelTurnService(
+            operations,
+            new Queue<AiModelResponse>([CreateResponse(AiModelDecisionType.Answer)]),
+            ["Bonjour", " monde"]);
+        var orchestrator = new MessageToolOrchestrator(
+            modelTurnService,
+            new StubContinuationPolicy(),
+            new StubToolCallBatchExecutor(operations),
+            new StubResultBuilder(operations, expectedResult),
+            Options.Create(CreateOptions()),
+            new StubTimeProvider(now));
+
+        // When
+        var result = await orchestrator.OrchestrateStreamingAsync(
+            processing,
+            selectedModel,
+            [],
+            [],
+            (_, _) => ValueTask.CompletedTask,
+            (delta, _) =>
+            {
+                receivedDeltas.Add(delta);
+                return ValueTask.CompletedTask;
+            },
+            CancellationToken.None);
+
+        // Then
+        Assert.Same(expectedResult, result);
+        Assert.Equal(["Bonjour", " monde"], receivedDeltas);
+        Assert.Equal(["StreamingModelTurn", "BuildResult"], operations);
+    }
+
+    [Theory, AutoDomainData]
+    public async Task Given_AnUnsafeFinalStreamingAnswer_When_OrchestrateStreamingAsync_Then_ForwardsTheSanitizedBuiltAnswer(
+        StartedMessageProcessing processing,
+        SelectedAiModel selectedModel,
+        MessageOrchestrationResult generatedResult,
+        DateTimeOffset now)
+    {
+        // Given
+        var expectedResult = generatedResult with { Answer = "Réponse finale." };
+        var operations = new List<string>();
+        var receivedDeltas = new List<string>();
+        var modelTurnService = new StubModelTurnService(
+            operations,
+            new Queue<AiModelResponse>([CreateResponse(AiModelDecisionType.Answer)]),
+            ["Réponse finale. ", "[evidence-757496c563c6593a56b787fd]"]);
+        var orchestrator = new MessageToolOrchestrator(
+            modelTurnService,
+            new StubContinuationPolicy(),
+            new StubToolCallBatchExecutor(operations),
+            new StubResultBuilder(operations, expectedResult),
+            Options.Create(CreateOptions()),
+            new StubTimeProvider(now));
+
+        // When
+        var result = await orchestrator.OrchestrateStreamingAsync(
+            processing,
+            selectedModel,
+            [],
+            [],
+            (_, _) => ValueTask.CompletedTask,
+            (delta, _) =>
+            {
+                receivedDeltas.Add(delta);
+                return ValueTask.CompletedTask;
+            },
+            CancellationToken.None);
+
+        // Then
+        Assert.Same(expectedResult, result);
+        Assert.Equal(["Réponse finale."], receivedDeltas);
+        Assert.Equal(["StreamingModelTurn", "BuildResult"], operations);
+    }
+
+    [Theory, AutoDomainData]
+    public async Task Given_AnIntermediateToolTurn_When_OrchestrateStreamingAsync_Then_ReportsProgressWithoutForwardingItsAnswer(
+        StartedMessageProcessing processing,
+        SelectedAiModel selectedModel,
+        MessageOrchestrationResult expectedResult,
+        DateTimeOffset now)
+    {
+        // Given
+        var operations = new List<string>();
+        var receivedProgress = new List<string>();
+        var receivedDeltas = new List<string>();
+        var responses = new Queue<AiModelResponse>(
+        [
+            CreateResponse(AiModelDecisionType.UseTools, "Je consulte les documents pertinents."),
+            CreateResponse(AiModelDecisionType.Answer, "J’ai trouvé une source utile.")
+        ]);
+        var streamingDeltas = new Queue<IReadOnlyCollection<string>>(
+        [
+            ["Brouillon intermédiaire"],
+            ["Réponse ", "finale"]
+        ]);
+        var orchestrator = new MessageToolOrchestrator(
+            new StubModelTurnService(
+                operations,
+                responses,
+                streamingDeltasByTurn: streamingDeltas),
+            new StubContinuationPolicy(),
+            new StubToolCallBatchExecutor(operations),
+            new StubResultBuilder(operations, expectedResult),
+            Options.Create(CreateOptions()),
+            new StubTimeProvider(now));
+
+        // When
+        var result = await orchestrator.OrchestrateStreamingAsync(
+            processing,
+            selectedModel,
+            [],
+            [],
+            (message, _) =>
+            {
+                receivedProgress.Add(message);
+                return ValueTask.CompletedTask;
+            },
+            (delta, _) =>
+            {
+                receivedDeltas.Add(delta);
+                return ValueTask.CompletedTask;
+            },
+            CancellationToken.None);
+
+        // Then
+        Assert.Same(expectedResult, result);
+        Assert.Equal(
+            ["Je consulte les documents pertinents.", "J’ai trouvé une source utile."],
+            receivedProgress);
+        Assert.Equal(["Réponse ", "finale"], receivedDeltas);
+        Assert.Equal(
+            ["StreamingModelTurn", "ExecuteTools", "StreamingModelTurn", "BuildResult"],
+            operations);
     }
 
     private static MessageOrchestrationOptions CreateOptions() =>
@@ -93,7 +243,9 @@ public sealed class MessageToolOrchestratorTests
             MaximumParallelToolCalls = 4
         };
 
-    private static AiModelResponse CreateResponse(AiModelDecisionType decisionType) =>
+    private static AiModelResponse CreateResponse(
+        AiModelDecisionType decisionType,
+        string? progressMessage = null) =>
         new(
             new AiModelDecision(
                 decisionType,
@@ -102,12 +254,15 @@ public sealed class MessageToolOrchestratorTests
                     ? [new AiRequestedToolCall("call-1", "tool", default)]
                     : [],
                 decisionType == AiModelDecisionType.Answer ? "Answer" : null,
-                []),
+                [],
+                progressMessage),
             new AiModelUsage(1, 1, 1, 0, 0.01m));
 
     private sealed class StubModelTurnService(
         List<string> operations,
-        Queue<AiModelResponse> responses) : IAiModelTurnService
+        Queue<AiModelResponse> responses,
+        IReadOnlyCollection<string>? streamingDeltas = null,
+        Queue<IReadOnlyCollection<string>>? streamingDeltasByTurn = null) : IAiModelTurnService
     {
         public Task<AiModelResponse> RequestNextActionAsync(
             MessageOrchestrationState state,
@@ -115,6 +270,27 @@ public sealed class MessageToolOrchestratorTests
         {
             operations.Add("ModelTurn");
             return Task.FromResult(responses.Dequeue());
+        }
+
+        public Task<AiModelResponse> RequestNextActionStreamingAsync(
+            MessageOrchestrationState state,
+            Func<string, CancellationToken, ValueTask> onAnswerDelta,
+            CancellationToken cancellationToken) =>
+            StreamAsync(state, onAnswerDelta, cancellationToken);
+
+        private async Task<AiModelResponse> StreamAsync(
+            MessageOrchestrationState state,
+            Func<string, CancellationToken, ValueTask> onAnswerDelta,
+            CancellationToken cancellationToken)
+        {
+            operations.Add("StreamingModelTurn");
+            var currentDeltas = streamingDeltasByTurn?.Dequeue() ?? streamingDeltas ?? [];
+            foreach (var delta in currentDeltas)
+            {
+                await onAnswerDelta(delta, cancellationToken);
+            }
+
+            return responses.Dequeue();
         }
     }
 
@@ -133,10 +309,12 @@ public sealed class MessageToolOrchestratorTests
         public OrchestrationContinuationDecision Evaluate(
             MessageOrchestrationState state,
             AiModelDecision decision) =>
-            new(
-                CanContinue: false,
-                OrchestrationStopReason.BudgetExceeded,
-                OrchestrationBudgetType.ToolCalls);
+            decision.Type == AiModelDecisionType.UseTools
+                ? new(
+                    CanContinue: false,
+                    OrchestrationStopReason.BudgetExceeded,
+                    OrchestrationBudgetType.ToolCalls)
+                : new(CanContinue: false, OrchestrationStopReason.ModelCompleted);
     }
 
     private sealed class StubToolCallBatchExecutor(List<string> operations)

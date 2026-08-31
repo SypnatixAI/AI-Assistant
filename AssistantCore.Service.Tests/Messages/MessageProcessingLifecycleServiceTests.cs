@@ -3,9 +3,11 @@ using AssistantCore.Repository.Domain.Enums;
 using AssistantCore.Repository.Repositories;
 using AssistantCore.Service.Application.Exceptions;
 using AssistantCore.Service.Application.Models.Messages;
+using AssistantCore.Service.Application.Models.Messages.AiModels;
 using AssistantCore.Service.Application.Models.Messages.Lifecycle;
 using AssistantCore.Service.Application.Models.Messages.Orchestration;
 using AssistantCore.Service.Application.Services.Messages.Lifecycle;
+using AssistantCore.Service.Application.Services.Messages.Memory;
 
 namespace AssistantCore.Service.Tests.Messages;
 
@@ -121,7 +123,9 @@ public sealed class MessageProcessingLifecycleServiceTests
         Assert.Equal("Another validated question", repository.AddedUserMessage.Content);
         Assert.Equal(MessageProcessingStatus.InProgress, repository.ReceivedProcessingStatus);
         Assert.Equal(repository.AddedUserMessage.Id, result.UserMessageId);
-        Assert.Equal(["FindConversation", "AddUserMessage", "UpdateStatus"], repository.Operations);
+        Assert.Equal(
+            ["FindConversation", "GetConversationHistory", "AddUserMessage", "UpdateStatus"],
+            repository.Operations);
         Assert.Equal(cancellationTokenSource.Token, repository.ReceivedCancellationToken);
     }
 
@@ -184,7 +188,9 @@ public sealed class MessageProcessingLifecycleServiceTests
         // Then
         Assert.Equal("Conversation not found.", exception.Message);
         Assert.Null(repository.ReceivedProcessingStatus);
-        Assert.Equal(["FindConversation", "AddUserMessage"], repository.Operations);
+        Assert.Equal(
+            ["FindConversation", "GetConversationHistory", "AddUserMessage"],
+            repository.Operations);
     }
 
     [Theory, AutoDomainData]
@@ -270,6 +276,31 @@ public sealed class MessageProcessingLifecycleServiceTests
         Assert.Equal(repository.CompletedAssistantMessage.Id, result.AssistantMessageId);
         Assert.Equal(completedAt, result.CreatedAt);
         Assert.Equal(cancellationTokenSource.Token, repository.ReceivedCancellationToken);
+    }
+
+    [Theory, AutoDomainData]
+    public async Task Given_ANonEmptyAiMemory_When_CompleteAsync_Then_PersistsTheAiGeneratedSummary(
+        StartedMessageProcessing processing,
+        MessageOrchestrationResult orchestrationResult,
+        DateTimeOffset completedAt)
+    {
+        // Given
+        processing.SelectedModel = new SelectedAiModel("OpenAI", "gpt-5-mini");
+        var repository = new RecordingConversationRepository();
+        var summaryService = new StubConversationMemorySummaryService("Facts\n- The team selected blue.");
+        var service = new MessageProcessingLifecycleService(
+            repository,
+            summaryService,
+            new StubTimeProvider(completedAt));
+
+        // When
+        await service.CompleteAsync(processing, orchestrationResult, CancellationToken.None);
+
+        // Then
+        Assert.Equal("Facts\n- The team selected blue.", repository.ReceivedContextSummary);
+        Assert.Equal(processing.SelectedModel, summaryService.ReceivedModel);
+        Assert.Equal(processing.UserMessage, summaryService.ReceivedUserMessage);
+        Assert.Equal(orchestrationResult.Answer, summaryService.ReceivedAssistantMessage);
     }
 
     [Theory, AutoDomainData]
@@ -404,6 +435,29 @@ public sealed class MessageProcessingLifecycleServiceTests
         public override DateTimeOffset GetUtcNow() => utcNow;
     }
 
+    private sealed class StubConversationMemorySummaryService(string? summary)
+        : IConversationMemorySummaryService
+    {
+        public SelectedAiModel? ReceivedModel { get; private set; }
+
+        public string? ReceivedUserMessage { get; private set; }
+
+        public string? ReceivedAssistantMessage { get; private set; }
+
+        public Task<string?> CreateAsync(
+            SelectedAiModel model,
+            IReadOnlyCollection<AiConversationMessage> conversationHistory,
+            string currentUserMessage,
+            string currentAssistantMessage,
+            CancellationToken cancellationToken)
+        {
+            ReceivedModel = model;
+            ReceivedUserMessage = currentUserMessage;
+            ReceivedAssistantMessage = currentAssistantMessage;
+            return Task.FromResult(summary);
+        }
+    }
+
     [Theory, AutoDomainData]
     public async Task Given_AnArchivedConversation_When_StartAsync_Then_ThrowsAConflictWithTheArchivedCode(
         Organization organization,
@@ -488,6 +542,8 @@ public sealed class MessageProcessingLifecycleServiceTests
 
         public DateTimeOffset? ReceivedFailureDate { get; private set; }
 
+        public string? ReceivedContextSummary { get; private set; }
+
         public CancellationToken ReceivedCancellationToken { get; private set; }
 
         public List<string> Operations { get; } = [];
@@ -524,6 +580,27 @@ public sealed class MessageProcessingLifecycleServiceTests
             Guid? cursorId,
             CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();
+
+        public Task<IReadOnlyList<ConversationMessageItem>> GetConversationHistoryAsync(
+            Guid organizationId,
+            Guid ownerMemberId,
+            Guid conversationId,
+            CancellationToken cancellationToken = default)
+        {
+            Operations.Add("GetConversationHistory");
+            ReceivedCancellationToken = cancellationToken;
+            return Task.FromResult<IReadOnlyList<ConversationMessageItem>>([]);
+        }
+
+        public Task<bool> UpdateConversationContextSummaryAsync(
+            Guid organizationId, Guid ownerMemberId, Guid conversationId, string summary,
+            DateTimeOffset updatedAt, CancellationToken cancellationToken = default)
+        {
+            Operations.Add("UpdateContextSummary");
+            ReceivedContextSummary = summary;
+            ReceivedCancellationToken = cancellationToken;
+            return Task.FromResult(true);
+        }
 
         public Task<ConversationListPage> ListConversationsAsync(
             Guid organizationId,

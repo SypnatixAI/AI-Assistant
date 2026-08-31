@@ -140,6 +140,18 @@ public sealed class ConversationMessageListingServiceTests
             return Task.FromResult(page ?? new ConversationMessagePage([], false, null, null));
         }
 
+        public Task<IReadOnlyList<ConversationMessageItem>> GetConversationHistoryAsync(
+            Guid organizationId,
+            Guid ownerMemberId,
+            Guid conversationId,
+            CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
+        public Task<bool> UpdateConversationContextSummaryAsync(
+            Guid organizationId, Guid ownerMemberId, Guid conversationId, string summary,
+            DateTimeOffset updatedAt, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
         public Task<(Conversation Conversation, Message UserMessage)> CreateConversationWithFirstMessageAsync(
             Guid organizationId,
             Guid ownerMemberId,
