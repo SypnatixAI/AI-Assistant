@@ -51,6 +51,8 @@ public sealed class Microsoft365SearchRepositoryAdapter(
             filter,
             parameters.MaximumResults,
             queryVector,
+            configuration.SemanticRankingEnabled,
+            configuration.SemanticConfigurationName,
             cancellationToken);
 
         return results.Select(result => new Microsoft365SearchRecord(

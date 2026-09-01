@@ -38,6 +38,7 @@ public sealed class Microsoft365SearchRepositoryTests
                         new Dictionary<string, object?>
                         {
                             ["@search.score"] = 1.0,
+                            ["@search.rerankerScore"] = 2.0,
                             ["chunkId"] = chunkId,
                             ["title"] = title,
                             ["content"] = content
@@ -93,6 +94,71 @@ public sealed class Microsoft365SearchRepositoryTests
         Assert.Equal(queryVector, vectorQuery.GetProperty("vector").EnumerateArray().Select(value => value.GetSingle()));
         Assert.Equal("semantic", document.RootElement.GetProperty("queryType").GetString());
         Assert.Equal("m365-semantic", document.RootElement.GetProperty("semanticConfiguration").GetString());
+    }
+
+    [Theory, AutoDomainData]
+    public async Task Given_SemanticRankingDisabled_When_SearchAsync_Then_UsesHybridSearchWithoutSemanticParameters(
+        Guid organizationId,
+        Guid userId,
+        string apiKey,
+        string query,
+        string chunkId,
+        string title,
+        string content,
+        float[] queryVector)
+    {
+        // Given
+        string? payload = null;
+        using var httpClient = new HttpClient(new StubHttpMessageHandler(request =>
+        {
+            payload = request.Content!.ReadAsStringAsync().GetAwaiter().GetResult();
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(JsonSerializer.Serialize(new
+                {
+                    value = new[]
+                    {
+                        new Dictionary<string, object?>
+                        {
+                            ["@search.score"] = 1.0,
+                            ["chunkId"] = chunkId,
+                            ["title"] = title,
+                            ["content"] = content
+                        }
+                    }
+                }))
+            };
+        }));
+        var repository = new Microsoft365SearchRepositoryAdapter(
+            new AzureAiSearchPassageSearchClient(httpClient),
+            Options.Create(new AzureAiSearchOptions
+            {
+                Endpoint = "https://search.example",
+                IndexName = "content-index",
+                ApiKey = apiKey,
+                SemanticRankingEnabled = false
+            }),
+            new StubEmbeddingGenerator(queryVector));
+        var parameters = new Microsoft365SearchParameters(
+            query,
+            ["sharepoint"],
+            null,
+            null,
+            new Microsoft365SearchSecurityContext(
+                organizationId,
+                userId.ToString("D"),
+                []),
+            10);
+
+        // When
+        var results = await repository.SearchAsync(parameters, CancellationToken.None);
+
+        // Then
+        Assert.Single(results);
+        using var document = JsonDocument.Parse(payload!);
+        Assert.False(document.RootElement.TryGetProperty("queryType", out _));
+        Assert.False(document.RootElement.TryGetProperty("semanticConfiguration", out _));
+        Assert.True(document.RootElement.TryGetProperty("vectorQueries", out _));
     }
 
     private sealed class StubEmbeddingGenerator(IReadOnlyList<float> vector)

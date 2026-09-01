@@ -30,8 +30,11 @@ public sealed class AzureAiSearchIndexClient
         string indexName,
         string? apiKey,
         int embeddingDimensions,
+        string semanticConfigurationName,
         CancellationToken cancellationToken = default)
     {
+        ArgumentException.ThrowIfNullOrWhiteSpace(semanticConfigurationName);
+
         var uri = new Uri(
             new Uri(endpoint),
             $"/indexes/{Uri.EscapeDataString(indexName)}?api-version={ApiVersion}");
@@ -64,7 +67,7 @@ public sealed class AzureAiSearchIndexClient
                     {
                         new
                         {
-                            name = "m365-semantic",
+                            name = semanticConfigurationName,
                             prioritizedFields = new
                             {
                                 titleField = new { fieldName = "title" },
