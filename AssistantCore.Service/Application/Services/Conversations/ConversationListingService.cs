@@ -1,3 +1,4 @@
+using AssistantCore.Repository.Domain.Enums;
 using AssistantCore.Repository.Repositories;
 using AssistantCore.Service.Application.Configuration;
 using AssistantCore.Service.Application.Models.Conversations;
@@ -12,6 +13,7 @@ public sealed class ConversationListingService(
     public async Task<ConversationListingPage> ListAsync(
         Guid organizationId,
         Guid ownerMemberId,
+        ConversationStatus status,
         int limit,
         DateTimeOffset? cursorUpdatedAt,
         Guid? cursorId,
@@ -20,6 +22,7 @@ public sealed class ConversationListingService(
         var page = await conversationRepository.ListConversationsAsync(
             organizationId,
             ownerMemberId,
+            status,
             limit,
             cursorUpdatedAt,
             cursorId,
@@ -29,6 +32,8 @@ public sealed class ConversationListingService(
             .Select(item => new ConversationSummaryResponse(
                 item.Id,
                 item.Title,
+                item.Status.ToString(),
+                item.Version,
                 item.CreatedAt,
                 item.UpdatedAt,
                 ConversationPreviewFactory.Create(

@@ -110,6 +110,8 @@ public sealed class ConversationsEndpointTests
         var summary = new ConversationSummaryResponse(
             conversationId,
             "Politique de teletravail",
+            nameof(ConversationStatus.Active),
+            7,
             updatedAt.AddMinutes(-5),
             updatedAt,
             "La politique permet jusqu'a deux jours...");
@@ -132,8 +134,62 @@ public sealed class ConversationsEndpointTests
         Assert.Equal(conversationId, returnedConversation.Id);
         Assert.Equal("Politique de teletravail", returnedConversation.Title);
         Assert.Equal("La politique permet jusqu'a deux jours...", returnedConversation.LastMessagePreview);
+        Assert.Equal(nameof(ConversationStatus.Active), returnedConversation.Status);
+        Assert.Equal(7, returnedConversation.Version);
         Assert.False(body.HasMore);
         Assert.Null(body.NextCursor);
+    }
+
+    [Fact]
+    public async Task Given_TheArchivedStatus_When_GetConversations_Then_ForwardsItToTheListingService()
+    {
+        // Given
+        var listingService = new RecordingConversationListingService();
+        await using var factory = CreateFactory(listingService, useTestAuthentication: true);
+        using var client = factory.CreateClient();
+
+        // When
+        using var response = await client.GetAsync("/api/conversations?status=Archived");
+
+        // Then
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal(1, listingService.CallCount);
+        Assert.Equal(ConversationStatus.Archived, listingService.ReceivedStatus);
+    }
+
+    [Fact]
+    public async Task Given_NoStatus_When_GetConversations_Then_ListsActiveConversations()
+    {
+        // Given
+        var listingService = new RecordingConversationListingService();
+        await using var factory = CreateFactory(listingService, useTestAuthentication: true);
+        using var client = factory.CreateClient();
+
+        // When
+        using var response = await client.GetAsync("/api/conversations");
+
+        // Then
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal(ConversationStatus.Active, listingService.ReceivedStatus);
+    }
+
+    [Theory]
+    [InlineData("status=Deleted")]
+    [InlineData("status=archived")]
+    public async Task Given_AnInvalidStatus_When_GetConversations_Then_ReturnsBadRequestBeforeQuerying(
+        string queryString)
+    {
+        // Given
+        var listingService = new RecordingConversationListingService();
+        await using var factory = CreateFactory(listingService, useTestAuthentication: true);
+        using var client = factory.CreateClient();
+
+        // When
+        using var response = await client.GetAsync($"/api/conversations?{queryString}");
+
+        // Then
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal(0, listingService.CallCount);
     }
 
     private static WebApplicationFactory<Program> CreateFactory(
@@ -219,9 +275,12 @@ public sealed class ConversationsEndpointTests
 
         public int ReceivedLimit { get; private set; }
 
+        public ConversationStatus ReceivedStatus { get; private set; }
+
         public Task<ConversationListingPage> ListAsync(
             Guid organizationId,
             Guid ownerMemberId,
+            ConversationStatus status,
             int limit,
             DateTimeOffset? cursorUpdatedAt,
             Guid? cursorId,
@@ -229,6 +288,7 @@ public sealed class ConversationsEndpointTests
         {
             CallCount++;
             ReceivedLimit = limit;
+            ReceivedStatus = status;
             return Task.FromResult(page ?? new ConversationListingPage([], HasMore: false));
         }
     }

@@ -548,6 +548,133 @@
       "name": "Conversations",
       "item": [
         {
+          "name": "List Conversations",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Response contains a conversations array', function () {",
+                  "    const response = pm.response.json();",
+                  "    pm.expect(response.conversations).to.be.an('array');",
+                  "});",
+                  "",
+                  "pm.test('Every summary carries its status and version', function () {",
+                  "    const response = pm.response.json();",
+                  "    response.conversations.forEach(function (conversation) {",
+                  "        pm.expect(conversation.status).to.eql('Active');",
+                  "        pm.expect(conversation.version).to.be.a('number');",
+                  "    });",
+                  "});",
+                  "",
+                  "if (pm.response.code === 200) {",
+                  "    const response = pm.response.json();",
+                  "    if (response.conversations.length > 0) {",
+                  "        pm.environment.set('conversation_id', response.conversations[0].id);",
+                  "        pm.environment.set('conversation_version', response.conversations[0].version);",
+                  "    }",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/conversations?limit=25",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "conversations"
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "25"
+                },
+                {
+                  "key": "cursor",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "status",
+                  "value": "Active",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "Retourne les conversations du membre connecte. Sans le parametre status, seules les conversations Active sont retournees. Chaque resume porte son status et sa version; le test enregistre ceux de la premiere conversation dans conversation_id et conversation_version pour alimenter Update Conversation.\n\nUne valeur de status inconnue retourne 400 avant toute lecture. Un curseur reste valide uniquement pour la valeur de status qui l'a produit."
+          },
+          "response": []
+        },
+        {
+          "name": "List Archived Conversations",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Only archived conversations are returned', function () {",
+                  "    const response = pm.response.json();",
+                  "    pm.expect(response.conversations).to.be.an('array');",
+                  "    response.conversations.forEach(function (conversation) {",
+                  "        pm.expect(conversation.status).to.eql('Archived');",
+                  "    });",
+                  "});",
+                  "",
+                  "if (pm.response.code === 200) {",
+                  "    const response = pm.response.json();",
+                  "    if (response.conversations.length > 0) {",
+                  "        pm.environment.set('conversation_id', response.conversations[0].id);",
+                  "        pm.environment.set('conversation_version', response.conversations[0].version);",
+                  "    }",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/conversations?status=Archived&limit=25",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "conversations"
+              ],
+              "query": [
+                {
+                  "key": "status",
+                  "value": "Archived"
+                },
+                {
+                  "key": "limit",
+                  "value": "25"
+                }
+              ]
+            },
+            "description": "Alimente la section Archives du frontend. Sans cet appel une conversation archivee deviendrait introuvable et ne pourrait plus etre restauree par Update Conversation avec le status Active.\n\nUne conversation supprimee logiquement n'apparait sous aucune valeur de status."
+          },
+          "response": []
+        },
+        {
           "name": "Update Conversation",
           "event": [
             {

@@ -5,4 +5,5 @@ namespace AssistantCore.Service.Application.Commands.ListConversations;
 
 public sealed record ListConversationsCommand(
     int? Limit,
-    string? Cursor) : IRequest<ListConversationsResponse>;
+    string? Cursor,
+    string? Status) : IRequest<ListConversationsResponse>;

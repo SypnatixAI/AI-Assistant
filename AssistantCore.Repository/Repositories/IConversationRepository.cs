@@ -40,14 +40,16 @@ public interface IConversationRepository
         CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Retourne une page de resumes de conversations visibles (statut Active),
-    /// triees par UpdatedAt puis Id decroissants. Lit toujours limit + 1 elements
-    /// pour determiner s'il existe une page suivante, sans jamais charger
-    /// l'historique complet des messages.
+    /// Retourne une page de resumes de conversations visibles portant le statut
+    /// demande, triees par UpdatedAt puis Id decroissants. Une conversation
+    /// supprimee logiquement n'est jamais retournee, quel que soit ce statut.
+    /// Lit toujours limit + 1 elements pour determiner s'il existe une page
+    /// suivante, sans jamais charger l'historique complet des messages.
     /// </summary>
     Task<ConversationListPage> ListConversationsAsync(
         Guid organizationId,
         Guid ownerMemberId,
+        ConversationStatus status,
         int limit,
         DateTimeOffset? cursorUpdatedAt,
         Guid? cursorId,
