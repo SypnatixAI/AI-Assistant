@@ -43,3 +43,19 @@ jobs:
 
       - name: Run tests
         run: dotnet test Solution.sln --configuration Release --no-build --logger "console;verbosity=normal"
+
+      - name: Run offline RAG evaluation
+        run: >-
+          dotnet run --project AssistantCore.RagEvaluation/AssistantCore.RagEvaluation.csproj
+          --configuration Release --no-build --
+          --mode offline
+          --dataset docs/recherche/rag-agentique/evaluation-cases.json
+          --output artifacts/rag-evaluation
+
+      - name: Upload RAG evaluation report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rag-evaluation-offline
+          path: artifacts/rag-evaluation
+          if-no-files-found: warn

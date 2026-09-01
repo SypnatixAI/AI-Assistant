@@ -158,6 +158,9 @@ minimaux à automatiser : français et anglais, suivi conversationnel,
 clarification, recherche corrective, filtres, isolation ACL, injection indirecte,
 citations et réponse partielle. Il s'agit d'un corpus de départ; ses seuils
 doivent être calibrés sur des questions réelles anonymisées avant la production.
+Le fonctionnement du runner, la séparation entre CI hors ligne et certification
+avec OpenAI, ainsi que les métriques produites sont décrits dans
+[Évaluation RAG automatisée avant production](evaluation-automatisee.md#but).
 
 ## Registre des sources
 
