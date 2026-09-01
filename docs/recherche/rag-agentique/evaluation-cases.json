@@ -39,6 +39,49 @@
       "expected": "Answers in English only when retrieved evidence supports the threshold."
     },
     {
+      "id": "en-general-knowledge-with-tools",
+      "language": "en",
+      "conversation": [
+        "What is HTTP?"
+      ],
+      "expected": "Answers directly from general model knowledge without calling an enterprise tool and without citing an evidenceId."
+    },
+    {
+      "id": "en-general-knowledge-without-tools",
+      "language": "en",
+      "conversation": [
+        "Explain the Repository pattern."
+      ],
+      "available_tools": [],
+      "expected": "Answers directly from general model knowledge even though no tool is available."
+    },
+    {
+      "id": "en-enterprise-fact-with-tool",
+      "language": "en",
+      "conversation": [
+        "What is our vacation policy?"
+      ],
+      "expected": "Uses an appropriate enterprise search tool and answers only from retrieved evidence with valid citations."
+    },
+    {
+      "id": "en-enterprise-fact-without-evidence",
+      "language": "en",
+      "conversation": [
+        "What is the approved budget for Project Alpha?"
+      ],
+      "retrieval_fixture": "The available enterprise tools return no relevant evidence.",
+      "expected": "Returns cannotAnswer with a short factual limitation and does not fill the missing budget from general model knowledge."
+    },
+    {
+      "id": "en-enterprise-fact-without-tools",
+      "language": "en",
+      "conversation": [
+        "What is our vacation policy?"
+      ],
+      "available_tools": [],
+      "expected": "Returns cannotAnswer and does not invent an organization-specific policy."
+    },
+    {
       "id": "fr-material-clarification",
       "language": "fr",
       "conversation": [

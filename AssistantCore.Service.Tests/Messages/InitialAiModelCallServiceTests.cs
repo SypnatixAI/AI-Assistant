@@ -84,6 +84,47 @@ public sealed class AiModelTurnServiceTests
     }
 
     [Theory, AutoDomainData]
+    public async Task Given_KnowledgeRouting_When_RequestNextActionAsync_Then_SendsGeneralAndEnterpriseRules(
+        StartedMessageProcessing processing,
+        DateTimeOffset startedAtUtc)
+    {
+        // Given
+        var provider = new RecordingAiModelProvider(
+            "OpenAI",
+            CreateResponse(AiModelDecisionType.Answer));
+        var state = CreateState(processing, startedAtUtc);
+        var service = new AiModelTurnService(
+            [provider],
+            new StubTimeProvider(startedAtUtc.AddSeconds(1)));
+
+        // When
+        await service.RequestNextActionAsync(state, CancellationToken.None);
+
+        // Then
+        var request = Assert.IsType<AiModelRequest>(provider.ReceivedRequest);
+        Assert.Contains(
+            "you may return \"answer\" directly from general model knowledge without calling a tool",
+            request.Instructions,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "Do not call enterprise tools merely to support general knowledge",
+            request.Instructions,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "Never infer, complete, or replace enterprise information with general model knowledge",
+            request.Instructions,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "including when no appropriate tool is available",
+            request.Instructions,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "not from a rigid keyword rule",
+            request.Instructions,
+            StringComparison.Ordinal);
+    }
+
+    [Theory, AutoDomainData]
     public async Task Given_AnUnregisteredProvider_When_RequestNextActionAsync_Then_RejectsTheCall(
         StartedMessageProcessing processing,
         DateTimeOffset startedAtUtc)
