@@ -58,6 +58,7 @@ public sealed class AiModelTurnServiceTests
 
         // Then
         var request = Assert.IsType<AiModelRequest>(provider.ReceivedRequest);
+        var normalizedInstructions = NormalizeWhitespace(request.Instructions);
         Assert.Same(state.SelectedModel, request.Model);
         Assert.Equal(state.Question, request.UserMessage);
         Assert.Equal(state.ConversationHistory, request.ConversationHistory);
@@ -78,9 +79,9 @@ public sealed class AiModelTurnServiceTests
             "Never include evidence identifiers in answer",
             request.Instructions,
             StringComparison.Ordinal);
-        Assert.Contains("language of the user's current message", request.Instructions, StringComparison.Ordinal);
-        Assert.Contains("Interpret the current message in its conversation context", request.Instructions, StringComparison.Ordinal);
-        Assert.Contains("fulfill that offer directly", request.Instructions, StringComparison.Ordinal);
+        Assert.Contains("language of the user's current message", normalizedInstructions, StringComparison.Ordinal);
+        Assert.Contains("Interpret the current message in its conversation context", normalizedInstructions, StringComparison.Ordinal);
+        Assert.Contains("fulfill that offer directly", normalizedInstructions, StringComparison.Ordinal);
     }
 
     [Theory, AutoDomainData]
@@ -102,25 +103,26 @@ public sealed class AiModelTurnServiceTests
 
         // Then
         var request = Assert.IsType<AiModelRequest>(provider.ReceivedRequest);
+        var normalizedInstructions = NormalizeWhitespace(request.Instructions);
         Assert.Contains(
             "you may return \"answer\" directly from general model knowledge without calling a tool",
-            request.Instructions,
+            normalizedInstructions,
             StringComparison.Ordinal);
         Assert.Contains(
             "Do not call enterprise tools merely to support general knowledge",
-            request.Instructions,
+            normalizedInstructions,
             StringComparison.Ordinal);
         Assert.Contains(
             "Never infer, complete, or replace enterprise information with general model knowledge",
-            request.Instructions,
+            normalizedInstructions,
             StringComparison.Ordinal);
         Assert.Contains(
             "including when no appropriate tool is available",
-            request.Instructions,
+            normalizedInstructions,
             StringComparison.Ordinal);
         Assert.Contains(
             "not from a rigid keyword rule",
-            request.Instructions,
+            normalizedInstructions,
             StringComparison.Ordinal);
     }
 
@@ -180,6 +182,9 @@ public sealed class AiModelTurnServiceTests
             limits,
             startedAtUtc);
     }
+
+    private static string NormalizeWhitespace(string value) =>
+        string.Join(' ', value.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
 
     private static AiModelResponse CreateResponse(AiModelDecisionType decisionType) => new(
         new AiModelDecision(
