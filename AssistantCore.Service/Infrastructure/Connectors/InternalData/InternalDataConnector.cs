@@ -36,7 +36,7 @@ public sealed class InternalDataConnector(
             candidates,
             new EvidenceNormalizationOptions(
                 options.MaximumContentLength,
-                context.RetrievalCandidateLimit));
+                Math.Min(options.MaximumResults, context.RetrievalCandidateLimit)));
 
         return new ConnectorResult(evidence);
     }
