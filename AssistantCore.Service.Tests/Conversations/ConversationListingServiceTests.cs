@@ -20,8 +20,8 @@ public sealed class ConversationListingServiceTests
         // Given
         var items = new[]
         {
-            new ConversationListItem(firstId, "Premiere conversation", updatedAt, updatedAt, "  Bonjour   le monde  "),
-            new ConversationListItem(secondId, "Deuxieme conversation", updatedAt, updatedAt, null)
+            new ConversationListItem(firstId, "Premiere conversation", ConversationStatus.Active, 3, updatedAt, updatedAt, "  Bonjour   le monde  "),
+            new ConversationListItem(secondId, "Deuxieme conversation", ConversationStatus.Archived, 1, updatedAt, updatedAt, null)
         };
         var repository = new RecordingConversationRepository(
             new ConversationListPage(items, HasMore: true));
@@ -33,6 +33,7 @@ public sealed class ConversationListingServiceTests
         var result = await service.ListAsync(
             organizationId,
             ownerMemberId,
+            ConversationStatus.Active,
             25,
             null,
             null,
@@ -69,7 +70,7 @@ public sealed class ConversationListingServiceTests
         var longMessage = new string('a', 200);
         var items = new[]
         {
-            new ConversationListItem(conversationId, "Titre", updatedAt, updatedAt, longMessage)
+            new ConversationListItem(conversationId, "Titre", ConversationStatus.Active, 1, updatedAt, updatedAt, longMessage)
         };
         var repository = new RecordingConversationRepository(
             new ConversationListPage(items, HasMore: false));
@@ -81,6 +82,7 @@ public sealed class ConversationListingServiceTests
         var result = await service.ListAsync(
             organizationId,
             ownerMemberId,
+            ConversationStatus.Active,
             25,
             null,
             null,
@@ -90,6 +92,77 @@ public sealed class ConversationListingServiceTests
         var preview = result.Items.Single().LastMessagePreview;
         Assert.Equal(160, preview!.Length);
         Assert.Equal(new string('a', 159) + "…", preview);
+    }
+
+    [Theory, AutoDomainData]
+    public async Task Given_TheArchivedStatus_When_ListAsync_Then_ForwardsItToThePersistence(
+        Guid organizationId,
+        Guid ownerMemberId)
+    {
+        // Given
+        var repository = new RecordingConversationRepository(
+            new ConversationListPage([], HasMore: false));
+        var service = new ConversationListingService(
+            repository,
+            Options.Create(new ConversationListingOptions { MaximumPreviewLength = 160 }));
+
+        // When
+        await service.ListAsync(
+            organizationId,
+            ownerMemberId,
+            ConversationStatus.Archived,
+            25,
+            null,
+            null,
+            CancellationToken.None);
+
+        // Then
+        Assert.Equal(ConversationStatus.Archived, repository.ReceivedStatus);
+    }
+
+    [Theory, AutoDomainData]
+    public async Task Given_ItemsWithStatusAndVersion_When_ListAsync_Then_MapsThemToTheSummaries(
+        Guid organizationId,
+        Guid ownerMemberId,
+        Guid activeId,
+        Guid archivedId,
+        DateTimeOffset updatedAt)
+    {
+        // Given
+        var items = new[]
+        {
+            new ConversationListItem(activeId, "Active", ConversationStatus.Active, 4, updatedAt, updatedAt, null),
+            new ConversationListItem(archivedId, "Archivee", ConversationStatus.Archived, 12, updatedAt, updatedAt, null)
+        };
+        var repository = new RecordingConversationRepository(
+            new ConversationListPage(items, HasMore: false));
+        var service = new ConversationListingService(
+            repository,
+            Options.Create(new ConversationListingOptions { MaximumPreviewLength = 160 }));
+
+        // When
+        var result = await service.ListAsync(
+            organizationId,
+            ownerMemberId,
+            ConversationStatus.Active,
+            25,
+            null,
+            null,
+            CancellationToken.None);
+
+        // Then
+        Assert.Collection(
+            result.Items,
+            summary =>
+            {
+                Assert.Equal("Active", summary.Status);
+                Assert.Equal(4, summary.Version);
+            },
+            summary =>
+            {
+                Assert.Equal("Archived", summary.Status);
+                Assert.Equal(12, summary.Version);
+            });
     }
 
     private sealed class RecordingConversationRepository(ConversationListPage page)
@@ -121,9 +194,12 @@ public sealed class ConversationListingServiceTests
 
         public int ReceivedLimit { get; private set; }
 
+        public ConversationStatus ReceivedStatus { get; private set; }
+
         public Task<ConversationListPage> ListConversationsAsync(
             Guid organizationId,
             Guid ownerMemberId,
+            ConversationStatus status,
             int limit,
             DateTimeOffset? cursorUpdatedAt,
             Guid? cursorId,
@@ -132,6 +208,7 @@ public sealed class ConversationListingServiceTests
             ReceivedOrganizationId = organizationId;
             ReceivedOwnerMemberId = ownerMemberId;
             ReceivedLimit = limit;
+            ReceivedStatus = status;
             return Task.FromResult(page);
         }
 

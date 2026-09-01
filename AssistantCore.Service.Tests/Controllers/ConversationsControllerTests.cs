@@ -25,7 +25,7 @@ public sealed class ConversationsControllerTests
         var controller = new ConversationsController(dispatcher);
 
         // When
-        var actionResult = await controller.ListConversations(50, "cursor-value", cancellationToken);
+        var actionResult = await controller.ListConversations(50, "cursor-value", "Archived", cancellationToken);
 
         // Then
         var okResult = Assert.IsType<OkObjectResult>(actionResult.Result);
@@ -34,6 +34,7 @@ public sealed class ConversationsControllerTests
         var command = Assert.IsType<ListConversationsCommand>(dispatcher.ReceivedRequest);
         Assert.Equal(50, command.Limit);
         Assert.Equal("cursor-value", command.Cursor);
+        Assert.Equal("Archived", command.Status);
         Assert.Equal(cancellationToken, dispatcher.ReceivedCancellationToken);
     }
 

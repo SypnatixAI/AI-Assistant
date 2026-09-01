@@ -605,6 +605,7 @@ public sealed class MessageProcessingLifecycleServiceTests
         public Task<ConversationListPage> ListConversationsAsync(
             Guid organizationId,
             Guid ownerMemberId,
+            ConversationStatus status,
             int limit,
             DateTimeOffset? cursorUpdatedAt,
             Guid? cursorId,

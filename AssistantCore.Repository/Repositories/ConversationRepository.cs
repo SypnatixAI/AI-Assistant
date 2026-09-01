@@ -203,6 +203,7 @@ public sealed class ConversationRepository(AssistantCoreDbContext dbContext)
     public async Task<ConversationListPage> ListConversationsAsync(
         Guid organizationId,
         Guid ownerMemberId,
+        ConversationStatus status,
         int limit,
         DateTimeOffset? cursorUpdatedAt,
         Guid? cursorId,
@@ -213,7 +214,7 @@ public sealed class ConversationRepository(AssistantCoreDbContext dbContext)
             .Where(conversation =>
                 conversation.OrganizationId == organizationId
                 && conversation.OwnerMemberId == ownerMemberId
-                && conversation.Status == ConversationStatus.Active
+                && conversation.Status == status
                 && conversation.DeletedAt == null);
 
         if (cursorUpdatedAt is not null && cursorId is not null)
@@ -230,6 +231,8 @@ public sealed class ConversationRepository(AssistantCoreDbContext dbContext)
             .Select(conversation => new ConversationListItem(
                 conversation.Id,
                 conversation.Title,
+                conversation.Status,
+                conversation.Version,
                 conversation.CreatedAt,
                 conversation.UpdatedAt,
                 conversation.Messages

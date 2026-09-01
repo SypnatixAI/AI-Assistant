@@ -18,11 +18,13 @@ public sealed class ListConversationsCommandHandler(
     {
         var userContext = await userContextService.GetCurrentAsync(cancellationToken);
         var limit = ConversationListingLimits.Validate(request.Limit);
+        var status = ConversationStatusParser.ParseOrDefault(request.Status);
         var cursor = cursorCodec.Decode(request.Cursor);
 
         var page = await conversationListingService.ListAsync(
             userContext.Organization.Id,
             userContext.Member.Id,
+            status,
             limit,
             cursor?.UpdatedAt,
             cursor?.Id,
