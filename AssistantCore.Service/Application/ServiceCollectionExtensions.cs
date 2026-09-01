@@ -47,7 +47,8 @@ public static class ServiceCollectionExtensions
                     && options.MaximumToolCalls > 0
                     && options.MaximumModelTokens > 0
                     && options.MaximumEstimatedCost > 0
-                    && options.MaximumResultsPerTool > 0
+                    && options.RetrievalCandidateLimit > 0
+                    && options.FinalEvidenceLimit > 0
                     && options.MaximumContextSize > 0
                     && options.MaximumRepeatedToolCalls > 0
                     && options.MaximumParallelToolCalls > 0,

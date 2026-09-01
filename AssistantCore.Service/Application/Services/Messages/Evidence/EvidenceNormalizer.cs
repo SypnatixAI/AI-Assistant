@@ -7,6 +7,24 @@ namespace AssistantCore.Service.Application.Services.Messages.Evidence;
 
 public sealed class EvidenceNormalizer : IEvidenceNormalizer
 {
+    public static IReadOnlyCollection<RetrievedEvidence> Limit(
+        IReadOnlyCollection<RetrievedEvidence> evidence,
+        int maximumResults)
+    {
+        ArgumentNullException.ThrowIfNull(evidence);
+
+        return new EvidenceNormalizer().Normalize(
+            evidence.Select(item => new EvidenceCandidate(
+                item.SourceType,
+                item.Title,
+                item.Content,
+                item.Reference,
+                item.Url,
+                item.OccurredAt,
+                item.RelevanceScore)).ToArray(),
+            new EvidenceNormalizationOptions(int.MaxValue, maximumResults));
+    }
+
     public IReadOnlyCollection<RetrievedEvidence> Normalize(
         IReadOnlyCollection<EvidenceCandidate> candidates,
         EvidenceNormalizationOptions options)

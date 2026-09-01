@@ -1,5 +1,6 @@
 using System.Text.Json;
 using AssistantCore.Repository.Domain.Enums;
+using AssistantCore.Service.Application.Models.Messages;
 using AssistantCore.Service.Application.Models.Messages.AiModels;
 using AssistantCore.Service.Application.Models.Messages.Connectors;
 using AssistantCore.Service.Application.Models.Messages.Lifecycle;
@@ -52,7 +53,8 @@ public sealed class MessageOrchestrationStateTests
             MaximumToolCalls: 8,
             MaximumModelTokens: 12_000,
             MaximumEstimatedCost: 1.25m,
-            MaximumResultsPerTool: 20,
+            RetrievalCandidateLimit: 20,
+            FinalEvidenceLimit: 8,
             MaximumContextSize: 30_000,
             MaximumRepeatedToolCalls: 2);
 
@@ -73,7 +75,12 @@ public sealed class MessageOrchestrationStateTests
         Assert.Equal(conversationHistory, state.ConversationHistory);
         Assert.Equal(organizationId, state.ToolExecutionContext.OrganizationId);
         Assert.Equal(memberId, state.ToolExecutionContext.MemberId);
-        Assert.Equal(executionContext, state.ToolExecutionContext);
+        Assert.Equal(executionContext.OrganizationId, state.ToolExecutionContext.OrganizationId);
+        Assert.Equal(executionContext.MemberId, state.ToolExecutionContext.MemberId);
+        Assert.Equal(executionContext.ExternalTenantId, state.ToolExecutionContext.ExternalTenantId);
+        Assert.Equal(executionContext.EntraUserId, state.ToolExecutionContext.EntraUserId);
+        Assert.Equal(executionContext.IdentityProvider, state.ToolExecutionContext.IdentityProvider);
+        Assert.Equal(limits.RetrievalCandidateLimit, state.ToolExecutionContext.RetrievalCandidateLimit);
         Assert.Same(limits, state.Budget.Limits);
         Assert.Equal(startedAtUtc, state.Budget.StartedAtUtc);
         Assert.Equal(
@@ -116,7 +123,8 @@ public sealed class MessageOrchestrationStateTests
             MaximumToolCalls: 8,
             MaximumModelTokens: 12_000,
             MaximumEstimatedCost: 1.25m,
-            MaximumResultsPerTool: 20,
+            RetrievalCandidateLimit: 20,
+            FinalEvidenceLimit: 8,
             MaximumContextSize: 30_000,
             MaximumRepeatedToolCalls: 2);
         var state = MessageOrchestrationState.Start(
@@ -149,7 +157,8 @@ public sealed class MessageOrchestrationStateTests
             MaximumToolCalls: 8,
             MaximumModelTokens: 12_000,
             MaximumEstimatedCost: 1.25m,
-            MaximumResultsPerTool: 20,
+            RetrievalCandidateLimit: 20,
+            FinalEvidenceLimit: 8,
             MaximumContextSize: 30_000,
             MaximumRepeatedToolCalls: 2);
         var state = MessageOrchestrationState.Start(
@@ -177,5 +186,50 @@ public sealed class MessageOrchestrationStateTests
 
         // Then
         Assert.Same(continuation, state.ContinuationContext);
+    }
+
+    [Theory, AutoDomainData]
+    public void Given_TwentyRetrievedCandidates_When_RecordToolResults_Then_ExposesOnlyTheBestEightEvidenceItems(
+        StartedMessageProcessing processing,
+        SelectedAiModel selectedModel,
+        DateTimeOffset startedAtUtc)
+    {
+        // Given
+        var limits = new OrchestrationExecutionLimits(
+            MaximumExecutionTime: TimeSpan.FromMinutes(2),
+            MaximumToolCalls: 8,
+            MaximumModelTokens: 12_000,
+            MaximumEstimatedCost: 1.25m,
+            RetrievalCandidateLimit: 20,
+            FinalEvidenceLimit: 8,
+            MaximumContextSize: 30_000,
+            MaximumRepeatedToolCalls: 2);
+        var state = MessageOrchestrationState.Start(
+            processing,
+            selectedModel,
+            [],
+            [],
+            limits,
+            startedAtUtc);
+        var evidence = Enumerable.Range(1, 20)
+            .Select(index => new RetrievedEvidence(
+                $"evidence-{index}",
+                "Microsoft365",
+                $"Title {index}",
+                $"Content {index}",
+                $"reference-{index}",
+                null,
+                null,
+                index))
+            .ToArray();
+
+        // When
+        state.RecordToolResults([ToolExecutionResult.Succeeded("tool-call", evidence)]);
+
+        // Then
+        Assert.Equal(8, state.CollectedEvidence.Count);
+        Assert.Equal(
+            Enumerable.Range(13, 8).Reverse().Select(value => (double?)value),
+            state.CollectedEvidence.Select(item => item.RelevanceScore));
     }
 }
