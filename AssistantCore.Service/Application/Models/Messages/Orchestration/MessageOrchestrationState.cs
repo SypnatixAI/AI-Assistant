@@ -2,6 +2,7 @@ using AssistantCore.Service.Application.Models.Messages.AiModels;
 using AssistantCore.Service.Application.Models.Messages.Connectors;
 using AssistantCore.Service.Application.Models.Messages.Lifecycle;
 using AssistantCore.Service.Application.Models.Messages.Tools;
+using AssistantCore.Service.Application.Services.Messages.Evidence;
 
 namespace AssistantCore.Service.Application.Models.Messages.Orchestration;
 
@@ -29,7 +30,10 @@ public sealed class MessageOrchestrationState
             conversationHistory,
             limits.MaximumContextSize);
         AllowedTools = allowedTools.ToArray();
-        ToolExecutionContext = toolExecutionContext;
+        ToolExecutionContext = toolExecutionContext with
+        {
+            RetrievalCandidateLimit = limits.RetrievalCandidateLimit
+        };
         Budget = new OrchestrationBudgetTracker(limits, startedAtUtc);
     }
 
@@ -48,7 +52,9 @@ public sealed class MessageOrchestrationState
     public OrchestrationBudgetTracker Budget { get; }
 
     public IReadOnlyCollection<RetrievedEvidence> CollectedEvidence =>
-        _collectedEvidence.ToArray();
+        EvidenceNormalizer.Limit(
+            _collectedEvidence,
+            Budget.Limits.FinalEvidenceLimit);
 
     public IReadOnlyCollection<string> Warnings => _warnings.ToArray();
 

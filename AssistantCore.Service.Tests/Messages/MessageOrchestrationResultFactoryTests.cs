@@ -208,7 +208,8 @@ public sealed class OrchestrationResultBuilderTests
                 MaximumToolCalls: 5,
                 MaximumModelTokens: 1_000,
                 MaximumEstimatedCost: 1m,
-                MaximumResultsPerTool: 10,
+                RetrievalCandidateLimit: 20,
+                FinalEvidenceLimit: 8,
                 MaximumContextSize: 1_000,
                 MaximumRepeatedToolCalls: 1),
             startedAtUtc);

@@ -35,7 +35,7 @@ public sealed class ToolCallBatchExecutorTests
             maximumToolCalls: 10,
             maximumRepeatedToolCalls: 0,
             maximumParallelToolCalls: 2,
-            maximumResultsPerTool: 1);
+            finalEvidenceLimit: 1);
         var processor = CreateProcessor(executor, now);
 
         // When
@@ -49,7 +49,7 @@ public sealed class ToolCallBatchExecutorTests
             Assert.Equal(processing.OrganizationId, context.OrganizationId);
             Assert.Equal(processing.OwnerMemberId, context.MemberId);
         });
-        Assert.All(results, result => Assert.Single(result.Evidence));
+        Assert.All(results, result => Assert.Equal(2, result.Evidence.Count));
         Assert.Single(state.CollectedEvidence);
         Assert.Equal(4, state.Warnings.Count);
         Assert.Equal(4, state.RequestedToolCalls.Count);
@@ -229,7 +229,8 @@ public sealed class ToolCallBatchExecutorTests
         int maximumToolCalls = 10,
         int maximumRepeatedToolCalls = 1,
         int maximumParallelToolCalls = 2,
-        int maximumResultsPerTool = 10,
+        int retrievalCandidateLimit = 20,
+        int finalEvidenceLimit = 8,
         TimeSpan? maximumExecutionTime = null,
         int maximumModelTokens = 12_000,
         decimal maximumEstimatedCost = 1.25m,
@@ -247,7 +248,8 @@ public sealed class ToolCallBatchExecutorTests
             maximumToolCalls,
             maximumModelTokens,
             maximumEstimatedCost,
-            maximumResultsPerTool,
+            retrievalCandidateLimit,
+            finalEvidenceLimit,
             maximumContextSize,
             maximumRepeatedToolCalls,
             maximumParallelToolCalls);
