@@ -64,8 +64,11 @@ ou un changement important de modèle ou d'instructions.
 7. Le scorer compare l'observation avec les attentes du cas et agrège les
    métriques. Le processus retourne un code différent de zéro dès qu'un cas
    échoue.
-8. Le writer enregistre `rag-evaluation.json` et `rag-evaluation.md`. GitHub
-   conserve ces fichiers comme artefacts, même lorsqu'une évaluation échoue.
+8. Le writer enregistre `rag-evaluation.json` et `rag-evaluation.md`. Pour une
+   pull request du dépôt, le workflow publie le rapport Markdown dans un
+   commentaire unique et met ce commentaire à jour à chaque nouvelle
+   exécution. GitHub conserve aussi les deux fichiers comme artefacts, même
+   lorsqu'une évaluation échoue.
 
 Avant l'opération, le système possède seulement un corpus de scénarios. Après
 l'opération, chaque scénario possède une observation, des métriques, les
@@ -141,6 +144,13 @@ Créer l'environnement GitHub `rag-evaluation-certification`, lui ajouter les
 approbateurs requis et y définir le secret `OPENAI_API_KEY`. Le workflow manuel
 est le seul endroit où ce secret est transmis au runner. Le workflow `CI` ne
 référence aucun secret OpenAI et ne peut donc pas déclencher un appel réel.
+
+Le workflow `CI` utilise la permission `pull-requests: write` uniquement pour
+publier le résultat hors ligne dans la conversation de la pull request. Le
+commentaire présente le résultat global, les métriques principales, le détail
+par scénario et les causes d'échec. Il est mis à jour au lieu d'être recréé.
+Cette publication est ignorée pour une pull request provenant d'un fork, où le
+jeton GitHub possède volontairement des droits plus limités.
 
 <a id="limites"></a>
 ## Limites

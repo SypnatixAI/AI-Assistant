@@ -61,6 +61,7 @@
 
 ## Documentation et issues
 
+* Ne créer un nouveau document que lorsqu’il est réellement nécessaire pour comprendre une fonctionnalité, un flow, une décision ou une contrainte importante. Pour une modification locale ou évidente, ne pas ajouter de documentation uniquement par principe. Mettre à jour un document existant seulement si son contenu devient incomplet ou incorrect.
 * Rédiger les documents et tickets dans un langage simple, clair et concret.
 * Choisir chaque mot pour que le texte paraisse naturel à une personne qui découvre le sujet. Éviter les tournures artificielles, les traductions littérales et le jargon inutile.
 * Préférer les expressions courantes comme `membre créé automatiquement` à des formulations techniques comme `membre provisionné`. Lorsqu'un terme technique est indispensable, l'expliquer simplement à sa première utilisation.
