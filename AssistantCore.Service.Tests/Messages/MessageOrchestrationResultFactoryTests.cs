@@ -98,6 +98,28 @@ public sealed class OrchestrationResultBuilderTests
     }
 
     [Theory, AutoDomainData]
+    public void Given_AGeneralAnswerWithoutEvidence_When_Build_Then_ReturnsTheDirectAnswer(
+        StartedMessageProcessing processing,
+        DateTimeOffset startedAtUtc,
+        string expectedAnswer)
+    {
+        // Given
+        var state = CreateState(processing, startedAtUtc);
+        var response = CreateResponse(
+            AiModelDecisionType.Answer,
+            expectedAnswer,
+            CitedEvidenceIds: []);
+        var builder = new OrchestrationResultBuilder(new EvidenceCitationResolver());
+
+        // When
+        var result = builder.Build(state, response);
+
+        // Then
+        Assert.Equal(expectedAnswer, result.Answer);
+        Assert.Empty(result.CitedEvidence);
+    }
+
+    [Theory, AutoDomainData]
     public void Given_InsufficientInformation_When_Build_Then_ReturnsAnExplicitSafeAnswer(
         StartedMessageProcessing processing,
         DateTimeOffset startedAtUtc,

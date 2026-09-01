@@ -20,6 +20,7 @@
 - [Connecteurs directs](#messages-direct-connectors)
 - [Normalisation des preuves](#messages-evidence)
 - [Orchestration modele-outils](#messages-orchestration)
+- [Routage des connaissances](#messages-knowledge-routing)
 - [Clarification et langue](#messages-clarification-language)
 - [Evaluation corrective des preuves](#messages-corrective-evidence)
 - [Construction et validation de la reponse](#17-construire-la-reponse-finale)
@@ -796,6 +797,39 @@ contenu d'un message.
 
 Apres chaque resultat d'outil, le modele doit evaluer si les preuves sont suffisantes.
 
+<a id="messages-knowledge-routing"></a>
+#### Distinguer les questions generales des questions internes
+
+Le modele choisit lui-meme la source necessaire en comprenant le sens de la
+question et le contexte de la conversation. Le backend n'ajoute aucun routeur
+base sur des mots-cles comme `notre`, `politique` ou `projet`.
+
+Une question de connaissance generale qui ne depend pas de donnees privees,
+propres a l'organisation ou externes et actuelles peut recevoir une reponse
+directe depuis les connaissances generales du modele. Par exemple, `What is
+HTTP?` ne declenche aucune recherche interne. Cette reponse ne contient aucun
+`evidenceId` et ne presente pas les connaissances du modele comme le resultat
+d'une recherche.
+
+Une question qui depend des documents, employes, projets, systemes, clients,
+transactions, politiques, conversations ou autres donnees privees ou actuelles
+de l'organisation doit utiliser les outils autorises pertinents. Le modele ne
+doit jamais inventer, completer ou remplacer une information interne avec ses
+connaissances generales. La reponse finale repose uniquement sur les preuves
+recuperees et cite leurs `evidenceId` selon le mecanisme existant.
+
+Si l'information interne necessaire reste introuvable apres les recherches
+raisonnablement utiles, ou si aucun outil autorise ne permet de l'obtenir, le
+modele retourne `cannotAnswer` avec une explication courte et factuelle. Il ne
+transforme pas une absence de preuve en conclusion et ne devine pas la valeur
+manquante.
+
+L'absence d'outil n'empeche donc pas une reponse de connaissance generale. Elle
+empeche seulement de repondre a une question qui exige des informations
+internes non deja presentes dans la conversation. La recherche web publique
+n'est pas disponible dans ce flow : une information generale recente qui
+necessite Internet ne doit pas etre presentee comme ayant ete verifiee en ligne.
+
 Il retourne une decision structuree parmi quatre valeurs :
 
 - `continue` : une nouvelle recherche utile est encore possible
@@ -841,7 +875,11 @@ Exemple : le premier resultat ERP montre une baisse. Le modele consulte ensuite 
 
 #### Decision `answer`
 
-Le modele choisit `answer` lorsque les preuves disponibles repondent directement a la question.
+Le modele choisit `answer` lorsque la question est clairement generale et peut
+etre traitee avec ses connaissances generales, ou lorsque les preuves
+disponibles repondent directement a une question interne. Une reponse generale
+directe ne contient aucune citation. Une reponse fondee sur des donnees internes
+cite les preuves utilisees.
 
 ```json
 {

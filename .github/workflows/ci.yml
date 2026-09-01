@@ -11,6 +11,7 @@ on:
 
 permissions:
   contents: read
+  pull-requests: write
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
@@ -43,3 +44,58 @@ jobs:
 
       - name: Run tests
         run: dotnet test Solution.sln --configuration Release --no-build --logger "console;verbosity=normal"
+
+      - name: Run offline RAG evaluation
+        run: >-
+          dotnet run --project AssistantCore.RagEvaluation/AssistantCore.RagEvaluation.csproj
+          --configuration Release --no-build --
+          --mode offline
+          --dataset docs/recherche/rag-agentique/evaluation-cases.json
+          --output artifacts/rag-evaluation
+
+      - name: Publish RAG evaluation in pull request
+        if: ${{ always() && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository }}
+        continue-on-error: true
+        uses: actions/github-script@v9
+        with:
+          script: |
+            const fs = require('fs');
+            const reportPath = 'artifacts/rag-evaluation/rag-evaluation.md';
+            const marker = '<!-- rag-evaluation-report -->';
+            const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            const report = fs.existsSync(reportPath)
+              ? fs.readFileSync(reportPath, 'utf8').trim()
+              : '# RAG evaluation\n\n> ⚠️ **Report unavailable**\n\nThe workflow stopped before the RAG evaluation report could be generated.';
+            const body = `${marker}\n${report}\n\n---\n[Open the complete workflow run](${runUrl})`;
+            const comments = await github.paginate(
+              github.rest.issues.listComments,
+              {
+                ...context.repo,
+                issue_number: context.issue.number,
+                per_page: 100
+              }
+            );
+            const existingComment = comments.find(comment =>
+              comment.user?.type === 'Bot' && comment.body?.includes(marker));
+
+            if (existingComment) {
+              await github.rest.issues.updateComment({
+                ...context.repo,
+                comment_id: existingComment.id,
+                body
+              });
+            } else {
+              await github.rest.issues.createComment({
+                ...context.repo,
+                issue_number: context.issue.number,
+                body
+              });
+            }
+
+      - name: Upload RAG evaluation report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rag-evaluation-offline
+          path: artifacts/rag-evaluation
+          if-no-files-found: warn
