@@ -194,7 +194,8 @@ public sealed class MessageToolOrchestrator(
             _options.MaximumToolCalls,
             _options.MaximumModelTokens,
             _options.MaximumEstimatedCost,
-            _options.MaximumResultsPerTool,
+            _options.RetrievalCandidateLimit,
+            _options.FinalEvidenceLimit,
             _options.MaximumContextSize,
             _options.MaximumRepeatedToolCalls,
             _options.MaximumParallelToolCalls);

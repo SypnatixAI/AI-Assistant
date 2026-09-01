@@ -49,13 +49,13 @@ public sealed class Microsoft365Connector(
                 context.OrganizationId,
                 normalizedUserId,
                 groupIds),
-            options.MaximumResults);
+            Math.Min(options.MaximumResults, context.RetrievalCandidateLimit));
         var records = await searchRepository.SearchAsync(searchParameters, cancellationToken);
         var evidence = evidenceNormalizer.Normalize(
             records.Select(MapCandidate).ToArray(),
             new EvidenceNormalizationOptions(
                 options.MaximumContentLength,
-                options.MaximumResults));
+                context.RetrievalCandidateLimit));
 
         return new ConnectorResult(evidence);
     }

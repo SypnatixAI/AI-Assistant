@@ -188,7 +188,8 @@ public sealed class OrchestrationContinuationPolicyTests
             MaximumToolCalls: maximumToolCalls,
             MaximumModelTokens: 12_000,
             MaximumEstimatedCost: 1.25m,
-            MaximumResultsPerTool: 20,
+            RetrievalCandidateLimit: 20,
+            FinalEvidenceLimit: 8,
             MaximumContextSize: 30_000,
             MaximumRepeatedToolCalls: 1,
             MaximumParallelToolCalls: 2);

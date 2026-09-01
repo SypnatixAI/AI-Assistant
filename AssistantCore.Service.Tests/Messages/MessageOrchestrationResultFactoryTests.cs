@@ -2,6 +2,7 @@ using System.Text.Json;
 using AssistantCore.Service.Application.Exceptions;
 using AssistantCore.Service.Application.Models.Messages;
 using AssistantCore.Service.Application.Models.Messages.AiModels;
+using AssistantCore.Service.Application.Models.Messages.Evidence;
 using AssistantCore.Service.Application.Models.Messages.Lifecycle;
 using AssistantCore.Service.Application.Models.Messages.Orchestration;
 using AssistantCore.Service.Application.Models.Messages.Tools;
@@ -124,17 +125,16 @@ public sealed class OrchestrationResultBuilderTests
         DateTimeOffset startedAtUtc)
     {
         // Given
-        const string evidenceId = "evidence-757496c563c6593a56b787fd";
         var state = CreateState(processing, startedAtUtc);
-        var evidence = CreateEvidence(evidenceId);
+        var evidence = CreateEvidence("reference-for-answer");
         state.RecordToolResults(
         [
             ToolExecutionResult.Succeeded("call-1", [evidence])
         ]);
         var response = CreateResponse(
             AiModelDecisionType.Answer,
-            $"Supported answer. [{evidenceId}]",
-            [evidenceId]);
+            $"Supported answer. [{evidence.EvidenceId}]",
+            [evidence.EvidenceId]);
         var builder = new OrchestrationResultBuilder(new EvidenceCitationResolver());
 
         // When
@@ -208,7 +208,8 @@ public sealed class OrchestrationResultBuilderTests
                 MaximumToolCalls: 5,
                 MaximumModelTokens: 1_000,
                 MaximumEstimatedCost: 1m,
-                MaximumResultsPerTool: 10,
+                RetrievalCandidateLimit: 20,
+                FinalEvidenceLimit: 8,
                 MaximumContextSize: 1_000,
                 MaximumRepeatedToolCalls: 1),
             startedAtUtc);
@@ -234,12 +235,17 @@ public sealed class OrchestrationResultBuilderTests
                 JsonSerializer.SerializeToElement(new { query = index })))
             .ToArray();
 
-    private static RetrievedEvidence CreateEvidence(string evidenceId) => new(
-        evidenceId,
-        "Internal",
-        "Title",
-        "Content",
-        evidenceId,
-        Url: null,
-        OccurredAt: null);
+    private static RetrievedEvidence CreateEvidence(string reference) =>
+        Assert.Single(new EvidenceNormalizer().Normalize(
+            [new EvidenceCandidate(
+                "Internal",
+                "Title",
+                "Content",
+                reference,
+                Url: null,
+                OccurredAt: null,
+                RelevanceScore: null)],
+            new EvidenceNormalizationOptions(
+                MaximumContentLength: 1_000,
+                MaximumResults: 1)));
 }

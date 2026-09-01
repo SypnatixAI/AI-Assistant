@@ -126,7 +126,8 @@ public sealed class AiModelTurnServiceTests
             MaximumToolCalls: 8,
             MaximumModelTokens: 12_000,
             MaximumEstimatedCost: 1.25m,
-            MaximumResultsPerTool: 20,
+            RetrievalCandidateLimit: 20,
+            FinalEvidenceLimit: 8,
             MaximumContextSize: 30_000,
             MaximumRepeatedToolCalls: 2);
 

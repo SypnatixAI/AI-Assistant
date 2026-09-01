@@ -11,7 +11,6 @@ namespace AssistantCore.ExternalServices.Services.Azure;
 public sealed class AzureAiSearchPassageSearchClient
 {
     private const string ApiVersion = "2025-09-01";
-    private const string SemanticConfigurationName = "m365-semantic";
     private const int SemanticCandidateCount = 50;
     private static readonly string[] SearchScopes = ["https://search.azure.com/.default"];
     private readonly HttpClient httpClient;
@@ -45,6 +44,8 @@ public sealed class AzureAiSearchPassageSearchClient
             filter,
             maximumResults,
             null,
+            true,
+            "m365-semantic",
             cancellationToken);
     }
 
@@ -56,6 +57,8 @@ public sealed class AzureAiSearchPassageSearchClient
         string filter,
         int maximumResults,
         IReadOnlyList<float>? queryVector,
+        bool semanticRankingEnabled,
+        string semanticConfigurationName,
         CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(query);
@@ -64,16 +67,23 @@ public sealed class AzureAiSearchPassageSearchClient
         {
             throw new ArgumentOutOfRangeException(nameof(maximumResults));
         }
+        if (semanticRankingEnabled)
+        {
+            ArgumentException.ThrowIfNullOrWhiteSpace(semanticConfigurationName);
+        }
 
         var payload = new Dictionary<string, object?>
         {
             ["search"] = query,
             ["filter"] = filter,
             ["select"] = "chunkId,title,content,url,modifiedAt",
-            ["queryType"] = "semantic",
-            ["semanticConfiguration"] = SemanticConfigurationName,
             ["top"] = maximumResults
         };
+        if (semanticRankingEnabled)
+        {
+            payload["queryType"] = "semantic";
+            payload["semanticConfiguration"] = semanticConfigurationName;
+        }
         if (queryVector is { Count: > 0 })
         {
             payload["vectorQueries"] = new[]
