@@ -8,5 +8,5 @@ public sealed record Microsoft365OnboardingStatus(
     bool HasIndexedSource)
 {
     public bool IsComplete =>
-        IsConsentComplete && HasSelectedSite;
+        IsConsentComplete && HasSelectedSite && HasIndexedSource;
 }

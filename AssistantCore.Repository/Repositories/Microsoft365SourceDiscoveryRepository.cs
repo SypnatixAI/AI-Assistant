@@ -25,6 +25,8 @@ public sealed class Microsoft365SourceDiscoveryRepository(AssistantCoreDbContext
             .AnyAsync(source =>
                 source.Microsoft365Connection.OrganizationId == organizationId
                 && source.IsIndexed
+                && (source.Status == Microsoft365SourceStatus.Enabled
+                    || source.Status == Microsoft365SourceStatus.FullResyncRequired)
                 && source.Kind != Microsoft365SourceKind.SharePointSite,
                 cancellationToken);
 
@@ -101,11 +103,18 @@ public sealed class Microsoft365SourceDiscoveryRepository(AssistantCoreDbContext
         DateTimeOffset requestedAt,
         CancellationToken cancellationToken = default)
     {
-        if (drive.EnableIndexing(requestedAt)
-            && !drive.Synchronizations.Any(synchronization =>
+        drive.EnableIndexing(requestedAt);
+
+        var hasSuccessfulInitialSynchronization = drive.Synchronizations.Any(synchronization =>
+            synchronization.Type == Microsoft365SynchronizationType.Initial
+            && synchronization.Status == Microsoft365SynchronizationStatus.Succeeded);
+        var hasRetryableInitialSynchronization = drive.Synchronizations.Any(synchronization =>
                 synchronization.Type == Microsoft365SynchronizationType.Initial
                 && synchronization.Status is Microsoft365SynchronizationStatus.Pending
-                    or Microsoft365SynchronizationStatus.Running))
+                    or Microsoft365SynchronizationStatus.Running
+                    or Microsoft365SynchronizationStatus.TemporaryFailure);
+        if (!hasSuccessfulInitialSynchronization
+            && !hasRetryableInitialSynchronization)
         {
             drive.Synchronizations.Add(new Microsoft365Synchronization
             {
@@ -224,10 +233,18 @@ public sealed class Microsoft365SourceDiscoveryRepository(AssistantCoreDbContext
         var initialSynchronizationRequests = 0;
         var subscriptionCreationRequests = 0;
 
-        if (!list.Synchronizations.Any(synchronization =>
+        list.EnableIndexing(requestedAt);
+
+        var hasSuccessfulInitialSynchronization = list.Synchronizations.Any(synchronization =>
+            synchronization.Type == Microsoft365SynchronizationType.Initial
+            && synchronization.Status == Microsoft365SynchronizationStatus.Succeeded);
+        var hasRetryableInitialSynchronization = list.Synchronizations.Any(synchronization =>
                 synchronization.Type == Microsoft365SynchronizationType.Initial
                 && synchronization.Status is Microsoft365SynchronizationStatus.Pending
-                    or Microsoft365SynchronizationStatus.Running))
+                    or Microsoft365SynchronizationStatus.Running
+                    or Microsoft365SynchronizationStatus.TemporaryFailure);
+        if (!hasSuccessfulInitialSynchronization
+            && !hasRetryableInitialSynchronization)
         {
             list.Synchronizations.Add(new Microsoft365Synchronization
             {

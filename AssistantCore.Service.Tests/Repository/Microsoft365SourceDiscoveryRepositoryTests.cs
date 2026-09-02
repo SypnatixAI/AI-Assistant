@@ -64,6 +64,29 @@ public sealed class Microsoft365SourceDiscoveryRepositoryTests
     }
 
     [Theory, AutoDomainData]
+    public async Task Given_OnlyAnUnavailableIndexedSource_When_HasIndexedSourceAsync_Then_ReturnsFalse(
+        Guid databaseId)
+    {
+        // Given
+        await using var dbContext = CreateDbContext(databaseId);
+        var site = await SeedSiteAsync(dbContext);
+        var list = CreateList(site, "list-id", "Requests");
+        list.EnableIndexing(DateTimeOffset.UtcNow);
+        list.MarkUnavailable();
+        dbContext.Add(list);
+        await dbContext.SaveChangesAsync();
+        var repository = new Microsoft365SourceDiscoveryRepository(dbContext);
+
+        // When
+        var hasIndexedSource = await repository.HasIndexedSourceAsync(
+            site.OrganizationId,
+            CancellationToken.None);
+
+        // Then
+        Assert.False(hasIndexedSource);
+    }
+
+    [Theory, AutoDomainData]
     public async Task Given_TheSameListActivationTwice_When_SaveListActivationAsync_Then_CreatesOneUsefulWorkAndSubscription(
         Guid databaseId,
         DateTimeOffset requestedAt)
@@ -98,6 +121,89 @@ public sealed class Microsoft365SourceDiscoveryRepositoryTests
         Assert.Null(subscription.MicrosoftSubscriptionId);
         Assert.Null(subscription.ProtectedClientState);
         Assert.Null(subscription.ExpiresAt);
+    }
+
+    [Theory, AutoDomainData]
+    public async Task Given_APermanentlyFailedInitialListSynchronization_When_SaveListActivationAsync_Then_CreatesANewRetry(
+        Guid databaseId,
+        DateTimeOffset requestedAt)
+    {
+        // Given
+        await using var dbContext = CreateDbContext(databaseId);
+        var site = await SeedSiteAsync(dbContext);
+        var list = CreateList(site, "list-id", "Requests");
+        list.EnableIndexing(requestedAt.AddMinutes(-1));
+        list.Synchronizations.Add(new Microsoft365Synchronization
+        {
+            Id = Guid.NewGuid(),
+            Microsoft365SourceId = list.Id,
+            Type = Microsoft365SynchronizationType.Initial,
+            Status = Microsoft365SynchronizationStatus.PermanentFailure,
+            RequestedAt = requestedAt.AddMinutes(-1)
+        });
+        dbContext.Add(list);
+        await dbContext.SaveChangesAsync();
+        var repository = new Microsoft365SourceDiscoveryRepository(dbContext);
+        var loadedList = await repository.FindListAsync(
+            site.OrganizationId,
+            site.SiteId,
+            list.ListId,
+            CancellationToken.None);
+        Assert.NotNull(loadedList);
+
+        // When
+        var result = await repository.SaveListActivationAsync(
+            loadedList,
+            requestedAt,
+            CancellationToken.None);
+
+        // Then
+        Assert.Equal(1, result.InitialSynchronizationRequests);
+        Assert.Equal(2, loadedList.Synchronizations.Count);
+        Assert.Contains(
+            loadedList.Synchronizations,
+            synchronization => synchronization.Status == Microsoft365SynchronizationStatus.Pending);
+    }
+
+    [Theory, AutoDomainData]
+    public async Task Given_APermanentlyFailedInitialDriveSynchronization_When_SaveDriveActivationAsync_Then_CreatesANewRetry(
+        Guid databaseId,
+        DateTimeOffset requestedAt)
+    {
+        // Given
+        await using var dbContext = CreateDbContext(databaseId);
+        var site = await SeedSiteAsync(dbContext);
+        var drive = CreateDrive(site, "drive-id", "Documents");
+        drive.EnableIndexing(requestedAt.AddMinutes(-1));
+        drive.Synchronizations.Add(new Microsoft365Synchronization
+        {
+            Id = Guid.NewGuid(),
+            Microsoft365SourceId = drive.Id,
+            Type = Microsoft365SynchronizationType.Initial,
+            Status = Microsoft365SynchronizationStatus.PermanentFailure,
+            RequestedAt = requestedAt.AddMinutes(-1)
+        });
+        dbContext.Add(drive);
+        await dbContext.SaveChangesAsync();
+        var repository = new Microsoft365SourceDiscoveryRepository(dbContext);
+        var loadedDrive = await repository.FindDriveAsync(
+            site.OrganizationId,
+            site.SiteId,
+            drive.DriveId,
+            CancellationToken.None);
+        Assert.NotNull(loadedDrive);
+
+        // When
+        await repository.SaveDriveActivationAsync(
+            loadedDrive,
+            requestedAt,
+            CancellationToken.None);
+
+        // Then
+        Assert.Equal(2, loadedDrive.Synchronizations.Count);
+        Assert.Contains(
+            loadedDrive.Synchronizations,
+            synchronization => synchronization.Status == Microsoft365SynchronizationStatus.Pending);
     }
 
     [Theory, AutoDomainData]
@@ -332,6 +438,27 @@ public sealed class Microsoft365SourceDiscoveryRepositoryTests
             ListId = listId,
             Kind = Microsoft365SourceKind.SharePointList,
             ExternalResourceId = listId,
+            ParentExternalResourceId = site.SiteId,
+            DisplayName = displayName,
+            Status = Microsoft365SourceStatus.Discovered,
+            IsIndexed = false,
+            DiscoveredAt = DateTimeOffset.UtcNow
+        };
+
+    private static Microsoft365Drive CreateDrive(
+        Microsoft365Site site,
+        string driveId,
+        string displayName) =>
+        new()
+        {
+            Id = Guid.NewGuid(),
+            Microsoft365ConnectionId = site.Microsoft365ConnectionId,
+            OrganizationId = site.OrganizationId,
+            OrganizationConnectorId = site.OrganizationConnectorId,
+            SiteId = site.SiteId,
+            DriveId = driveId,
+            Kind = Microsoft365SourceKind.SharePointDrive,
+            ExternalResourceId = driveId,
             ParentExternalResourceId = site.SiteId,
             DisplayName = displayName,
             Status = Microsoft365SourceStatus.Discovered,

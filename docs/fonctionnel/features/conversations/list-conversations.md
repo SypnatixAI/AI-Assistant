@@ -47,10 +47,11 @@ Un membre authentifie peut l'utiliser si :
 
 - son organisation existe et est active
 - son compte interne existe et est actif
-- son role interne est `Admin` ou `User`
+- son jeton contient `AssistantCore.Access`
+- la configuration Microsoft 365 est terminee, ou son jeton contient aussi `tenantAdmin`
 
-Les roles `Admin` et `User` voient uniquement leurs propres conversations.
-Un administrateur ne voit pas automatiquement les conversations des autres
+Tous les membres voient uniquement leurs propres conversations.
+Un `tenantAdmin` ne voit pas automatiquement les conversations des autres
 membres.
 
 ## Donnees envoyees par le frontend

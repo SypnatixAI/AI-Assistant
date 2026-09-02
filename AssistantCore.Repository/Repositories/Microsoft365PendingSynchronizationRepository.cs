@@ -9,7 +9,7 @@ namespace AssistantCore.Repository.Repositories;
 public sealed class Microsoft365PendingSynchronizationRepository(AssistantCoreDbContext dbContext)
     : IMicrosoft365PendingSynchronizationRepository
 {
-    public async Task<Microsoft365PendingSynchronization?> ClaimNextDriveAsync(
+    public async Task<Microsoft365PendingSynchronization?> ClaimNextAsync(
         DateTimeOffset startedAt,
         CancellationToken cancellationToken = default)
     {
@@ -17,12 +17,21 @@ public sealed class Microsoft365PendingSynchronizationRepository(AssistantCoreDb
             IsolationLevel.Serializable,
             cancellationToken);
         var synchronization = await dbContext.Microsoft365Synchronizations
+            .Include(candidate => candidate.Microsoft365Source)
             .Where(candidate =>
-                candidate.Microsoft365Source is Microsoft365Drive
+                (candidate.Microsoft365Source is Microsoft365Drive
+                    || candidate.Microsoft365Source is Microsoft365List)
+                && (candidate.Microsoft365Source.SynchronizationLeaseId == null
+                    || candidate.Microsoft365Source.SynchronizationLeaseExpiresAt <= startedAt)
                 && (candidate.Status == Microsoft365SynchronizationStatus.Pending
-                    || candidate.Status == Microsoft365SynchronizationStatus.TemporaryFailure)
+                    || candidate.Status == Microsoft365SynchronizationStatus.TemporaryFailure
+                    || candidate.Status == Microsoft365SynchronizationStatus.Running)
                 && (candidate.Type == Microsoft365SynchronizationType.Initial
-                    || candidate.Type == Microsoft365SynchronizationType.Delta))
+                    || candidate.Type == Microsoft365SynchronizationType.Delta
+                    || candidate.Type == Microsoft365SynchronizationType.IndexCleanup)
+                && !candidate.Microsoft365Source.Synchronizations.Any(other =>
+                    other.Id != candidate.Id
+                    && other.Status == Microsoft365SynchronizationStatus.Running))
             .OrderBy(candidate => candidate.RequestedAt)
             .FirstOrDefaultAsync(cancellationToken);
         if (synchronization is null)
@@ -36,9 +45,21 @@ public sealed class Microsoft365PendingSynchronizationRepository(AssistantCoreDb
         synchronization.AttemptCount++;
         await dbContext.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
+        var organizationId = synchronization.Microsoft365Source switch
+        {
+            Microsoft365Drive drive => drive.OrganizationId,
+            Microsoft365List list => list.OrganizationId,
+            _ => throw new InvalidOperationException(
+                "The Microsoft 365 synchronization source type is not supported.")
+        };
+
         return new Microsoft365PendingSynchronization(
             synchronization.Id,
             synchronization.Microsoft365SourceId,
+            organizationId,
+            synchronization.Microsoft365Source.Kind,
+            synchronization.Microsoft365Source.Status,
+            synchronization.Microsoft365Source.IsIndexed,
             synchronization.Type);
     }
 }

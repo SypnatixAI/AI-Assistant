@@ -1,11 +1,14 @@
 using AssistantCore.Repository.Domain.Entities;
 using AssistantCore.Repository.Domain.Enums;
+using AssistantCore.Repository.Queries;
 using AssistantCore.Repository.Repositories;
 using AssistantCore.Service.Application.Exceptions;
 
 namespace AssistantCore.Service.Application.Services.Organizations;
 
-public sealed class OrganizationManagementService(IOrganizationRepository organizationRepository)
+public sealed class OrganizationManagementService(
+    IOrganizationRepository organizationRepository,
+    IOrganizationQueries organizationQueries)
     : IOrganizationManagementService
 {
     private const int MaximumDomainLength = 200;
@@ -27,8 +30,12 @@ public sealed class OrganizationManagementService(IOrganizationRepository organi
         };
 
         return await organizationRepository.TryCreateOrganizationAsync(organization, cancellationToken)
-            ?? throw new ConflictException(
-                "An organization already exists for this identity provider and domain.");
+            ?? await organizationQueries.FindOrganizationByDomain(
+                organization.IdentityProvider,
+                normalizedDomain,
+                cancellationToken)
+            ?? throw new InvalidOperationException(
+                "The existing organization could not be reloaded after a concurrent creation.");
     }
 
     private static string ValidateDomain(string domain)

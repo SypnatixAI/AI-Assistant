@@ -339,7 +339,8 @@ connexion Microsoft 365.
 
 Le service retrouve l'utilisateur et son organisation depuis le JWT. Aucun
 `organizationId` n'est accepté depuis la requête. Il vérifie ensuite que le
-membre possède le rôle `Admin`; sinon, il retourne `403 Forbidden`.
+jeton contient `AssistantCore.Access` et `tenantAdmin`; sinon, il retourne
+`403 Forbidden`. Le rôle indicatif conservé en base n'autorise pas cette action.
 
 Le service génère un `state` contenant l'organisation, un nonce aléatoire et
 une expiration courte. Le `state` est chiffré et signé. Seule son empreinte est
@@ -453,9 +454,8 @@ Authorization: Bearer <JWT AssistantCore>
 ```
 
 Le controller transmet une commande au `IDispatcher`. Le handler appelle le
-service de connexion, qui retrouve l'organisation depuis le JWT et refuse un
-membre non administrateur. Aucun `organizationId` n'est accepté dans la
-requête.
+service de connexion, qui retrouve l'organisation depuis le JWT et exige le
+claim `tenantAdmin`. Aucun `organizationId` n'est accepté dans la requête.
 
 Le service recherche la connexion avec son identifiant et l'organisation
 courante. Une connexion appartenant à une autre organisation est traitée comme
@@ -563,16 +563,18 @@ recommencer.
 L'administrateur peut cocher et décocher plusieurs sites avant de confirmer sa
 sélection. La confirmation ajoute automatiquement toutes les bibliothèques et
 toutes les listes compatibles des sites retenus. Le bouton permettant d'accéder
-au chat apparaît dès qu'au moins un site a été préparé; il n'existe aucune
-troisième étape obligatoire.
+au chat apparaît dès qu'au moins un site a été préparé et qu'au moins une de ses
+bibliothèques ou listes est activée pour l'indexation; il n'existe aucune
+troisième action manuelle obligatoire.
 Lors des connexions suivantes, une organisation déjà
 configurée arrive directement dans le chat. Un membre non administrateur voit
 un écran d'attente clair tant que la configuration doit encore être terminée
 par un administrateur.
 
 Cette règle n'est pas seulement une présentation frontend : tant que
-l'onboarding n'est pas terminé (consentement valide et au moins un site
-sélectionné), le backend refuse `403 Forbidden` avec le code métier
+l'onboarding n'est pas terminé (consentement valide, au moins un site
+sélectionné et au moins une source enfant activée), le backend refuse
+`403 Forbidden` avec le code métier
 `tenant_admin_required` à tout appel d'un membre qui ne possède pas le rôle
 Entra `tenantAdmin`, y compris `authenticateUser` lui-même. Un membre avec
 `tenantAdmin` reste toujours admis, que la configuration soit terminée ou non.
@@ -580,7 +582,7 @@ Une fois l'onboarding termine, `tenantAdmin` cesse d'etre requis pour les
 membres standards : voir [Authenticate User](../authentification/authenticate-user.md#auth-admission-policy)
 pour la regle complete de derivation du role et de la politique d'admission.
 
-Après l'onboarding, un membre possédant le rôle `Admin` retrouve le même écran
+Après l'onboarding, un membre dont le jeton contient `tenantAdmin` retrouve le même écran
 depuis le menu de la SPA pour retirer ou ajouter des contenus. Ce réglage est
 facultatif et ne bloque pas le chat. Le backend continue de refuser les actions
 administratives aux autres membres.
@@ -629,7 +631,11 @@ POST /api/microsoft365/sites/{siteId}
 Le backend valide de nouveau le site auprès de Graph avant de l'enregistrer.
 Il découvre ensuite ses bibliothèques et ses listes compatibles, les active et
 crée le travail nécessaire à leur première synchronisation. La SPA considère
-alors l'onboarding comme terminé sans demander une sélection supplémentaire.
+alors l'onboarding comme terminé sans demander une sélection supplémentaire,
+mais uniquement si au moins une source enfant est effectivement activée. Si la
+découverte s'interrompt après l'enregistrement du site, la même sélection peut
+être relancée : les lignes valides sont réutilisées et les travaux initiaux ou
+souscriptions manquants sont recréés sans doublon.
 
 Voir un site dans la liste ne l'ajoute pas à onPremia. Seul le choix explicite
 de l'administrateur autorise ses contenus compatibles.
@@ -652,6 +658,12 @@ Lorsqu’un site est activé :
 4. activer automatiquement chaque contenu compatible;
 5. créer une synchronisation initiale pour chaque contenu activé;
 6. créer une souscription par bibliothèque ou liste lorsque cela est supporté.
+
+Ces opérations sont idempotentes. Une source déjà activée est tout de même
+réconciliée afin de réparer un travail initial absent ou définitivement échoué.
+Le worker peut aussi reprendre une synchronisation restée `Running` après un
+arrêt lorsque son lease a expiré. Il n'est jamais nécessaire de vider la base
+pour reprendre ce flow.
 
 Le choix du site autorise donc tout son contenu compatible, y compris les
 listes non masquées qui ne sont ni des listes système ni des bibliothèques de

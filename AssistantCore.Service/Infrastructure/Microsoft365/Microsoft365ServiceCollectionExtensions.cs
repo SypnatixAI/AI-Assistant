@@ -66,7 +66,12 @@ public static class Microsoft365ServiceCollectionExtensions
             .ValidateOnStart();
 
         services.AddOptions<AzureAiSearchOptions>()
-            .Bind(configuration.GetSection(AzureAiSearchOptions.SectionName));
+            .Bind(configuration.GetSection(AzureAiSearchOptions.SectionName))
+            .Validate(options =>
+                    double.IsFinite(options.MinimumSemanticRelevanceScore)
+                    && options.MinimumSemanticRelevanceScore is >= 0d and <= 4d,
+                "AzureSearch minimum semantic relevance score must be between 0 and 4.")
+            .ValidateOnStart();
 
         services.AddDataProtection();
         services.AddMemoryCache();

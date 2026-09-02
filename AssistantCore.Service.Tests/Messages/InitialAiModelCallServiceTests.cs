@@ -124,6 +124,18 @@ public sealed class AiModelTurnServiceTests
             "not from a rigid keyword rule",
             normalizedInstructions,
             StringComparison.Ordinal);
+        Assert.Contains(
+            "The user does not need to explicitly say \"our\", \"my company\", or the organization's name",
+            normalizedInstructions,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "Use general model knowledge directly only when the request is clearly general",
+            normalizedInstructions,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "Treat them as distinct unless the available evidence explicitly establishes a relationship",
+            normalizedInstructions,
+            StringComparison.Ordinal);
     }
 
     [Theory, AutoDomainData]

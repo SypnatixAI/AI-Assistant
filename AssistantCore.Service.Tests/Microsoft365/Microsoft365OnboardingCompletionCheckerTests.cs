@@ -69,7 +69,31 @@ public sealed class Microsoft365OnboardingCompletionCheckerTests
     }
 
     [Theory, AutoDomainData]
-    public async Task Given_AnActiveConnectionWithASelectedSite_When_IsCompleteAsync_Then_ReturnsTrue(
+    public async Task Given_AnActiveConnectionWithASelectedSiteButNoIndexedSource_When_IsCompleteAsync_Then_ReturnsFalse(
+        Guid organizationId,
+        string siteId,
+        CancellationToken cancellationToken)
+    {
+        // Given
+        var checker = CreateChecker(
+            organizationId,
+            new Microsoft365Connection
+            {
+                OrganizationId = organizationId,
+                Status = Microsoft365ConnectionStatus.Active
+            },
+            siteIds: [siteId],
+            hasIndexedSource: false);
+
+        // When
+        var isComplete = await checker.IsCompleteAsync(organizationId, cancellationToken);
+
+        // Then
+        Assert.False(isComplete);
+    }
+
+    [Theory, AutoDomainData]
+    public async Task Given_AnActiveConnectionWithAnIndexedSource_When_IsCompleteAsync_Then_ReturnsTrue(
         Guid organizationId,
         string siteId,
         CancellationToken cancellationToken)
@@ -143,7 +167,7 @@ public sealed class Microsoft365OnboardingCompletionCheckerTests
         Assert.True(firstResult);
         Assert.True(secondResult);
         Assert.Equal(1, connectionRepository.CallCount);
-        Assert.Equal(1, sourceRepository.CallCount);
+        Assert.Equal(2, sourceRepository.CallCount);
     }
 
     [Theory, AutoDomainData]
@@ -180,10 +204,11 @@ public sealed class Microsoft365OnboardingCompletionCheckerTests
     private static Microsoft365OnboardingCompletionChecker CreateChecker(
         Guid connectionOrganizationId,
         Microsoft365Connection? connection,
-        IReadOnlyCollection<string> siteIds) =>
+        IReadOnlyCollection<string> siteIds,
+        bool? hasIndexedSource = null) =>
         new(
             new StubConnectionRepository(connectionOrganizationId, connection),
-            new StubSourceRepository(connectionOrganizationId, siteIds),
+            new StubSourceRepository(connectionOrganizationId, siteIds, hasIndexedSource),
             new MemoryCache(new MemoryCacheOptions()));
 
     private sealed class StubConnectionRepository(
@@ -212,7 +237,8 @@ public sealed class Microsoft365OnboardingCompletionCheckerTests
 
     private sealed class StubSourceRepository(
         Guid organizationId,
-        IReadOnlyCollection<string> siteIds) : IMicrosoft365SourceDiscoveryRepository
+        IReadOnlyCollection<string> siteIds,
+        bool? hasIndexedSource = null) : IMicrosoft365SourceDiscoveryRepository
     {
         public int CallCount { get; private set; }
 
@@ -226,7 +252,15 @@ public sealed class Microsoft365OnboardingCompletionCheckerTests
                 : (IReadOnlyCollection<string>)[]);
         }
 
-        public Task<bool> HasIndexedSourceAsync(Guid organizationId, CancellationToken cancellationToken = default) => Task.FromResult(false);
+        public Task<bool> HasIndexedSourceAsync(
+            Guid requestedOrganizationId,
+            CancellationToken cancellationToken = default)
+        {
+            CallCount++;
+            return Task.FromResult(
+                requestedOrganizationId == organizationId
+                && (hasIndexedSource ?? siteIds.Count > 0));
+        }
         public Task<Microsoft365Site?> FindSiteAsync(Guid organizationId, string siteId, CancellationToken cancellationToken = default) => Task.FromResult<Microsoft365Site?>(null);
         public Task<IReadOnlyCollection<Microsoft365List>> GetListsAsync(Guid organizationId, string siteId, CancellationToken cancellationToken = default) => Task.FromResult<IReadOnlyCollection<Microsoft365List>>([]);
         public Task<Microsoft365List?> FindListAsync(Guid organizationId, string siteId, string listId, CancellationToken cancellationToken = default) => Task.FromResult<Microsoft365List?>(null);

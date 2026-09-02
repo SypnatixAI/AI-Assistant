@@ -13,29 +13,31 @@
 
 ## But
 
-Cette fonctionnalite permet a un `Admin` :
+Cette fonctionnalite permet a un membre dont le jeton contient `tenantAdmin` :
 
 - de voir les utilisateurs de son organisation
-- de promouvoir un utilisateur en `Admin`
-- de remettre un `Admin` au role `User`
+- de modifier l'etiquette indicative `Admin` ou `User` conservee sur leur fiche
 
 Ces actions utilisent deux endpoints :
 
 - `GET /api/members` affiche les membres
 - `PATCH /api/members/{memberId}/role` modifie le role d'un membre
 
-Un endpoint `GET` ne doit jamais modifier une donnee. Le changement de role utilise donc un endpoint `PATCH` separe.
+Un endpoint `GET` ne doit jamais modifier une donnee. Le changement du role
+indicatif utilise donc un endpoint `PATCH` separe. Cette modification n'accorde
+et ne retire aucun droit : les droits d'administration viennent exclusivement
+du claim `tenantAdmin` du jeton courant.
 
 ## Regles communes
 
 - l'utilisateur doit etre connecte
 - l'organisation vient de l'identite de l'utilisateur connecte
 - le frontend ne choisit jamais l'organisation
-- seul un membre actif avec le role `Admin` peut utiliser ces endpoints
-- un Admin ne peut consulter ou modifier que les membres de son organisation
+- seul un membre actif dont le jeton contient `AssistantCore.Access` et `tenantAdmin` peut utiliser ces endpoints
+- un `tenantAdmin` ne peut consulter ou modifier que les membres de son organisation
 - les seuls roles possibles sont `Admin` et `User`
-- les roles viennent uniquement de la base interne
-- aucune permission supplementaire n'est utilisee
+- ces roles en base sont uniquement indicatifs
+- les autorisations viennent des app roles du jeton, jamais du role en base
 
 ---
 
@@ -103,16 +105,16 @@ Concretement :
 
 Si le membre n'existe pas ou n'est pas actif, retourner `403 Forbidden`.
 
-#### 4. Verifier le role Admin
+#### 4. Verifier le droit d'administration
 
 Concretement :
 
-- lire le role du membre dans la base interne
-- continuer seulement si ce role est `Admin`
+- verifier que les app roles du jeton contiennent `AssistantCore.Access`
+- continuer seulement si elles contiennent aussi `tenantAdmin`
 
-Le frontend et les roles du fournisseur d'identite ne sont pas la source de verite.
+Le frontend et le role indicatif de la fiche membre ne sont pas la source de verite.
 
-Si le membre a le role `User`, retourner `403 Forbidden`.
+Si `tenantAdmin` est absent, retourner `403 Forbidden`.
 
 #### 5. Charger les membres
 
@@ -120,7 +122,7 @@ Concretement :
 
 - chercher les membres avec l'identifiant interne de l'organisation courante
 - ne jamais charger les membres d'une autre organisation
-- inclure les membres actifs et inactifs pour donner une vue complete a l'Admin
+- inclure les membres actifs et inactifs pour donner une vue complete au `tenantAdmin`
 - trier la liste par nom, puis par email
 
 Pour chaque membre, retourner seulement :
@@ -157,7 +159,7 @@ PATCH /api/members/{memberId}/role
 
 `memberId` est l'identifiant interne du membre a modifier.
 
-### Promouvoir un utilisateur
+### Indiquer Admin sur la fiche
 
 ```json
 {
@@ -165,7 +167,7 @@ PATCH /api/members/{memberId}/role
 }
 ```
 
-### Remettre un Admin en User
+### Indiquer User sur la fiche
 
 ```json
 {
@@ -188,14 +190,17 @@ PATCH /api/members/{memberId}/role
 <a id="members-role-flow"></a>
 ### Etapes de construction
 
-#### 1. Verifier l'Admin connecte
+#### 1. Verifier l'administrateur connecte
 
 Effectuer les memes controles que pour la liste :
 
 - verifier l'authentification
 - retrouver l'organisation active
 - retrouver le membre connecte et actif
-- verifier que son role interne est `Admin`
+- verifier que son jeton contient `AssistantCore.Access` et `tenantAdmin`
+
+Le role conserve sur sa fiche membre est indicatif et ne doit jamais autoriser
+cette action.
 
 Si un controle echoue, retourner `401` ou `403` sans modifier la base.
 
@@ -228,7 +233,8 @@ Concretement :
 - comparer l'identifiant du membre connecte avec `memberId`
 - si les identifiants sont identiques, retourner `400 Bad Request`
 
-Cette regle evite qu'un Admin se retire lui-meme son acces administratif.
+Cette regle evite une modification accidentelle de sa propre fiche. Elle ne
+protege pas son acces administratif, qui depend de `tenantAdmin` dans Entra.
 
 #### 5. Enregistrer le nouveau role
 
@@ -253,7 +259,7 @@ Retourner `200 OK` avec les informations actuelles du membre et son nouveau role
 - l'identifiant du membre est invalide
 - le body ou le role est invalide
 - le membre cible est inactif
-- l'Admin essaie de modifier son propre role
+- l'administrateur essaie de modifier son propre role indicatif
 
 ### 401 Unauthorized
 
@@ -264,7 +270,7 @@ Retourner `200 OK` avec les informations actuelles du membre et son nouveau role
 
 - l'organisation n'existe pas ou n'est pas active
 - le membre connecte n'existe pas ou n'est pas actif
-- le membre connecte a le role `User`
+- le jeton du membre connecte ne contient pas `tenantAdmin`
 
 ### 404 Not Found
 
@@ -278,9 +284,11 @@ Retourner `200 OK` avec les informations actuelles du membre et son nouveau role
 
 ## Resume
 
-`GET /api/members` verifie l'Admin connecte et retourne uniquement les membres de son organisation.
+`GET /api/members` verifie les droits `tenantAdmin` du membre connecte et retourne uniquement les membres de son organisation.
 
-`PATCH /api/members/{memberId}/role` verifie le meme contexte, valide le membre cible et enregistre son role `Admin` ou `User`.
+`PATCH /api/members/{memberId}/role` verifie le meme contexte, valide le membre
+cible et enregistre son role indicatif `Admin` ou `User`. Cette valeur ne change
+pas ses autorisations.
 
 La désactivation et la réactivation utilisent un contrat séparé décrit dans
 [Gérer le statut d'un membre](manage-member-status.md).

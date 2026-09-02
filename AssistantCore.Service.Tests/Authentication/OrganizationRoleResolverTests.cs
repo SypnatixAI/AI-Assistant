@@ -39,21 +39,23 @@ public sealed class OrganizationRoleResolverTests
         var resolver = CreateResolver();
 
         // When
-        var role = resolver.Resolve(["AssistantCore.Access", "tenantAdmin"]);
+        var role = resolver.Resolve(["AssistantCore.Access", "TenantAdmin"]);
 
         // Then
         Assert.Equal(OrganizationRole.Admin, role);
     }
 
     [Fact]
-    public void Given_TenantAdminWithoutTheAdmissionRole_When_Resolve_Then_ThrowsForbiddenException()
+    public void Given_TenantAdminWithoutTheAdmissionRole_When_Resolve_Then_ReturnsAdmin()
     {
         // Given
         var resolver = CreateResolver();
 
-        // When / Then
-        var exception = Assert.Throws<ForbiddenException>(() => resolver.Resolve(["tenantAdmin"]));
-        Assert.Equal("Organization member access denied.", exception.Message);
+        // When
+        var role = resolver.Resolve(["TenantAdmin"]);
+
+        // Then
+        Assert.Equal(OrganizationRole.Admin, role);
     }
 
     [Fact]
@@ -73,6 +75,6 @@ public sealed class OrganizationRoleResolverTests
         new(Options.Create(new OrganizationRoleOptions
         {
             RequiredAdmissionRole = "AssistantCore.Access",
-            TenantAdminRole = "tenantAdmin"
+            TenantAdminRole = "TenantAdmin"
         }));
 }

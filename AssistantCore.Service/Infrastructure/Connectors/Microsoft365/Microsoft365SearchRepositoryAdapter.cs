@@ -55,7 +55,10 @@ public sealed class Microsoft365SearchRepositoryAdapter(
             configuration.SemanticConfigurationName,
             cancellationToken);
 
-        return results.Select(result => new Microsoft365SearchRecord(
+        return results
+            .Where(result => result.SemanticScore is null
+                || result.SemanticScore >= configuration.MinimumSemanticRelevanceScore)
+            .Select(result => new Microsoft365SearchRecord(
                 "Microsoft365",
                 result.Title,
                 result.Content,

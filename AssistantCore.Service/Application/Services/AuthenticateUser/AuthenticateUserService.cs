@@ -102,18 +102,15 @@ public sealed class AuthenticateUserService(
                 },
                 cancellationToken);
         }
-        else if (member.Role != resolvedRole)
-        {
-            member = await organizationMemberQueries.UpdateRole(
-                member,
-                resolvedRole,
-                cancellationToken);
-        }
 
         if (member.Status != RecordStatus.Active)
         {
             throw new ForbiddenException("Organization member access denied.");
         }
+
+        // Le rôle persistant est informatif. Les autorisations de la session
+        // courante suivent toujours les app roles du JWT.
+        member.Role = resolvedRole;
 
         var isOnboardingComplete = await onboardingCompletionChecker.IsCompleteAsync(
             organizationId,

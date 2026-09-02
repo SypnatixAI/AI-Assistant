@@ -53,8 +53,14 @@ public sealed class Microsoft365OnboardingCompletionChecker(
         var selectedSiteIds = await sourceRepository.GetSiteIdsAsync(
             organizationId,
             cancellationToken);
+        if (selectedSiteIds.Count == 0)
+        {
+            return false;
+        }
 
-        return selectedSiteIds.Count > 0;
+        return await sourceRepository.HasIndexedSourceAsync(
+            organizationId,
+            cancellationToken);
     }
 
     private static string GetCacheKey(Guid organizationId) => $"m365-onboarding-complete:{organizationId:D}";

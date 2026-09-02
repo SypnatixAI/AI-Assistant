@@ -9,4 +9,5 @@ public sealed class AzureAiSearchOptions
     public bool EnsureIndexOnStartup { get; init; }
     public bool SemanticRankingEnabled { get; init; } = true;
     public string SemanticConfigurationName { get; init; } = "m365-semantic";
+    public double MinimumSemanticRelevanceScore { get; init; } = 1.5d;
 }
