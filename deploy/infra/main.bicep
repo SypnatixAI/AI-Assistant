@@ -209,19 +209,19 @@ var devApiEnvironmentVariables = [
   }
   {
     name: 'Microsoft365__GraphBaseUrl'
-    value: '${wiremockInternalBaseUrl}/graph'
+    value: '${wiremockPublicBaseUrl}/graph'
   }
   {
     name: 'Microsoft365__EmbeddingEndpoint'
-    value: '${wiremockInternalBaseUrl}/openai/v1'
+    value: '${wiremockPublicBaseUrl}/openai/v1'
   }
   {
     name: 'AzureSearch__Endpoint'
-    value: '${wiremockInternalBaseUrl}/azure-search'
+    value: '${wiremockPublicBaseUrl}/azure-search'
   }
   {
     name: 'AiModels__Providers__OpenAI__Endpoint'
-    value: '${wiremockInternalBaseUrl}/openai/v1'
+    value: '${wiremockPublicBaseUrl}/openai/v1'
   }
 ]
 
