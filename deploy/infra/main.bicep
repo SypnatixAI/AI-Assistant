@@ -611,7 +611,7 @@ resource migrationsJob 'Microsoft.App/jobs@2024-03-01' = {
           env: [
             {
               name: 'FLYWAY_URL'
-              value: 'jdbc:sqlserver://${sql.outputs.serverFqdn}:1433;databaseName=master;encrypt=true;trustServerCertificate=false;hostNameInCertificate=*.database.windows.net;loginTimeout=30'
+              value: 'jdbc:sqlserver://${sql.outputs.serverFqdn}:1433;databaseName=${sql.outputs.databaseName};encrypt=true;trustServerCertificate=false;hostNameInCertificate=*.database.windows.net;loginTimeout=30'
             }
             {
               name: 'FLYWAY_USER'
