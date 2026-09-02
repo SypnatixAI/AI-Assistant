@@ -1,0 +1,79 @@
+name: Start or stop CERTIF
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: Desired state
+        required: true
+        type: choice
+        options: [start, stop]
+      scope:
+        description: Control only the worker or the complete environment
+        required: true
+        default: all
+        type: choice
+        options: [all, worker]
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: control-certif
+  cancel-in-progress: false
+
+env:
+  AZURE_CORE_OUTPUT: none
+  RESOURCE_GROUP: ${{ vars.AZURE_CERTIF_RESOURCE_GROUP }}
+
+jobs:
+  control:
+    name: ${{ inputs.action }} CERTIF (${{ inputs.scope }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: certif
+
+    steps:
+      - name: Sign in to Azure with OIDC
+        uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Control worker
+        run: |
+          if [ "${{ inputs.action }}" = "start" ]; then
+            MIN_REPLICAS=1
+          else
+            MIN_REPLICAS=0
+          fi
+
+          az containerapp update \
+            --name ca-assistant-worker-certif \
+            --resource-group "$RESOURCE_GROUP" \
+            --min-replicas "$MIN_REPLICAS"
+
+      - name: Control public applications
+        if: ${{ inputs.scope == 'all' }}
+        run: |
+          for app in ca-assistant-api-certif ca-assistant-spa-certif; do
+            if [ "${{ inputs.action }}" = "start" ]; then
+              az containerapp ingress enable \
+                --name "$app" \
+                --resource-group "$RESOURCE_GROUP" \
+                --type external \
+                --target-port 8080 \
+                --transport auto
+            else
+              az containerapp ingress disable \
+                --name "$app" \
+                --resource-group "$RESOURCE_GROUP"
+              az containerapp update \
+                --name "$app" \
+                --resource-group "$RESOURCE_GROUP" \
+                --min-replicas 0
+            fi
+          done
+

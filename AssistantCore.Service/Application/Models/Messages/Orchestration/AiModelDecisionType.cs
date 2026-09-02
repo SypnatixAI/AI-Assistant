@@ -4,5 +4,6 @@ public enum AiModelDecisionType
 {
     UseTools,
     Answer,
+    AskClarification,
     InsufficientInformation
 }

@@ -19,6 +19,7 @@ public sealed class Microsoft365SearchIndexInitializerAdapter(
                 search.IndexName,
                 search.ApiKey,
                 microsoft365Options.Value.EmbeddingDimensions,
+                search.SemanticConfigurationName,
                 cancellationToken)
             : Task.CompletedTask;
     }

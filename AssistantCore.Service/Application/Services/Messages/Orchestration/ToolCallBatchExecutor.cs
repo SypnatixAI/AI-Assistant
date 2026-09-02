@@ -22,9 +22,7 @@ public sealed class ToolCallBatchExecutor(
         cancellationToken.ThrowIfCancellationRequested();
 
         var maximumParallelCalls = state.Budget.Limits.MaximumParallelToolCalls;
-        var maximumEvidencePerTool = state.Budget.Limits.MaximumResultsPerTool;
         EnsurePositive(maximumParallelCalls, nameof(maximumParallelCalls));
-        EnsurePositive(maximumEvidencePerTool, nameof(maximumEvidencePerTool));
 
         var validatedToolCalls = await ValidateAllAsync(
             requestedToolCalls,
@@ -47,7 +45,6 @@ public sealed class ToolCallBatchExecutor(
                 executionResults,
                 state.ToolExecutionContext,
                 maximumParallelCalls,
-                maximumEvidencePerTool,
                 cancellationToken);
         }
         catch
@@ -82,7 +79,6 @@ public sealed class ToolCallBatchExecutor(
         ToolExecutionResult[] executionResults,
         ConnectorExecutionContext executionContext,
         int maximumParallelCalls,
-        int maximumEvidencePerTool,
         CancellationToken cancellationToken)
     {
         using var concurrencyGate = new SemaphoreSlim(maximumParallelCalls);
@@ -102,7 +98,7 @@ public sealed class ToolCallBatchExecutor(
                     cancellationToken);
                 EnsureMatchingCallId(toolCall, result);
                 result = AddFailureWarningWhenMissing(toolCall, result);
-                executionResults[resultIndex] = LimitEvidence(result, maximumEvidencePerTool);
+                executionResults[resultIndex] = result;
             }
             finally
             {
@@ -126,35 +122,6 @@ public sealed class ToolCallBatchExecutor(
                 ?? throw new InvalidOperationException(
                     "A failed tool result must contain an error code."),
             [failureWarningFactory.Create(toolCall.ToolName)]);
-    }
-
-    private static ToolExecutionResult LimitEvidence(
-        ToolExecutionResult result,
-        int maximumEvidenceCount)
-    {
-        var limitedEvidence = result.Evidence.Take(maximumEvidenceCount).ToArray();
-
-        return result.Status switch
-        {
-            ToolExecutionStatus.Success =>
-                ToolExecutionResult.Succeeded(result.ToolCallId, limitedEvidence),
-            ToolExecutionStatus.PartialSuccess =>
-                ToolExecutionResult.PartiallySucceeded(
-                    result.ToolCallId,
-                    limitedEvidence,
-                    result.Warnings),
-            ToolExecutionStatus.Failed =>
-                ToolExecutionResult.Failed(
-                    result.ToolCallId,
-                    result.ErrorCode
-                        ?? throw new InvalidOperationException(
-                            "A failed tool result must contain an error code."),
-                    result.Warnings),
-            _ => throw new ArgumentOutOfRangeException(
-                nameof(result),
-                result.Status,
-                "Unsupported tool execution status.")
-        };
     }
 
     private static void EnsureMatchingCallId(

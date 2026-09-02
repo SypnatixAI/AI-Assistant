@@ -2,6 +2,7 @@ using System.Text.Json;
 using AssistantCore.Service.Application.Exceptions;
 using AssistantCore.Service.Application.Models.Messages;
 using AssistantCore.Service.Application.Models.Messages.AiModels;
+using AssistantCore.Service.Application.Models.Messages.Evidence;
 using AssistantCore.Service.Application.Models.Messages.Lifecycle;
 using AssistantCore.Service.Application.Models.Messages.Orchestration;
 using AssistantCore.Service.Application.Models.Messages.Tools;
@@ -15,8 +16,7 @@ public sealed class OrchestrationResultBuilderTests
     [Theory, AutoDomainData]
     public void Given_PartialSourceFailureAndKnownEvidence_When_Build_Then_ReturnsSupportedAnswerAndAggregatedUsage(
         StartedMessageProcessing processing,
-        DateTimeOffset startedAtUtc,
-        string unknownEvidenceId)
+        DateTimeOffset startedAtUtc)
     {
         // Given
         var state = CreateState(processing, startedAtUtc);
@@ -35,7 +35,7 @@ public sealed class OrchestrationResultBuilderTests
         var response = CreateResponse(
             AiModelDecisionType.Answer,
             "  Supported answer.  ",
-            [evidence.EvidenceId, unknownEvidenceId]);
+            [evidence.EvidenceId]);
         var builder = new OrchestrationResultBuilder(new EvidenceCitationResolver());
 
         // When
@@ -66,7 +66,7 @@ public sealed class OrchestrationResultBuilderTests
         ]);
         var response = CreateResponse(
             AiModelDecisionType.InsufficientInformation,
-            Answer: null,
+            Answer: "The sources are temporarily unavailable.",
             CitedEvidenceIds: []);
         var builder = new OrchestrationResultBuilder(new EvidenceCitationResolver());
 
@@ -98,15 +98,16 @@ public sealed class OrchestrationResultBuilderTests
     }
 
     [Theory, AutoDomainData]
-    public void Given_InsufficientInformation_When_Build_Then_ReturnsAnExplicitSafeAnswer(
+    public void Given_AGeneralAnswerWithoutEvidence_When_Build_Then_ReturnsTheDirectAnswer(
         StartedMessageProcessing processing,
-        DateTimeOffset startedAtUtc)
+        DateTimeOffset startedAtUtc,
+        string expectedAnswer)
     {
         // Given
         var state = CreateState(processing, startedAtUtc);
         var response = CreateResponse(
-            AiModelDecisionType.InsufficientInformation,
-            Answer: null,
+            AiModelDecisionType.Answer,
+            expectedAnswer,
             CitedEvidenceIds: []);
         var builder = new OrchestrationResultBuilder(new EvidenceCitationResolver());
 
@@ -114,8 +115,101 @@ public sealed class OrchestrationResultBuilderTests
         var result = builder.Build(state, response);
 
         // Then
-        Assert.Equal(OrchestrationResultBuilder.InsufficientInformationAnswer, result.Answer);
+        Assert.Equal(expectedAnswer, result.Answer);
         Assert.Empty(result.CitedEvidence);
+    }
+
+    [Theory, AutoDomainData]
+    public void Given_InsufficientInformation_When_Build_Then_ReturnsAnExplicitSafeAnswer(
+        StartedMessageProcessing processing,
+        DateTimeOffset startedAtUtc,
+        string expectedAnswer)
+    {
+        // Given
+        var state = CreateState(processing, startedAtUtc);
+        var response = CreateResponse(
+            AiModelDecisionType.InsufficientInformation,
+            expectedAnswer,
+            CitedEvidenceIds: []);
+        var builder = new OrchestrationResultBuilder(new EvidenceCitationResolver());
+
+        // When
+        var result = builder.Build(state, response);
+
+        // Then
+        Assert.Equal(expectedAnswer, result.Answer);
+        Assert.Empty(result.CitedEvidence);
+    }
+
+    [Theory, AutoDomainData]
+    public void Given_AnAnswerContainingAnEvidenceIdentifier_When_Build_Then_RemovesTheInternalIdentifier(
+        StartedMessageProcessing processing,
+        DateTimeOffset startedAtUtc)
+    {
+        // Given
+        var state = CreateState(processing, startedAtUtc);
+        var evidence = CreateEvidence("reference-for-answer");
+        state.RecordToolResults(
+        [
+            ToolExecutionResult.Succeeded("call-1", [evidence])
+        ]);
+        var response = CreateResponse(
+            AiModelDecisionType.Answer,
+            $"Supported answer. [{evidence.EvidenceId}]",
+            [evidence.EvidenceId]);
+        var builder = new OrchestrationResultBuilder(new EvidenceCitationResolver());
+
+        // When
+        var result = builder.Build(state, response);
+
+        // Then
+        Assert.Equal("Supported answer.", result.Answer);
+        Assert.Equal([evidence], result.CitedEvidence);
+    }
+
+    [Theory, AutoDomainData]
+    public void Given_AnUnknownEvidenceIdentifier_When_Build_Then_RejectsTheProviderResponse(
+        StartedMessageProcessing processing,
+        DateTimeOffset startedAtUtc,
+        string unknownEvidenceId)
+    {
+        // Given
+        var state = CreateState(processing, startedAtUtc);
+        var response = CreateResponse(
+            AiModelDecisionType.Answer,
+            "Supported answer.",
+            [unknownEvidenceId]);
+        var builder = new OrchestrationResultBuilder(new EvidenceCitationResolver());
+
+        // When
+        var exception = Record.Exception(() => builder.Build(state, response));
+
+        // Then
+        Assert.IsType<AiProviderInvalidResponseException>(exception);
+    }
+
+    [Theory, AutoDomainData]
+    public void Given_RetrievedEvidenceAndAnUncitedAnswer_When_Build_Then_RejectsTheProviderResponse(
+        StartedMessageProcessing processing,
+        DateTimeOffset startedAtUtc)
+    {
+        // Given
+        var state = CreateState(processing, startedAtUtc);
+        state.RecordToolResults(
+        [
+            ToolExecutionResult.Succeeded("call-1", [CreateEvidence("evidence-known")])
+        ]);
+        var response = CreateResponse(
+            AiModelDecisionType.Answer,
+            "Uncited answer.",
+            CitedEvidenceIds: []);
+        var builder = new OrchestrationResultBuilder(new EvidenceCitationResolver());
+
+        // When
+        var exception = Record.Exception(() => builder.Build(state, response));
+
+        // Then
+        Assert.IsType<AiProviderInvalidResponseException>(exception);
     }
 
     private static MessageOrchestrationState CreateState(
@@ -136,7 +230,8 @@ public sealed class OrchestrationResultBuilderTests
                 MaximumToolCalls: 5,
                 MaximumModelTokens: 1_000,
                 MaximumEstimatedCost: 1m,
-                MaximumResultsPerTool: 10,
+                RetrievalCandidateLimit: 20,
+                FinalEvidenceLimit: 8,
                 MaximumContextSize: 1_000,
                 MaximumRepeatedToolCalls: 1),
             startedAtUtc);
@@ -162,12 +257,17 @@ public sealed class OrchestrationResultBuilderTests
                 JsonSerializer.SerializeToElement(new { query = index })))
             .ToArray();
 
-    private static RetrievedEvidence CreateEvidence(string evidenceId) => new(
-        evidenceId,
-        "Internal",
-        "Title",
-        "Content",
-        evidenceId,
-        Url: null,
-        OccurredAt: null);
+    private static RetrievedEvidence CreateEvidence(string reference) =>
+        Assert.Single(new EvidenceNormalizer().Normalize(
+            [new EvidenceCandidate(
+                "Internal",
+                "Title",
+                "Content",
+                reference,
+                Url: null,
+                OccurredAt: null,
+                RelevanceScore: null)],
+            new EvidenceNormalizationOptions(
+                MaximumContentLength: 1_000,
+                MaximumResults: 1)));
 }

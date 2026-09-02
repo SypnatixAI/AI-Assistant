@@ -32,7 +32,7 @@ internal static class AuthorizationIntegrationTestFactory
             {
                 builder.UseEnvironment(Environments.Development);
                 builder.ConfigureAppConfiguration(configuration =>
-                    configuration.AddInMemoryCollection(
+                    configuration.AddIntegrationTestDefaults().AddInMemoryCollection(
                         new Dictionary<string, string?>
                         {
                             ["AiModels:Providers:OpenAI:ApiKey"] = "integration-test-secret",

@@ -8,4 +8,14 @@ public interface IOpenAiResponsesClient
     Task<OpenAiResponsesResult> CreateResponseAsync(
         AiModelRequest request,
         CancellationToken cancellationToken);
+
+    Task<OpenAiResponsesResult> CreateResponseStreamingAsync(
+        AiModelRequest request,
+        Func<string, CancellationToken, ValueTask> onTextDelta,
+        CancellationToken cancellationToken);
+
+    Task<string> CreateConversationSummaryAsync(
+        AiConversationSummaryRequest request,
+        CancellationToken cancellationToken) =>
+        throw new NotSupportedException("Conversation summarization is not supported by this client.");
 }

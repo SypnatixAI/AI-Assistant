@@ -25,6 +25,12 @@ public sealed class ConversationConfiguration : IEntityTypeConfiguration<Convers
             .HasMaxLength(200)
             .IsRequired();
 
+        builder.Property(conversation => conversation.ContextSummary)
+            .HasColumnType("nvarchar(max)");
+
+        builder.Property(conversation => conversation.ContextSummaryUpdatedAt)
+            .HasColumnType("datetimeoffset");
+
         builder.Property(conversation => conversation.Status)
             .HasConversion<string>()
             .HasMaxLength(20)

@@ -1,0 +1,64 @@
+name: RAG evaluation certification
+
+on:
+  workflow_dispatch:
+    inputs:
+      model:
+        description: OpenAI model configured for certification
+        required: true
+        default: gpt-5.6-luna
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rag-evaluation-certification-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+  DOTNET_NOLOGO: "1"
+
+jobs:
+  evaluate:
+    name: Evaluate production orchestration with OpenAI
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: rag-evaluation-certification
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Restore dependencies
+        run: dotnet restore AssistantCore.RagEvaluation/AssistantCore.RagEvaluation.csproj
+
+      - name: Build evaluation runner
+        run: >-
+          dotnet build AssistantCore.RagEvaluation/AssistantCore.RagEvaluation.csproj
+          --configuration Release --no-restore
+
+      - name: Run model RAG evaluation
+        env:
+          RAG_EVAL_OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: >-
+          dotnet run --project AssistantCore.RagEvaluation/AssistantCore.RagEvaluation.csproj
+          --configuration Release --no-build --
+          --mode model
+          --model "${{ inputs.model }}"
+          --dataset docs/recherche/rag-agentique/evaluation-cases.json
+          --output artifacts/rag-evaluation
+
+      - name: Upload RAG evaluation report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rag-evaluation-model-${{ inputs.model }}
+          path: artifacts/rag-evaluation
+          if-no-files-found: warn

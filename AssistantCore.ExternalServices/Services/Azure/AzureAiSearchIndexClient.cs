@@ -30,20 +30,18 @@ public sealed class AzureAiSearchIndexClient
         string indexName,
         string? apiKey,
         int embeddingDimensions,
+        string semanticConfigurationName,
         CancellationToken cancellationToken = default)
     {
+        ArgumentException.ThrowIfNullOrWhiteSpace(semanticConfigurationName);
+
         var uri = new Uri(
             new Uri(endpoint),
             $"/indexes/{Uri.EscapeDataString(indexName)}?api-version={ApiVersion}");
         using var get = new HttpRequestMessage(HttpMethod.Get, uri);
         await AuthorizeAsync(get, apiKey, cancellationToken);
         using var existing = await httpClient.SendAsync(get, cancellationToken);
-        if (existing.IsSuccessStatusCode)
-        {
-            return;
-        }
-
-        if (existing.StatusCode != HttpStatusCode.NotFound)
+        if (!existing.IsSuccessStatusCode && existing.StatusCode != HttpStatusCode.NotFound)
         {
             throw new AzureAiSearchExternalException(
                 $"Azure AI Search index validation failed with status {(int)existing.StatusCode}.");
@@ -62,6 +60,22 @@ public sealed class AzureAiSearchIndexClient
                 {
                     algorithms = new[] { new { name = "m365-hnsw", kind = "hnsw" } },
                     profiles = new[] { new { name = "m365-vector-profile", algorithm = "m365-hnsw" } }
+                },
+                semantic = new
+                {
+                    configurations = new[]
+                    {
+                        new
+                        {
+                            name = semanticConfigurationName,
+                            prioritizedFields = new
+                            {
+                                titleField = new { fieldName = "title" },
+                                prioritizedContentFields = new[] { new { fieldName = "content" } },
+                                prioritizedKeywordsFields = Array.Empty<object>()
+                            }
+                        }
+                    }
                 }
             })
         };

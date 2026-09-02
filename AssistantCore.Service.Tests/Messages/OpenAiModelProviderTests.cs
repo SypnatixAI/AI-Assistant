@@ -21,6 +21,7 @@ public sealed class OpenAiModelProviderTests
                   "decision": "answer",
                   "reason": "The available evidence answers the question.",
                   "answer": "Sales increased by eight percent.",
+                  "progressMessage": "I found the relevant sales figures.",
                   "evidenceIds": ["source-001"]
                 }
                 """,
@@ -36,6 +37,7 @@ public sealed class OpenAiModelProviderTests
         // Then
         Assert.Equal(AiModelDecisionType.Answer, result.Decision.Type);
         Assert.Equal("Sales increased by eight percent.", result.Decision.Answer);
+        Assert.Equal("I found the relevant sales figures.", result.Decision.ProgressMessage);
         Assert.Equal(["source-001"], result.Decision.CitedEvidenceIds);
         Assert.Equal(120, result.Usage.InputTokens);
         Assert.Equal(40, result.Usage.OutputTokens);
@@ -52,7 +54,15 @@ public sealed class OpenAiModelProviderTests
         {
             Handler = (_, _) => Task.FromResult(new OpenAiResponsesResult(
                 "response-002",
-                string.Empty,
+                """
+                {
+                  "decision": "answer",
+                  "reason": "A source lookup is required.",
+                  "answer": "Search in progress.",
+                  "progressMessage": "Je consulte les données de vente.",
+                  "evidenceIds": []
+                }
+                """,
                 [new OpenAiToolCall("call-001", "query_erp", "{\"metric\":\"sales\"}")],
                 InputTokens: 80,
                 OutputTokens: 20))
@@ -69,6 +79,7 @@ public sealed class OpenAiModelProviderTests
         Assert.Equal("query_erp", toolCall.ToolName);
         Assert.Equal("sales", toolCall.Arguments.GetProperty("metric").GetString());
         Assert.Null(result.Decision.Answer);
+        Assert.Equal("Je consulte les données de vente.", result.Decision.ProgressMessage);
         Assert.Equal(1, result.Usage.ToolCallCount);
     }
 
@@ -114,8 +125,9 @@ public sealed class OpenAiModelProviderTests
     }
 
     [Theory, AutoDomainData]
-    public async Task Given_ACannotAnswerDecisionWithoutAnswer_When_GetNextActionAsync_Then_ReturnsInsufficientInformation(
-        string responseId)
+    public async Task Given_ACannotAnswerDecision_When_GetNextActionAsync_Then_ReturnsLocalizedInsufficientInformation(
+        string responseId,
+        string userMessage)
     {
         // Given
         var client = new StubOpenAiResponsesClient
@@ -126,7 +138,40 @@ public sealed class OpenAiModelProviderTests
                 {
                   "decision": "cannotAnswer",
                   "reason": "No available source contains the requested information.",
-                  "answer": null,
+                  "answer": "{{userMessage}}",
+                  "evidenceIds": []
+                }
+                """.Replace("{{userMessage}}", userMessage, StringComparison.Ordinal),
+                [],
+                InputTokens: 90,
+                OutputTokens: 25))
+        };
+        var provider = CreateProvider(client);
+
+        // When
+        var result = await provider.GetNextActionAsync(CreateRequest(), CancellationToken.None);
+
+        // Then
+        Assert.Equal(AiModelDecisionType.InsufficientInformation, result.Decision.Type);
+        Assert.Equal(userMessage, result.Decision.Answer);
+        Assert.Empty(result.Decision.CitedEvidenceIds);
+    }
+
+    [Theory, AutoDomainData]
+    public async Task Given_AClarificationDecision_When_GetNextActionAsync_Then_ReturnsTheQuestion(
+        string responseId,
+        string clarificationQuestion)
+    {
+        // Given
+        var client = new StubOpenAiResponsesClient
+        {
+            Handler = (_, _) => Task.FromResult(new OpenAiResponsesResult(
+                responseId,
+                $$"""
+                {
+                  "decision": "askClarification",
+                  "reason": "A material subject is missing.",
+                  "answer": "{{clarificationQuestion}}",
                   "evidenceIds": []
                 }
                 """,
@@ -140,8 +185,8 @@ public sealed class OpenAiModelProviderTests
         var result = await provider.GetNextActionAsync(CreateRequest(), CancellationToken.None);
 
         // Then
-        Assert.Equal(AiModelDecisionType.InsufficientInformation, result.Decision.Type);
-        Assert.Null(result.Decision.Answer);
+        Assert.Equal(AiModelDecisionType.AskClarification, result.Decision.Type);
+        Assert.Equal(clarificationQuestion, result.Decision.Answer);
         Assert.Empty(result.Decision.CitedEvidenceIds);
     }
 
@@ -149,6 +194,7 @@ public sealed class OpenAiModelProviderTests
     [InlineData("")]
     [InlineData("not-json")]
     [InlineData("{\"decision\":\"answer\",\"reason\":\"Missing answer\"}")]
+    [InlineData("{\"decision\":\"cannotAnswer\",\"reason\":\"Missing answer\",\"answer\":null,\"evidenceIds\":[]}")]
     public async Task Given_AnInvalidResponse_When_GetNextActionAsync_Then_ThrowsControlledInvalidResponse(
         string outputText)
     {
@@ -249,6 +295,107 @@ public sealed class OpenAiModelProviderTests
         Assert.Equal(statusCode, exception.ProviderStatusCode);
     }
 
+    [Theory, AutoDomainData]
+    public async Task Given_AStreamingAnswer_When_GetNextActionStreamingAsync_Then_ForwardsDeltasAndReturnsTheMappedDecision(
+        string unused)
+    {
+        // Given
+        _ = unused;
+        var client = new StubOpenAiResponsesClient
+        {
+            Handler = (_, _) => Task.FromResult(new OpenAiResponsesResult(
+                "response-stream-001",
+                """
+                {"decision":"answer","reason":"Supported.","answer":"Bonjour monde","progressMessage":"J’ai vérifié les sources.","evidenceIds":[]}
+                """,
+                [],
+                InputTokens: 12,
+                OutputTokens: 4)),
+            StreamingHandler = async (_, onTextDelta, token) =>
+            {
+                await onTextDelta("Bonjour", token);
+                await onTextDelta(" monde", token);
+                return await Task.FromResult(new OpenAiResponsesResult(
+                    "response-stream-001",
+                    """
+                    {"decision":"answer","reason":"Supported.","answer":"Bonjour monde","progressMessage":"J’ai vérifié les sources.","evidenceIds":[]}
+                    """,
+                    [],
+                    InputTokens: 12,
+                    OutputTokens: 4));
+            }
+        };
+        var provider = CreateProvider(client);
+        var deltas = new List<string>();
+
+        // When
+        var result = await provider.GetNextActionStreamingAsync(
+            CreateRequest(),
+            (delta, _) =>
+            {
+                deltas.Add(delta);
+                return ValueTask.CompletedTask;
+            },
+            CancellationToken.None);
+
+        // Then
+        Assert.Equal(["Bonjour", " monde"], deltas);
+        Assert.Equal(AiModelDecisionType.Answer, result.Decision.Type);
+        Assert.Equal("Bonjour monde", result.Decision.Answer);
+        Assert.Equal("J’ai vérifié les sources.", result.Decision.ProgressMessage);
+    }
+
+    [Theory, AutoDomainData]
+    public async Task Given_AClientCancellation_When_GetNextActionStreamingAsync_Then_PropagatesCancellation(
+        string unused)
+    {
+        // Given
+        _ = unused;
+        using var cancellationSource = new CancellationTokenSource();
+        await cancellationSource.CancelAsync();
+        var client = new StubOpenAiResponsesClient
+        {
+            Handler = (_, _) => Task.FromCanceled<OpenAiResponsesResult>(cancellationSource.Token),
+            StreamingHandler = (_, _, token) => Task.FromCanceled<OpenAiResponsesResult>(token)
+        };
+        var provider = CreateProvider(client);
+
+        // When
+        var exception = await Record.ExceptionAsync(() => provider.GetNextActionStreamingAsync(
+            CreateRequest(),
+            (_, _) => ValueTask.CompletedTask,
+            cancellationSource.Token));
+
+        // Then
+        Assert.IsType<TaskCanceledException>(exception);
+    }
+
+    [Theory, AutoDomainData]
+    public async Task Given_AStreamingTransportFailure_When_GetNextActionStreamingAsync_Then_ThrowsControlledUnavailable(
+        string unused)
+    {
+        // Given
+        _ = unused;
+        var client = new StubOpenAiResponsesClient
+        {
+            Handler = (_, _) => Task.FromException<OpenAiResponsesResult>(
+                new OpenAiTransportException(StatusCodes.Status503ServiceUnavailable)),
+            StreamingHandler = (_, _, _) => Task.FromException<OpenAiResponsesResult>(
+                new OpenAiTransportException(StatusCodes.Status503ServiceUnavailable))
+        };
+        var provider = CreateProvider(client);
+
+        // When
+        var exception = await Assert.ThrowsAsync<AiProviderUnavailableException>(() =>
+            provider.GetNextActionStreamingAsync(
+                CreateRequest(),
+                (_, _) => ValueTask.CompletedTask,
+                CancellationToken.None));
+
+        // Then
+        Assert.Equal(StatusCodes.Status503ServiceUnavailable, exception.ProviderStatusCode);
+    }
+
     private static StubOpenAiResponsesClient CreateFailingClient(int statusCode) =>
         new()
         {
@@ -286,9 +433,24 @@ public sealed class OpenAiModelProviderTests
             init;
         }
 
+        public Func<
+            AiModelRequest,
+            Func<string, CancellationToken, ValueTask>,
+            CancellationToken,
+            Task<OpenAiResponsesResult>>? StreamingHandler { get; init; }
+
         public Task<OpenAiResponsesResult> CreateResponseAsync(
             AiModelRequest request,
             CancellationToken cancellationToken) =>
             Handler(request, cancellationToken);
+
+        public Task<OpenAiResponsesResult> CreateResponseStreamingAsync(
+            AiModelRequest request,
+            Func<string, CancellationToken, ValueTask> onTextDelta,
+            CancellationToken cancellationToken) =>
+            (StreamingHandler ?? ((streamRequest, _, token) => Handler(streamRequest, token)))(
+                request,
+                onTextDelta,
+                cancellationToken);
     }
 }

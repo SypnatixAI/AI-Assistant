@@ -1,4 +1,5 @@
 using AssistantCore.Repository.Domain.Entities;
+using AssistantCore.Repository.Domain.Enums;
 using AssistantCore.Service.Application.Commands.ListConversations;
 using AssistantCore.Service.Application.Exceptions;
 using AssistantCore.Service.Application.Models.Conversations;
@@ -25,7 +26,7 @@ public sealed class ListConversationsCommandHandlerTests
 
         // When
         var response = await handler.HandleAsync(
-            new ListConversationsCommand(null, null),
+            new ListConversationsCommand(null, null, null),
             CancellationToken.None);
 
         // Then
@@ -58,7 +59,7 @@ public sealed class ListConversationsCommandHandlerTests
 
         // When
         var response = await handler.HandleAsync(
-            new ListConversationsCommand(null, null),
+            new ListConversationsCommand(null, null, null),
             CancellationToken.None);
 
         // Then
@@ -82,7 +83,7 @@ public sealed class ListConversationsCommandHandlerTests
 
         // When
         await handler.HandleAsync(
-            new ListConversationsCommand(50, encodedCursor),
+            new ListConversationsCommand(50, encodedCursor, null),
             CancellationToken.None);
 
         // Then
@@ -104,8 +105,64 @@ public sealed class ListConversationsCommandHandlerTests
         // When / Then
         await Assert.ThrowsAsync<BadRequestException>(() =>
             handler.HandleAsync(
-                new ListConversationsCommand(null, "not-a-valid-cursor"),
+                new ListConversationsCommand(null, "not-a-valid-cursor", null),
                 CancellationToken.None));
+    }
+
+    [Theory, AutoDomainData]
+    public async Task Given_NoStatus_When_HandleAsync_Then_ListsActiveConversations(
+        Organization organization,
+        OrganizationMember member)
+    {
+        // Given
+        var listingService = new RecordingConversationListingService(
+            new ConversationListingPage([], HasMore: false));
+        var handler = CreateHandler(organization, member, listingService);
+
+        // When
+        await handler.HandleAsync(
+            new ListConversationsCommand(null, null, null),
+            CancellationToken.None);
+
+        // Then
+        Assert.Equal(ConversationStatus.Active, listingService.ReceivedStatus);
+    }
+
+    [Theory, AutoDomainData]
+    public async Task Given_TheArchivedStatus_When_HandleAsync_Then_ForwardsItToTheListingService(
+        Organization organization,
+        OrganizationMember member)
+    {
+        // Given
+        var listingService = new RecordingConversationListingService(
+            new ConversationListingPage([], HasMore: false));
+        var handler = CreateHandler(organization, member, listingService);
+
+        // When
+        await handler.HandleAsync(
+            new ListConversationsCommand(null, null, "Archived"),
+            CancellationToken.None);
+
+        // Then
+        Assert.Equal(ConversationStatus.Archived, listingService.ReceivedStatus);
+    }
+
+    [Theory, AutoDomainData]
+    public async Task Given_AnUnknownStatus_When_HandleAsync_Then_ThrowsBadRequestExceptionBeforeListing(
+        Organization organization,
+        OrganizationMember member)
+    {
+        // Given
+        var listingService = new RecordingConversationListingService(
+            new ConversationListingPage([], HasMore: false));
+        var handler = CreateHandler(organization, member, listingService);
+
+        // When / Then
+        await Assert.ThrowsAsync<BadRequestException>(() =>
+            handler.HandleAsync(
+                new ListConversationsCommand(null, null, "Deleted"),
+                CancellationToken.None));
+        Assert.Equal(0, listingService.CallCount);
     }
 
     private static ListConversationsCommandHandler CreateHandler(
@@ -133,6 +190,10 @@ public sealed class ListConversationsCommandHandlerTests
 
         public int ReceivedLimit { get; private set; }
 
+        public ConversationStatus ReceivedStatus { get; private set; }
+
+        public int CallCount { get; private set; }
+
         public DateTimeOffset? ReceivedCursorUpdatedAt { get; private set; }
 
         public Guid? ReceivedCursorId { get; private set; }
@@ -140,14 +201,17 @@ public sealed class ListConversationsCommandHandlerTests
         public Task<ConversationListingPage> ListAsync(
             Guid organizationId,
             Guid ownerMemberId,
+            ConversationStatus status,
             int limit,
             DateTimeOffset? cursorUpdatedAt,
             Guid? cursorId,
             CancellationToken cancellationToken)
         {
+            CallCount++;
             ReceivedOrganizationId = organizationId;
             ReceivedOwnerMemberId = ownerMemberId;
             ReceivedLimit = limit;
+            ReceivedStatus = status;
             ReceivedCursorUpdatedAt = cursorUpdatedAt;
             ReceivedCursorId = cursorId;
             return Task.FromResult(page);

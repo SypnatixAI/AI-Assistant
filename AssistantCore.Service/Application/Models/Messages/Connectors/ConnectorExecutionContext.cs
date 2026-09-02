@@ -7,4 +7,5 @@ public sealed record ConnectorExecutionContext(
     Guid MemberId,
     string? ExternalTenantId = null,
     Guid? EntraUserId = null,
-    IdentityProvider? IdentityProvider = null);
+    IdentityProvider? IdentityProvider = null,
+    int RetrievalCandidateLimit = int.MaxValue);

@@ -32,7 +32,9 @@ public sealed class ConversationLifecycleService(
         }
 
         var desiredTitle = title is null ? null : NormalizeTitle(title);
-        ConversationStatus? desiredStatus = status is null ? null : ParseStatus(status);
+        ConversationStatus? desiredStatus = status is null
+            ? null
+            : ConversationStatusParser.Parse(status);
 
         var conversation = await conversationRepository.FindConversationAsync(
             organizationId,
@@ -177,14 +179,6 @@ public sealed class ConversationLifecycleService(
 
         return normalized;
     }
-
-    private static ConversationStatus ParseStatus(string status) =>
-        status switch
-        {
-            nameof(ConversationStatus.Active) => ConversationStatus.Active,
-            nameof(ConversationStatus.Archived) => ConversationStatus.Archived,
-            _ => throw new BadRequestException("Status must be 'Active' or 'Archived'.")
-        };
 
     private static ConversationResponse Map(Conversation conversation) =>
         new(

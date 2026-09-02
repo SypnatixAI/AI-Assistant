@@ -1,6 +1,5 @@
 using AssistantCore.Service.Application.Abstractions;
 using AssistantCore.Service.Application.Commands.SendMessage.Models;
-using AssistantCore.Service.Application.Models.Messages.Connectors;
 using AssistantCore.Service.Application.Services.Messages.AiModels;
 using AssistantCore.Service.Application.Services.Messages.Authorization;
 using AssistantCore.Service.Application.Services.Messages.Lifecycle;
@@ -37,22 +36,15 @@ public sealed class SendMessageCommandHandler(
             userContext.Organization,
             userContext.Member,
             cancellationToken);
+        processing.SelectedModel = selectedModel;
         var availableTools = await toolRegistry.GetAvailableToolsAsync(
             userContext.Organization.Id,
             cancellationToken);
-        var executionContext = new ConnectorExecutionContext(
-            userContext.Organization.Id,
-            userContext.Member.Id,
-            userContext.Organization.ExternalTenantId,
-            Guid.TryParse(userContext.Member.ExternalUserId, out var entraUserId)
-                ? entraUserId
-                : null,
-            userContext.Member.IdentityProvider);
         var orchestrationResult = await orchestrator.OrchestrateAsync(
             processing,
-            executionContext,
+            userContext.CreateConnectorExecutionContext(),
             selectedModel,
-            [],
+            processing.ConversationHistory,
             availableTools,
             cancellationToken);
         var completedProcessing = await lifecycleService.CompleteAsync(

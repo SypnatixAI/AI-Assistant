@@ -293,7 +293,7 @@ public sealed class ConversationLifecycleEndpointTests
             {
                 builder.UseEnvironment(Environments.Development);
                 builder.ConfigureAppConfiguration(configuration =>
-                    configuration.AddInMemoryCollection(
+                    configuration.AddIntegrationTestDefaults().AddInMemoryCollection(
                         new Dictionary<string, string?>
                         {
                             ["AiModels:Providers:OpenAI:ApiKey"] = "integration-test-secret",

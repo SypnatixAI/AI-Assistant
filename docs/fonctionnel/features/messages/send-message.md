@@ -5,6 +5,7 @@
 - [But](#but)
 - [Fonctionnement general](#messages-overview)
 - [Route](#route)
+- [Reponse progressive](#messages-streaming)
 - [Acces](#qui-peut-utiliser-cet-endpoint)
 - [Contrat du frontend](#messages-contracts)
 - [Exemple de reponse](#exemple-de-reponse)
@@ -20,6 +21,9 @@
 - [Connecteurs directs](#messages-direct-connectors)
 - [Normalisation des preuves](#messages-evidence)
 - [Orchestration modele-outils](#messages-orchestration)
+- [Routage des connaissances](#messages-knowledge-routing)
+- [Clarification et langue](#messages-clarification-language)
+- [Evaluation corrective des preuves](#messages-corrective-evidence)
 - [Construction et validation de la reponse](#17-construire-la-reponse-finale)
 - [Finalisation atomique](#messages-completion)
 - [Gestion des echecs](#messages-resilience)
@@ -78,6 +82,110 @@ question conserve un etat permettant de suivre cet echec.
 ```http
 POST /api/messages
 ```
+
+<a id="messages-streaming"></a>
+## Reponse progressive
+
+```http
+POST /api/messages/stream
+```
+
+Cette route accepte exactement le meme corps que `POST /api/messages` et applique
+les memes regles d'acces, de validation et de persistance. Elle ne differe que
+par la forme de la reponse : au lieu d'attendre la reponse complete, elle diffuse
+l'avancement au fur et a mesure en Server-Sent Events.
+
+La reponse porte `Content-Type: text/event-stream`. Chaque evenement se compose
+d'un nom et d'un corps JSON :
+
+```text
+event: <nom>
+data: <json>
+```
+
+### Evenements
+
+| Nom | Moment | Corps |
+| --- | --- | --- |
+| `message.accepted` | La question est enregistree et le traitement demarre | identifiants, et le resume de la conversation si elle vient d'etre creee |
+| `progress.updated` | Une etape intermediaire merite d'etre montree | `message` |
+| `answer.delta` | Un fragment de reponse est disponible | `delta` |
+| `answer.completed` | La reponse finale est enregistree | la meme charge utile que `POST /api/messages` |
+| `error` | Le traitement a echoue | `code` |
+
+Un flux se termine soit par `answer.completed`, soit par `error`. Aucun autre
+evenement ne suit.
+
+### `message.accepted`
+
+C'est le premier evenement du flux. Il permet au frontend d'afficher
+immediatement la conversation avant meme que le modele ait commence a repondre.
+
+Lorsque la requete ne portait aucun `conversationId`, la conversation vient
+d'etre creee et l'evenement la decrit entierement :
+
+```json
+{
+  "conversationId": "8d7df699-13f8-4c85-871f-115d049bc697",
+  "userMessageId": "2b038fab-0674-46b2-bfd0-ac1cbeb2cb47",
+  "conversation": {
+    "id": "8d7df699-13f8-4c85-871f-115d049bc697",
+    "title": "Politique de teletravail",
+    "status": "Active",
+    "version": 1,
+    "createdAt": "2026-09-01T14:30:00Z",
+    "updatedAt": "2026-09-01T14:30:00Z",
+    "lastMessagePreview": null
+  }
+}
+```
+
+Le champ `conversation` porte exactement la meme forme que les elements de
+[`GET /api/conversations`](../conversations/list-conversations.md#conversations-summary-fields).
+Le frontend peut donc l'inserer directement dans sa liste, sans conversion et
+sans appel supplementaire.
+
+Ce champ est indispensable pour deux raisons :
+
+- le `title` est derive du premier message **par le backend**, apres
+  normalisation des espaces et troncature. Un client qui reutiliserait le texte
+  brut afficherait un titre different de celui reellement enregistre;
+- la `version` est necessaire pour renseigner l'en-tete `If-Match` d'un
+  [renommage](../conversations/manage-conversation.md#conversation-management-patch).
+  Sans elle, la premiere modification d'une conversation toute neuve partirait
+  sans protection de concurrence.
+
+`lastMessagePreview` vaut `null` : a cet instant, la reponse de l'Assistant
+n'existe pas encore et deviendra le dernier message quelques secondes plus tard.
+
+Lorsque la requete portait deja un `conversationId`, la conversation existe et le
+client la connait. Le champ `conversation` est alors **absent**, et non nul :
+
+```json
+{
+  "conversationId": "8d7df699-13f8-4c85-871f-115d049bc697",
+  "userMessageId": "2b038fab-0674-46b2-bfd0-ac1cbeb2cb47"
+}
+```
+
+### Codes d'erreur du flux
+
+Une fois le flux ouvert, le statut HTTP vaut deja `200`. Un echec survenu ensuite
+ne peut donc plus changer ce statut : il est transporte par l'evenement `error`,
+dont le champ `code` prend l'une de ces valeurs stables :
+
+- `ai_provider_timeout`
+- `ai_provider_limit`
+- `ai_provider_unavailable`
+- `ai_provider_invalid_response`
+- `message_generation_failed`
+- `message_generation_cancelled`
+
+Les erreurs anterieures a l'ouverture du flux, comme une requete invalide ou un
+acces refuse, restent des reponses HTTP ordinaires decrites dans
+[Erreurs](#erreurs-a-prevoir).
+
+---
 
 ## Qui peut utiliser cet endpoint
 
@@ -794,10 +902,45 @@ contenu d'un message.
 
 Apres chaque resultat d'outil, le modele doit evaluer si les preuves sont suffisantes.
 
-Il retourne une decision structuree parmi trois valeurs :
+<a id="messages-knowledge-routing"></a>
+#### Distinguer les questions generales des questions internes
+
+Le modele choisit lui-meme la source necessaire en comprenant le sens de la
+question et le contexte de la conversation. Le backend n'ajoute aucun routeur
+base sur des mots-cles comme `notre`, `politique` ou `projet`.
+
+Une question de connaissance generale qui ne depend pas de donnees privees,
+propres a l'organisation ou externes et actuelles peut recevoir une reponse
+directe depuis les connaissances generales du modele. Par exemple, `What is
+HTTP?` ne declenche aucune recherche interne. Cette reponse ne contient aucun
+`evidenceId` et ne presente pas les connaissances du modele comme le resultat
+d'une recherche.
+
+Une question qui depend des documents, employes, projets, systemes, clients,
+transactions, politiques, conversations ou autres donnees privees ou actuelles
+de l'organisation doit utiliser les outils autorises pertinents. Le modele ne
+doit jamais inventer, completer ou remplacer une information interne avec ses
+connaissances generales. La reponse finale repose uniquement sur les preuves
+recuperees et cite leurs `evidenceId` selon le mecanisme existant.
+
+Si l'information interne necessaire reste introuvable apres les recherches
+raisonnablement utiles, ou si aucun outil autorise ne permet de l'obtenir, le
+modele retourne `cannotAnswer` avec une explication courte et factuelle. Il ne
+transforme pas une absence de preuve en conclusion et ne devine pas la valeur
+manquante.
+
+L'absence d'outil n'empeche donc pas une reponse de connaissance generale. Elle
+empeche seulement de repondre a une question qui exige des informations
+internes non deja presentes dans la conversation. La recherche web publique
+n'est pas disponible dans ce flow : une information generale recente qui
+necessite Internet ne doit pas etre presentee comme ayant ete verifiee en ligne.
+
+Il retourne une decision structuree parmi quatre valeurs :
 
 - `continue` : une nouvelle recherche utile est encore possible
 - `answer` : les preuves disponibles permettent de repondre
+- `askClarification` : une information que seul l'utilisateur peut fournir
+  manque pour poursuivre utilement
 - `cannotAnswer` : aucune recherche supplementaire raisonnable ne permettra de repondre
 
 #### Decision `continue`
@@ -837,7 +980,11 @@ Exemple : le premier resultat ERP montre une baisse. Le modele consulte ensuite 
 
 #### Decision `answer`
 
-Le modele choisit `answer` lorsque les preuves disponibles repondent directement a la question.
+Le modele choisit `answer` lorsque la question est clairement generale et peut
+etre traitee avec ses connaissances generales, ou lorsque les preuves
+disponibles repondent directement a une question interne. Une reponse generale
+directe ne contient aucune citation. Une reponse fondee sur des donnees internes
+cite les preuves utilisees.
 
 ```json
 {
@@ -875,6 +1022,47 @@ Le modele choisit `cannotAnswer` lorsque :
 ```
 
 Cette reponse est enregistree normalement. Elle indique clairement la limite des informations trouvees sans inventer une explication.
+
+<a id="messages-clarification-language"></a>
+#### Decision `askClarification` et langue de la reponse
+
+Le modele choisit `askClarification` uniquement lorsqu'il ne peut pas resoudre
+le sujet ou la contrainte manquante depuis le message courant, l'historique ou
+les preuves deja collectees. Il pose la plus petite question permettant de
+reprendre le travail. Il ne demande pas a l'utilisateur une information qu'un
+outil autorise peut raisonnablement retrouver.
+
+Chaque decision terminale contient un message destine a l'utilisateur. Ce
+message est produit dans la langue du message utilisateur courant. Le backend
+ne remplace jamais ce texte par un fallback anglais, francais ou propre a une
+autre langue. Une reponse insuffisante explique ce qui a ete consulte, ce qui
+manque et, lorsque pertinent, la prochaine information utile.
+
+La clarification est enregistree comme un message Assistant normal. La reponse
+suivante de l'utilisateur reprend la meme conversation et beneficie du contexte
+precedent.
+
+<a id="messages-corrective-evidence"></a>
+#### Evaluation corrective des preuves
+
+Apres chaque recherche, l'orchestrateur evalue separement :
+
+- la pertinence des passages pour la question courante;
+- la couverture des faits demandes;
+- les informations encore manquantes;
+- les contradictions entre sources;
+- l'existence d'une recherche differente et raisonnablement utile.
+
+Une recherche vide ou faible ne termine pas automatiquement le traitement. Le
+modele peut reformuler la requete, decomposer la question ou choisir une autre
+source, dans les limites du budget. Une nouvelle recherche doit viser un manque
+precis et ne doit pas seulement accumuler plus de passages.
+
+Le backend accepte `cannotAnswer` seulement apres avoir verifie que la decision
+est compatible avec l'etat reel de l'orchestration. Lorsqu'un budget technique
+est atteint, il interdit les nouveaux outils et demande un dernier tour de
+synthese avec les preuves deja disponibles au lieu de transformer la limite en
+erreur fournisseur.
 
 #### Comment le modele decide d'arreter
 
@@ -939,7 +1127,10 @@ Avant de retourner la reponse :
 
 - verifier que la reponse n'est pas vide
 - verifier que les sources citees existent dans les resultats recuperes
-- retirer les references inconnues
+- rejeter une decision qui repose sur des references inconnues
+- verifier que les affirmations importantes sont soutenues par les preuves citees
+- verifier que toutes les parties essentielles de la question sont traitees ou signalees comme manquantes
+- verifier que la reponse utilise la langue du message utilisateur courant
 - construire la liste finale `sources`
 
 Si les informations sont insuffisantes, la reponse doit le dire clairement, par exemple :

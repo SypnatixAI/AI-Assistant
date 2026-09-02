@@ -5,7 +5,8 @@ public sealed record OrchestrationExecutionLimits(
     int MaximumToolCalls,
     int MaximumModelTokens,
     decimal MaximumEstimatedCost,
-    int MaximumResultsPerTool,
+    int RetrievalCandidateLimit,
+    int FinalEvidenceLimit,
     int MaximumContextSize,
     int MaximumRepeatedToolCalls,
     int MaximumParallelToolCalls = 4);

@@ -29,14 +29,14 @@ public sealed class InternalDataConnector(
             context.MemberId,
             request.Query,
             options.EnabledCategories,
-            options.MaximumResults);
+            Math.Min(options.MaximumResults, context.RetrievalCandidateLimit));
         var records = await repository.SearchAsync(parameters, cancellationToken);
         var candidates = records.Select(MapCandidate).ToArray();
         var evidence = evidenceNormalizer.Normalize(
             candidates,
             new EvidenceNormalizationOptions(
                 options.MaximumContentLength,
-                options.MaximumResults));
+                Math.Min(options.MaximumResults, context.RetrievalCandidateLimit)));
 
         return new ConnectorResult(evidence);
     }

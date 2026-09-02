@@ -120,6 +120,7 @@ public sealed class ConversationRepositoryDeletedVisibilityTests
         var page = await repository.ListConversationsAsync(
             organizationId,
             ownerMemberId,
+            ConversationStatus.Active,
             limit: 25,
             cursorUpdatedAt: null,
             cursorId: null);
@@ -158,6 +159,42 @@ public sealed class ConversationRepositoryDeletedVisibilityTests
 
         // Then
         Assert.Null(added);
+    }
+
+    [Theory, AutoDomainData]
+    public async Task Given_ADeletedArchivedConversation_When_ListConversationsAsync_Then_ExcludesItFromTheArchivedList(
+        Guid organizationId,
+        Guid ownerMemberId,
+        Conversation visibleConversation,
+        Conversation deletedConversation,
+        DateTimeOffset deletedAt)
+    {
+        // Given
+        visibleConversation.OrganizationId = organizationId;
+        visibleConversation.OwnerMemberId = ownerMemberId;
+        visibleConversation.Status = ConversationStatus.Archived;
+        deletedConversation.OrganizationId = organizationId;
+        deletedConversation.OwnerMemberId = ownerMemberId;
+        deletedConversation.Status = ConversationStatus.Archived;
+        deletedConversation.DeletedAt = deletedAt;
+
+        await using var dbContext = CreateDbContext();
+        dbContext.Conversations.AddRange(visibleConversation, deletedConversation);
+        await dbContext.SaveChangesAsync();
+        var repository = new ConversationRepository(dbContext);
+
+        // When
+        var page = await repository.ListConversationsAsync(
+            organizationId,
+            ownerMemberId,
+            ConversationStatus.Archived,
+            limit: 25,
+            cursorUpdatedAt: null,
+            cursorId: null);
+
+        // Then
+        Assert.Single(page.Items);
+        Assert.Equal(visibleConversation.Id, page.Items[0].Id);
     }
 
     private static AssistantCoreDbContext CreateDbContext()

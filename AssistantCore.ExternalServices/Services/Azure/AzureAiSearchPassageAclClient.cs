@@ -61,6 +61,7 @@ public sealed class AzureAiSearchPassageAclClient
                 ["@search.action"] = "mergeOrUpload",
                 ["chunkId"] = passage.ChunkId,
                 ["organizationId"] = passage.OrganizationId,
+                ["sourceType"] = passage.SourceType,
                 ["title"] = passage.Title,
                 ["content"] = passage.Content,
                 ["siteId"] = passage.SiteId,

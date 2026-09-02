@@ -11,6 +11,7 @@ namespace AssistantCore.ExternalServices.Services.Azure;
 public sealed class AzureAiSearchPassageSearchClient
 {
     private const string ApiVersion = "2025-09-01";
+    private const int SemanticCandidateCount = 50;
     private static readonly string[] SearchScopes = ["https://search.azure.com/.default"];
     private readonly HttpClient httpClient;
     private readonly TokenCredential credential;
@@ -43,6 +44,8 @@ public sealed class AzureAiSearchPassageSearchClient
             filter,
             maximumResults,
             null,
+            true,
+            "m365-semantic",
             cancellationToken);
     }
 
@@ -54,6 +57,8 @@ public sealed class AzureAiSearchPassageSearchClient
         string filter,
         int maximumResults,
         IReadOnlyList<float>? queryVector,
+        bool semanticRankingEnabled,
+        string semanticConfigurationName,
         CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(query);
@@ -61,6 +66,10 @@ public sealed class AzureAiSearchPassageSearchClient
         if (maximumResults <= 0)
         {
             throw new ArgumentOutOfRangeException(nameof(maximumResults));
+        }
+        if (semanticRankingEnabled)
+        {
+            ArgumentException.ThrowIfNullOrWhiteSpace(semanticConfigurationName);
         }
 
         var payload = new Dictionary<string, object?>
@@ -70,6 +79,11 @@ public sealed class AzureAiSearchPassageSearchClient
             ["select"] = "chunkId,title,content,url,modifiedAt",
             ["top"] = maximumResults
         };
+        if (semanticRankingEnabled)
+        {
+            payload["queryType"] = "semantic";
+            payload["semanticConfiguration"] = semanticConfigurationName;
+        }
         if (queryVector is { Count: > 0 })
         {
             payload["vectorQueries"] = new[]
@@ -79,7 +93,7 @@ public sealed class AzureAiSearchPassageSearchClient
                     kind = "vector",
                     vector = queryVector,
                     fields = "contentVector",
-                    k = maximumResults
+                    k = Math.Max(maximumResults, SemanticCandidateCount)
                 }
             };
         }
@@ -144,7 +158,7 @@ public sealed class AzureAiSearchPassageSearchClient
             document.ChunkId,
             document.Title,
             document.Content,
-            document.Score,
+            document.RerankerScore ?? document.Score,
             document.Url,
             document.ModifiedAt);
     }
@@ -172,5 +186,6 @@ public sealed class AzureAiSearchPassageSearchClient
         [property: JsonPropertyName("content")] string? Content,
         [property: JsonPropertyName("url")] string? Url,
         [property: JsonPropertyName("modifiedAt")] DateTimeOffset? ModifiedAt,
-        [property: JsonPropertyName("@search.score")] double? Score);
+        [property: JsonPropertyName("@search.score")] double? Score,
+        [property: JsonPropertyName("@search.rerankerScore")] double? RerankerScore);
 }

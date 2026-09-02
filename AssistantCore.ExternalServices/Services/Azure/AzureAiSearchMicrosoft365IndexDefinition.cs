@@ -8,6 +8,7 @@ public static class AzureAiSearchMicrosoft365IndexDefinition
     [
         new("chunkId", "Edm.String", Key: true, Filterable: true),
         new("organizationId", "Edm.String", Filterable: true, Retrievable: false),
+        new("sourceType", "Edm.String", Filterable: true),
         new("title", "Edm.String", Searchable: true),
         new("content", "Edm.String", Searchable: true),
         new("siteId", "Edm.String", Filterable: true),

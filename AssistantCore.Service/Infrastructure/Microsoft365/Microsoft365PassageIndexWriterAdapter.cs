@@ -46,7 +46,8 @@ public sealed class Microsoft365PassageIndexWriterAdapter(
             passage.ChunkNumber,
             passage.Url,
             passage.ModifiedAt,
-            passage.ContentVector)).ToArray();
+            passage.ContentVector,
+            passage.SourceType)).ToArray();
         return client.MergeOrUploadAsync(
             configuration.Endpoint,
             configuration.IndexName,

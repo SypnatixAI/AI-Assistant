@@ -36,4 +36,49 @@ public sealed class OpenAiResponsesClientAdapter(
         }
     }
 
+    public async Task<ApplicationOpenAiResponsesResult> CreateResponseStreamingAsync(
+        AiModelRequest request,
+        Func<string, CancellationToken, ValueTask> onTextDelta,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var externalRequest = requestAdapter.Map(request);
+            var response = await externalClient.CreateResponseStreamingAsync(
+                externalRequest,
+                onTextDelta,
+                cancellationToken);
+
+            return new ApplicationOpenAiResponsesResult(
+                response.ResponseId,
+                response.OutputText,
+                response.ToolCalls.Select(toolCall => new ApplicationOpenAi.OpenAiToolCall(
+                    toolCall.CallId,
+                    toolCall.Name,
+                    toolCall.ArgumentsJson)).ToArray(),
+                response.InputTokens,
+                response.OutputTokens);
+        }
+        catch (OpenAiExternalException exception)
+        {
+            throw new ApplicationOpenAi.OpenAiTransportException(exception.StatusCode);
+        }
+    }
+
+    public async Task<string> CreateConversationSummaryAsync(
+        AiConversationSummaryRequest request,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await externalClient.CreateConversationSummaryAsync(
+                requestAdapter.Map(request),
+                cancellationToken);
+        }
+        catch (OpenAiExternalException exception)
+        {
+            throw new ApplicationOpenAi.OpenAiTransportException(exception.StatusCode);
+        }
+    }
+
 }

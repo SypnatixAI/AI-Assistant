@@ -12,6 +12,7 @@ namespace AssistantCore.Service.Infrastructure.Authentication;
 
 public static class AuthenticationServiceCollectionExtensions
 {
+    private const string DevEnvironmentName = "Dev";
     private const string LocalEnvironmentName = "Local";
     private const string LocalJwtMode = "LocalJwt";
     private const string MicrosoftEntraMode = "MicrosoftEntra";
@@ -38,10 +39,11 @@ public static class AuthenticationServiceCollectionExtensions
                 $"Unsupported authentication mode '{mode}'.");
         }
 
-        if (!environment.IsEnvironment(LocalEnvironmentName))
+        if (!environment.IsEnvironment(LocalEnvironmentName)
+            && !environment.IsEnvironment(DevEnvironmentName))
         {
             throw new InvalidOperationException(
-                $"Authentication mode '{LocalJwtMode}' is only allowed in the '{LocalEnvironmentName}' environment.");
+                $"Authentication mode '{LocalJwtMode}' is only allowed in the '{LocalEnvironmentName}' or '{DevEnvironmentName}' environment.");
         }
 
         var localJwt = configuration

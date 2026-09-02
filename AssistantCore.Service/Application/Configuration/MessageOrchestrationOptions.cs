@@ -12,7 +12,9 @@ public sealed class MessageOrchestrationOptions
 
     public decimal MaximumEstimatedCost { get; init; }
 
-    public int MaximumResultsPerTool { get; init; }
+    public int RetrievalCandidateLimit { get; init; }
+
+    public int FinalEvidenceLimit { get; init; }
 
     public int MaximumContextSize { get; init; }
 

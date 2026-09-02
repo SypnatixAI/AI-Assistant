@@ -10,6 +10,7 @@ Ce dossier contient la documentation fonctionnelle du projet.
 - [Lister les conversations](features/conversations/list-conversations.md)
 - [Charger les messages d'une conversation](features/conversations/get-conversation-messages.md)
 - [Envoyer un message](features/messages/send-message.md)
+- [Rechercher sur le web public](features/messages/public-web-search.md)
 - [Interface web du client](features/frontend/client-interface.md)
 - [Lister les modèles disponibles](features/models/list-models.md)
 - [Consulter le quota de jetons](features/usage/get-token-usage.md)

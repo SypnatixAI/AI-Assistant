@@ -54,6 +54,7 @@ public sealed class AzureAiSearchPassageAclClientTests
         var action = document.RootElement.GetProperty("value").EnumerateArray().Single();
         Assert.Equal("mergeOrUpload", action.GetProperty("@search.action").GetString());
         Assert.Equal(organizationId.ToString("D"), action.GetProperty("organizationId").GetString());
+        Assert.Equal("sharepoint", action.GetProperty("sourceType").GetString());
         Assert.Equal(userId, action.GetProperty("allowedUserIds").EnumerateArray().Single().GetString());
         Assert.Equal(groupId, action.GetProperty("allowedGroupIds").EnumerateArray().Single().GetString());
         Assert.Equal(

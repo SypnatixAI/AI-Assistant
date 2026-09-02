@@ -10,6 +10,8 @@ namespace AssistantCore.Service.Application.Services.Messages.AiModels.Providers
 
 public sealed class OpenAiResponseMapper
 {
+    private const int MaximumProgressMessageLength = 240;
+
     private static readonly JsonSerializerOptions SerializerOptions = new()
     {
         PropertyNameCaseInsensitive = true
@@ -19,7 +21,9 @@ public sealed class OpenAiResponseMapper
     {
         var requestedToolCalls = MapToolCalls(response.ToolCalls);
         var decision = requestedToolCalls.Count > 0
-            ? CreateUseToolsDecision(requestedToolCalls)
+            ? CreateUseToolsDecision(
+                requestedToolCalls,
+                TryReadProgressMessage(response.OutputText))
             : CreateTextDecision(response.OutputText);
 
         var usage = new AiModelUsage(
@@ -52,13 +56,15 @@ public sealed class OpenAiResponseMapper
     }
 
     private static AiModelDecision CreateUseToolsDecision(
-        IReadOnlyCollection<AiRequestedToolCall> requestedToolCalls) =>
+        IReadOnlyCollection<AiRequestedToolCall> requestedToolCalls,
+        string? progressMessage) =>
         new(
             AiModelDecisionType.UseTools,
             "The model requested one or more tools.",
             requestedToolCalls,
             Answer: null,
-            CitedEvidenceIds: []);
+            CitedEvidenceIds: [],
+            ProgressMessage: progressMessage);
 
     private static AiModelDecision CreateTextDecision(string outputText)
     {
@@ -80,12 +86,12 @@ public sealed class OpenAiResponseMapper
         var action = decision.Decision?.Trim().ToLowerInvariant() switch
         {
             "answer" => AiModelDecisionType.Answer,
+            "askclarification" => AiModelDecisionType.AskClarification,
             "cannotanswer" => AiModelDecisionType.InsufficientInformation,
             _ => throw CreateInvalidResponseException()
         };
 
-        if (action == AiModelDecisionType.Answer
-            && string.IsNullOrWhiteSpace(decision.Answer))
+        if (string.IsNullOrWhiteSpace(decision.Answer))
         {
             throw CreateInvalidResponseException();
         }
@@ -95,7 +101,41 @@ public sealed class OpenAiResponseMapper
             decision.Reason,
             ToolCalls: [],
             decision.Answer,
-            decision.EvidenceIds ?? []);
+            decision.EvidenceIds ?? [],
+            NormalizeProgressMessage(decision.ProgressMessage));
+    }
+
+    private static string? TryReadProgressMessage(string outputText)
+    {
+        if (string.IsNullOrWhiteSpace(outputText))
+        {
+            return null;
+        }
+
+        try
+        {
+            var decision = JsonSerializer.Deserialize<OpenAiDecision>(
+                outputText,
+                SerializerOptions);
+            return NormalizeProgressMessage(decision?.ProgressMessage);
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
+
+    private static string? NormalizeProgressMessage(string? progressMessage)
+    {
+        if (string.IsNullOrWhiteSpace(progressMessage))
+        {
+            return null;
+        }
+
+        var normalized = progressMessage.ReplaceLineEndings(" ").Trim();
+        return normalized.Length <= MaximumProgressMessageLength
+            ? normalized
+            : $"{normalized[..(MaximumProgressMessageLength - 1)].TrimEnd()}…";
     }
 
     private static AiProviderInvalidResponseException CreateInvalidResponseException() =>
@@ -105,5 +145,6 @@ public sealed class OpenAiResponseMapper
         [property: JsonPropertyName("decision")] string? Decision,
         [property: JsonPropertyName("reason")] string? Reason,
         [property: JsonPropertyName("answer")] string? Answer,
+        [property: JsonPropertyName("progressMessage")] string? ProgressMessage,
         [property: JsonPropertyName("evidenceIds")] IReadOnlyCollection<string>? EvidenceIds);
 }

@@ -8,8 +8,10 @@ using AssistantCore.Service.Application.Services.Messages;
 using AssistantCore.Service.Application.Services.Messages.Authorization;
 using AssistantCore.Service.Application.Services.Messages.Evidence;
 using AssistantCore.Service.Application.Services.Messages.Lifecycle;
+using AssistantCore.Service.Application.Services.Messages.Memory;
 using AssistantCore.Service.Application.Services.Messages.Orchestration;
 using AssistantCore.Service.Application.Services.Messages.Responses;
+using AssistantCore.Service.Application.Services.Messages.Streaming;
 using AssistantCore.Service.Application.Services.Messages.Tools;
 using AssistantCore.Service.Application.Services.Messages.Validation;
 using AssistantCore.Service.Application.Services.Microsoft365;
@@ -45,7 +47,8 @@ public static class ServiceCollectionExtensions
                     && options.MaximumToolCalls > 0
                     && options.MaximumModelTokens > 0
                     && options.MaximumEstimatedCost > 0
-                    && options.MaximumResultsPerTool > 0
+                    && options.RetrievalCandidateLimit > 0
+                    && options.FinalEvidenceLimit > 0
                     && options.MaximumContextSize > 0
                     && options.MaximumRepeatedToolCalls > 0
                     && options.MaximumParallelToolCalls > 0,
@@ -92,8 +95,10 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IOrganizationManagementService, OrganizationManagementService>();
         services.AddMicrosoft365Application();
         services.AddScoped<IMessageProcessingLifecycleService, MessageProcessingLifecycleService>();
+        services.AddScoped<IConversationMemorySummaryService, ConversationMemorySummaryService>();
         services.AddScoped<IMessageToolOrchestrator, MessageToolOrchestrator>();
         services.AddSingleton<ISendMessageResponseFactory, SendMessageResponseFactory>();
+        services.AddScoped<IMessageStreamErrorReporter, MessageStreamErrorReporter>();
         services.AddScoped<IAiModelTurnService, AiModelTurnService>();
         services.AddScoped<IToolCallBatchExecutor, ToolCallBatchExecutor>();
         services.AddScoped<IOrchestrationContinuationPolicy, OrchestrationContinuationPolicy>();

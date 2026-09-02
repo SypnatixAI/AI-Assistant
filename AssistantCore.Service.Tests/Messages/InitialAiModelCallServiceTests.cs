@@ -13,6 +13,7 @@ public sealed class AiModelTurnServiceTests
     [Theory]
     [InlineAutoDomainData(AiModelDecisionType.Answer)]
     [InlineAutoDomainData(AiModelDecisionType.UseTools)]
+    [InlineAutoDomainData(AiModelDecisionType.AskClarification)]
     [InlineAutoDomainData(AiModelDecisionType.InsufficientInformation)]
     public async Task Given_AProviderDecision_When_RequestNextActionAsync_Then_ReturnsTheDecision(
         AiModelDecisionType decisionType,
@@ -57,14 +58,72 @@ public sealed class AiModelTurnServiceTests
 
         // Then
         var request = Assert.IsType<AiModelRequest>(provider.ReceivedRequest);
+        var normalizedInstructions = NormalizeWhitespace(request.Instructions);
         Assert.Same(state.SelectedModel, request.Model);
         Assert.Equal(state.Question, request.UserMessage);
         Assert.Equal(state.ConversationHistory, request.ConversationHistory);
         Assert.Equal(state.AllowedTools, request.AllowedTools);
         Assert.Empty(request.RequestedToolCalls);
         Assert.Empty(request.ToolResults);
-        Assert.Contains("decision \"cannotAnswer\"", request.Instructions, StringComparison.Ordinal);
-        Assert.Contains("answer to null", request.Instructions, StringComparison.Ordinal);
+        Assert.Contains("Return \"askClarification\"", request.Instructions, StringComparison.Ordinal);
+        Assert.Contains("Return \"cannotAnswer\"", request.Instructions, StringComparison.Ordinal);
+        Assert.Contains(
+            "never disclose internal implementation details",
+            request.Instructions,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "even when the user explicitly requests them",
+            request.Instructions,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "Never include evidence identifiers in answer",
+            request.Instructions,
+            StringComparison.Ordinal);
+        Assert.Contains("language of the user's current message", normalizedInstructions, StringComparison.Ordinal);
+        Assert.Contains("Interpret the current message in its conversation context", normalizedInstructions, StringComparison.Ordinal);
+        Assert.Contains("fulfill that offer directly", normalizedInstructions, StringComparison.Ordinal);
+    }
+
+    [Theory, AutoDomainData]
+    public async Task Given_KnowledgeRouting_When_RequestNextActionAsync_Then_SendsGeneralAndEnterpriseRules(
+        StartedMessageProcessing processing,
+        DateTimeOffset startedAtUtc)
+    {
+        // Given
+        var provider = new RecordingAiModelProvider(
+            "OpenAI",
+            CreateResponse(AiModelDecisionType.Answer));
+        var state = CreateState(processing, startedAtUtc);
+        var service = new AiModelTurnService(
+            [provider],
+            new StubTimeProvider(startedAtUtc.AddSeconds(1)));
+
+        // When
+        await service.RequestNextActionAsync(state, CancellationToken.None);
+
+        // Then
+        var request = Assert.IsType<AiModelRequest>(provider.ReceivedRequest);
+        var normalizedInstructions = NormalizeWhitespace(request.Instructions);
+        Assert.Contains(
+            "you may return \"answer\" directly from general model knowledge without calling a tool",
+            normalizedInstructions,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "Do not call enterprise tools merely to support general knowledge",
+            normalizedInstructions,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "Never infer, complete, or replace enterprise information with general model knowledge",
+            normalizedInstructions,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "including when no appropriate tool is available",
+            normalizedInstructions,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "not from a rigid keyword rule",
+            normalizedInstructions,
+            StringComparison.Ordinal);
     }
 
     [Theory, AutoDomainData]
@@ -110,7 +169,8 @@ public sealed class AiModelTurnServiceTests
             MaximumToolCalls: 8,
             MaximumModelTokens: 12_000,
             MaximumEstimatedCost: 1.25m,
-            MaximumResultsPerTool: 20,
+            RetrievalCandidateLimit: 20,
+            FinalEvidenceLimit: 8,
             MaximumContextSize: 30_000,
             MaximumRepeatedToolCalls: 2);
 
@@ -122,6 +182,9 @@ public sealed class AiModelTurnServiceTests
             limits,
             startedAtUtc);
     }
+
+    private static string NormalizeWhitespace(string value) =>
+        string.Join(' ', value.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
 
     private static AiModelResponse CreateResponse(AiModelDecisionType decisionType) => new(
         new AiModelDecision(
@@ -154,6 +217,12 @@ public sealed class AiModelTurnServiceTests
             ReceivedRequest = request;
             return Task.FromResult(response);
         }
+
+        public Task<AiModelResponse> GetNextActionStreamingAsync(
+            AiModelRequest request,
+            Func<string, CancellationToken, ValueTask> onTextDelta,
+            CancellationToken cancellationToken) =>
+            GetNextActionAsync(request, cancellationToken);
     }
 
     private sealed class StubTimeProvider(DateTimeOffset utcNow) : TimeProvider

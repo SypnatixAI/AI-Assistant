@@ -25,6 +25,9 @@ docker --version
 docker compose version
 ```
 
+Pour créer DEV et CERTIF dans Azure Container Apps, suivre le guide
+[Installer DEV et CERTIF dans Azure Container Apps](docs/operations/azure-dev-certif-setup.md).
+
 ## Demarrage rapide
 
 ### 1. Restaurer et compiler
@@ -97,6 +100,9 @@ dans les fichiers `appsettings.Local.json`; elles ne sont pas lues depuis les
 ```bash
 bash scripts/start-local-wiremock.sh
 ```
+
+Le script fonctionne tel quel sous Linux, macOS et Windows avec Git Bash. Aucune
+variable d'environnement ni fonction preparatoire n'est necessaire.
 
 Le script :
 

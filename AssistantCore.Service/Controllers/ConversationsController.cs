@@ -20,16 +20,17 @@ public sealed class ConversationsController(IDispatcher dispatcher) : Controller
     [HttpGet]
     [SwaggerOperation(Summary = "Lister les conversations de l'utilisateur courant")]
     [SwaggerResponse(StatusCodes.Status200OK, "Conversations returned successfully.", typeof(ListConversationsResponse))]
-    [SwaggerResponse(StatusCodes.Status400BadRequest, "Invalid pagination parameters.")]
+    [SwaggerResponse(StatusCodes.Status400BadRequest, "Invalid pagination parameters or status.")]
     [SwaggerResponse(StatusCodes.Status401Unauthorized, "Authentication required.")]
     [SwaggerResponse(StatusCodes.Status403Forbidden, "Organization or member access denied.")]
     public async Task<ActionResult<ListConversationsResponse>> ListConversations(
         [FromQuery] int? limit,
         [FromQuery] string? cursor,
+        [FromQuery] string? status,
         CancellationToken cancellationToken)
     {
         var result = await dispatcher.SendAsync(
-            new ListConversationsCommand(limit, cursor),
+            new ListConversationsCommand(limit, cursor, status),
             cancellationToken);
 
         return Ok(result);

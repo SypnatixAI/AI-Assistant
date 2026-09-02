@@ -75,6 +75,51 @@ public sealed class Microsoft365DocumentChunkingServiceTests
         Assert.Empty(passages);
     }
 
+    [Theory, AutoDomainData]
+    public void Given_ASectionSpanningSeveralChunks_When_CreateChunks_Then_RepeatsItsContext(
+        Guid organizationId,
+        Guid sourceId,
+        string siteId,
+        string driveId,
+        string itemId,
+        string version,
+        string title)
+    {
+        // Given
+        var service = CreateService(maximumTokens: 20, overlapTokens: 2);
+        var units = new[]
+        {
+            new Microsoft365ExtractedContentUnit(
+                Microsoft365ExtractedContentUnitKind.Header,
+                0,
+                "Accès au bâtiment",
+                "word/document.xml"),
+            new Microsoft365ExtractedContentUnit(
+                Microsoft365ExtractedContentUnitKind.Paragraph,
+                1,
+                string.Join(' ', Enumerable.Repeat("procédure", 40)),
+                "word/document.xml")
+        };
+
+        // When
+        var passages = service.CreateChunks(
+            organizationId,
+            sourceId,
+            siteId,
+            driveId,
+            itemId,
+            version,
+            title,
+            null,
+            null,
+            units);
+
+        // Then
+        Assert.True(passages.Count > 1);
+        Assert.All(passages.Skip(1), passage =>
+            Assert.StartsWith("Section: Accès au bâtiment", passage.Content, StringComparison.Ordinal));
+    }
+
     private static Microsoft365DocumentChunkingService CreateService(
         int maximumTokens,
         int overlapTokens) =>

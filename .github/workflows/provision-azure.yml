@@ -1,0 +1,149 @@
+name: Provision Azure infrastructure
+
+on:
+  workflow_dispatch:
+    inputs:
+      operation:
+        description: Infrastructure operation to run
+        required: true
+        type: choice
+        options:
+          - bootstrap-shared
+          - bootstrap-environment
+          - deploy-environment
+      environment_name:
+        description: Used by environment operations
+        required: true
+        default: dev
+        type: choice
+        options: [dev, certif]
+      backend_image_tag:
+        description: Required by deploy-environment
+        required: false
+        type: string
+      spa_image_tag:
+        description: Required by deploy-environment
+        required: false
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: provision-azure-${{ inputs.environment_name }}
+  cancel-in-progress: false
+
+env:
+  AZURE_CORE_OUTPUT: none
+  LOCATION: canadacentral
+  NAME_SUFFIX: ${{ vars.AZURE_NAME_SUFFIX }}
+
+jobs:
+  provision:
+    name: ${{ inputs.operation }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: ${{ inputs.environment_name }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Sign in to Azure with OIDC
+        uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Validate naming suffix
+        run: |
+          if ! printf '%s' "$NAME_SUFFIX" | grep -Eq '^[a-z0-9]{3,8}$'; then
+            echo "AZURE_NAME_SUFFIX must contain 3 to 8 lowercase letters or digits." >&2
+            exit 1
+          fi
+
+      - name: Bootstrap shared ACR
+        if: ${{ inputs.operation == 'bootstrap-shared' }}
+        env:
+          RESOURCE_GROUP: ${{ vars.AZURE_SHARED_RESOURCE_GROUP }}
+        run: |
+          az group create --name "$RESOURCE_GROUP" --location "$LOCATION"
+          az deployment group create \
+            --name "shared-${GITHUB_RUN_ID}" \
+            --resource-group "$RESOURCE_GROUP" \
+            --template-file deploy/infra/bootstrap-shared.bicep \
+            --parameters location="$LOCATION" nameSuffix="$NAME_SUFFIX"
+
+      - name: Select environment resource group
+        if: ${{ inputs.operation != 'bootstrap-shared' }}
+        run: |
+          if [ "${{ inputs.environment_name }}" = "dev" ]; then
+            RESOURCE_GROUP="${{ vars.AZURE_DEV_RESOURCE_GROUP }}"
+          else
+            RESOURCE_GROUP="${{ vars.AZURE_CERTIF_RESOURCE_GROUP }}"
+          fi
+          echo "RESOURCE_GROUP=${RESOURCE_GROUP}" >> "$GITHUB_ENV"
+
+      - name: Bootstrap environment Key Vault
+        if: ${{ inputs.operation == 'bootstrap-environment' }}
+        run: |
+          az group create --name "$RESOURCE_GROUP" --location "$LOCATION"
+          az deployment group create \
+            --name "bootstrap-${{ inputs.environment_name }}-${GITHUB_RUN_ID}" \
+            --resource-group "$RESOURCE_GROUP" \
+            --template-file deploy/infra/bootstrap-environment.bicep \
+            --parameters \
+              location="$LOCATION" \
+              environmentName="${{ inputs.environment_name }}" \
+              nameSuffix="$NAME_SUFFIX"
+
+          KEY_VAULT_NAME="kv-assistant-${{ inputs.environment_name }}-${NAME_SUFFIX}"
+          {
+            echo "### Key Vault created"
+            echo
+            echo "Seed the required values in \`${KEY_VAULT_NAME}\` before running deploy-environment."
+            echo "The secret values must not be copied into GitHub variables or repository files."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Validate application image tags
+        if: ${{ inputs.operation == 'deploy-environment' }}
+        env:
+          BACKEND_TAG: ${{ inputs.backend_image_tag }}
+          SPA_TAG: ${{ inputs.spa_image_tag }}
+        run: |
+          for tag in "$BACKEND_TAG" "$SPA_TAG"; do
+            if ! printf '%s' "$tag" | grep -Eq '^sha-[0-9a-f]{40}$'; then
+              echo "Both image tags must be sha- followed by a complete 40-character Git SHA." >&2
+              exit 1
+            fi
+          done
+
+      - name: Preview and deploy environment
+        if: ${{ inputs.operation == 'deploy-environment' }}
+        env:
+          BACKEND_TAG: ${{ inputs.backend_image_tag }}
+          SPA_TAG: ${{ inputs.spa_image_tag }}
+          SHARED_RESOURCE_GROUP: ${{ vars.AZURE_SHARED_RESOURCE_GROUP }}
+        run: |
+          PARAMETERS=(
+            location="$LOCATION"
+            environmentName="${{ inputs.environment_name }}"
+            nameSuffix="$NAME_SUFFIX"
+            sharedResourceGroupName="$SHARED_RESOURCE_GROUP"
+            backendImageTag="$BACKEND_TAG"
+            spaImageTag="$SPA_TAG"
+          )
+
+          az deployment group what-if \
+            --resource-group "$RESOURCE_GROUP" \
+            --template-file deploy/infra/main.bicep \
+            --parameters "${PARAMETERS[@]}"
+
+          az deployment group create \
+            --name "environment-${{ inputs.environment_name }}-${GITHUB_RUN_ID}" \
+            --resource-group "$RESOURCE_GROUP" \
+            --template-file deploy/infra/main.bicep \
+            --parameters "${PARAMETERS[@]}"
+
