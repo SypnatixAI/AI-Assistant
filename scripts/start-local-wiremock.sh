@@ -65,8 +65,14 @@ cd "$ROOT_DIR"
 echo "[1/7] Démarrage de SQL Server et préparation de la base locale isolée..."
 ASSISTANTCORE_SKIP_DATABASE_MIGRATIONS=true bash scripts/start-database-stack.sh
 
+# Les chemins destines au conteneur sont prefixes de deux barres obliques.
+# Git Bash reecrit tout argument ressemblant a un chemin absolu POSIX avant de le
+# passer a docker.exe, qui est un binaire Windows : /opt/... y deviendrait
+# C:/Program Files/Git/opt/... et le conteneur ne le trouverait pas. La forme
+# //opt/... traverse MSYS intacte et reste un chemin valide sous Linux et macOS.
+
 docker exec -i assistantcore-sqlserver \
-    /opt/mssql-tools18/bin/sqlcmd \
+    //opt/mssql-tools18/bin/sqlcmd \
     -C -S localhost -U sa -P "$SQL_SERVER_PASSWORD" \
     < test-support/local/reset-local-database.sql
 
@@ -75,13 +81,13 @@ for migration_file in AssistantCore.Repository/Database/Flyway/sql/*.sql; do
         test-support/local/sqlcmd-session-settings.sql \
         "$migration_file" \
         | docker exec -i assistantcore-sqlserver \
-            /opt/mssql-tools18/bin/sqlcmd \
+            //opt/mssql-tools18/bin/sqlcmd \
             -b -C -S localhost -U sa -P "$SQL_SERVER_PASSWORD"
 done
 
 echo "[2/7] Préparation de l'organisation et de l'administrateur locaux..."
 docker exec -i assistantcore-sqlserver \
-    /opt/mssql-tools18/bin/sqlcmd \
+    //opt/mssql-tools18/bin/sqlcmd \
     -C -S localhost -U sa -P "$SQL_SERVER_PASSWORD" \
     < test-support/local/seed-local.sql
 
