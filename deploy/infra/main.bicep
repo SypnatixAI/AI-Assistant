@@ -41,7 +41,8 @@ param tags object = {
 var isDev = environmentName == 'dev'
 var acrName = 'acrassistant${nameSuffix}'
 var acrLoginServer = '${acrName}.azurecr.io'
-var keyVaultName = 'kv-assistant-${environmentName}-${nameSuffix}'
+var keyVaultEnvironmentName = environmentName == 'certif' ? 'cert' : environmentName
+var keyVaultName = 'kv-assistant-${keyVaultEnvironmentName}-${nameSuffix}'
 var containerEnvironmentName = 'cae-assistant-${environmentName}'
 var apiAppName = 'ca-assistant-api-${environmentName}'
 var workerAppName = 'ca-assistant-worker-${environmentName}'

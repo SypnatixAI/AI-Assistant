@@ -18,7 +18,8 @@ param tags object = {
   managedBy: 'bicep'
 }
 
-var keyVaultName = 'kv-assistant-${environmentName}-${nameSuffix}'
+var keyVaultEnvironmentName = environmentName == 'certif' ? 'cert' : environmentName
+var keyVaultName = 'kv-assistant-${keyVaultEnvironmentName}-${nameSuffix}'
 
 resource keyVault 'Microsoft.KeyVault/vaults@2023-07-01' = {
   name: keyVaultName
