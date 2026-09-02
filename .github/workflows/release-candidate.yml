@@ -1,0 +1,96 @@
+name: Create release candidate
+
+on:
+  workflow_dispatch:
+    inputs:
+      backend_image_tag:
+        description: Backend tag already validated in DEV
+        required: true
+        type: string
+      spa_image_tag:
+        description: SPA tag already validated in DEV
+        required: true
+        type: string
+      release_candidate:
+        description: Candidate name, for example rc-2026.09.1
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  AZURE_CORE_OUTPUT: none
+  DEV_RESOURCE_GROUP: ${{ vars.AZURE_DEV_RESOURCE_GROUP }}
+  ACR_NAME: ${{ vars.AZURE_ACR_NAME }}
+
+jobs:
+  manifest:
+    name: Create immutable manifest
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: dev
+
+    steps:
+      - name: Sign in to Azure with OIDC
+        uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Validate inputs and DEV revisions
+        env:
+          BACKEND_TAG: ${{ inputs.backend_image_tag }}
+          SPA_TAG: ${{ inputs.spa_image_tag }}
+          RC_NAME: ${{ inputs.release_candidate }}
+        run: |
+          for tag in "$BACKEND_TAG" "$SPA_TAG"; do
+            if ! printf '%s' "$tag" | grep -Eq '^sha-[0-9a-f]{40}$'; then
+              echo "Every image tag must contain a complete Git SHA." >&2
+              exit 1
+            fi
+          done
+          if ! printf '%s' "$RC_NAME" | grep -Eq '^rc-[0-9A-Za-z._-]+$'; then
+            echo "release_candidate must start with rc-." >&2
+            exit 1
+          fi
+
+          CURRENT_API="$(az containerapp show --name ca-assistant-api-dev --resource-group "$DEV_RESOURCE_GROUP" --query properties.template.containers[0].image --output tsv)"
+          CURRENT_SPA="$(az containerapp show --name ca-assistant-spa-dev --resource-group "$DEV_RESOURCE_GROUP" --query properties.template.containers[0].image --output tsv)"
+          test "$CURRENT_API" = "${ACR_NAME}.azurecr.io/assistant-api:${BACKEND_TAG}"
+          test "$CURRENT_SPA" = "${ACR_NAME}.azurecr.io/assistant-spa:${SPA_TAG}"
+
+      - name: Resolve digests and write manifest
+        env:
+          BACKEND_TAG: ${{ inputs.backend_image_tag }}
+          SPA_TAG: ${{ inputs.spa_image_tag }}
+          RC_NAME: ${{ inputs.release_candidate }}
+        run: |
+          mkdir -p release-candidate
+          API_DIGEST="$(az acr repository show --name "$ACR_NAME" --image "assistant-api:${BACKEND_TAG}" --query digest --output tsv)"
+          WORKER_DIGEST="$(az acr repository show --name "$ACR_NAME" --image "assistant-worker:${BACKEND_TAG}" --query digest --output tsv)"
+          MIGRATIONS_DIGEST="$(az acr repository show --name "$ACR_NAME" --image "assistant-migrations:${BACKEND_TAG}" --query digest --output tsv)"
+          SPA_DIGEST="$(az acr repository show --name "$ACR_NAME" --image "assistant-spa:${SPA_TAG}" --query digest --output tsv)"
+
+          printf '%s\n' \
+            'schemaVersion: 1' \
+            "releaseCandidate: ${RC_NAME}" \
+            "createdAtUtc: $(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            'sourceEnvironment: dev' \
+            'images:' \
+            "  api: ${ACR_NAME}.azurecr.io/assistant-api@${API_DIGEST}" \
+            "  worker: ${ACR_NAME}.azurecr.io/assistant-worker@${WORKER_DIGEST}" \
+            "  migrations: ${ACR_NAME}.azurecr.io/assistant-migrations@${MIGRATIONS_DIGEST}" \
+            "  spa: ${ACR_NAME}.azurecr.io/assistant-spa@${SPA_DIGEST}" \
+            > "release-candidate/${RC_NAME}.yml"
+
+      - name: Upload release candidate manifest
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ inputs.release_candidate }}
+          path: release-candidate/${{ inputs.release_candidate }}.yml
+          if-no-files-found: error
+          retention-days: 90
+

@@ -99,23 +99,26 @@ de paramètres par environnement :
 deploy/
 ├── docker/
 │   ├── api.Dockerfile
-│   └── worker.Dockerfile
+│   ├── worker.Dockerfile
+│   └── wiremock.Dockerfile
 ├── infra/
+│   ├── bootstrap-shared.bicep
+│   ├── bootstrap-environment.bicep
 │   ├── main.bicep
 │   └── modules/
-├── environments/
-│   ├── manifest-vars-dev.bicepparam
-│   └── manifest-vars-certif.bicepparam
-└── scripts/
-    ├── run-migrations.sh
-    ├── smoke-test.sh
-    └── rollback.sh
+└── environments/
+    ├── shared.bicepparam
+    ├── dev.bootstrap.bicepparam
+    ├── dev.bicepparam
+    ├── certif.bootstrap.bicepparam
+    └── certif.bicepparam
 
 .github/workflows/
-├── build-images.yml
-├── _deploy-environment.yml
-├── deploy-to-dev.yml
-└── deploy-to-certif.yml
+├── provision-azure.yml
+├── deploy-dev.yml
+├── promote-certif.yml
+├── control-certif.yml
+└── release-candidate.yml
 ```
 
 `main.bicep` décrit la structure commune. Les fichiers `.bicepparam`
@@ -134,10 +137,10 @@ DEV et CERTIF possèdent chacun :
 - leurs propres données;
 - leur propre déploiement de l'API et du worker.
 
-Les deux bases peuvent initialement partager un serveur logique Azure SQL
-non-production afin de réduire les coûts. Leurs bases, utilisateurs, chaînes de
-connexion et droits restent séparés. Une application ne peut accéder qu'à la
-base de son environnement.
+Chaque base utilise aussi son propre serveur logique Azure SQL. Les chaînes de
+connexion et les droits restent séparés : une application ne peut accéder qu'à
+la base de son environnement. Les deux bases utilisent la limite gratuite
+serverless et se mettent en pause automatiquement après une heure d'inactivité.
 
 Le développement local conserve SQL Server dans Docker. Dans Azure, DEV et
 CERTIF utilisent de vraies bases Azure SQL afin de valider Flyway, les
@@ -147,12 +150,19 @@ redémarrage.
 <a id="production-deployment-images"></a>
 ### Images immuables
 
-L'API, le worker et Flyway sont publiés avec un tag basé sur le SHA du commit :
+Un ACR Basic partagé stocke les images de DEV et CERTIF. Son compte
+administrateur est désactivé. Les Container Apps tirent les images avec une
+identité managée ayant seulement le rôle `AcrPull`.
+
+L'API, le worker, Flyway, WireMock et la SPA sont publiés avec un tag basé sur
+le SHA complet du commit :
 
 ```text
-ghcr.io/sypnatixai/assistantcore-api:sha-abc123
-ghcr.io/sypnatixai/assistantcore-worker:sha-abc123
-ghcr.io/sypnatixai/assistantcore-migrations:sha-abc123
+acrassistant<suffix>.azurecr.io/assistant-api:sha-<40 caractères>
+acrassistant<suffix>.azurecr.io/assistant-worker:sha-<40 caractères>
+acrassistant<suffix>.azurecr.io/assistant-migrations:sha-<40 caractères>
+acrassistant<suffix>.azurecr.io/assistant-wiremock:sha-<40 caractères>
+acrassistant<suffix>.azurecr.io/assistant-spa:sha-<40 caractères>
 ```
 
 Une image n'est jamais reconstruite lors de sa promotion. Le même SHA passe de
@@ -176,7 +186,7 @@ WireMock simule :
 
 L'API et le worker utilisent l'adresse interne de WireMock, jamais
 `localhost`. Azure SQL n'est pas simulé : Flyway et l'application utilisent
-la vraie base `assistantcore-dev`.
+la vraie base `AssistantCoreDb` du serveur DEV.
 
 Le mode d'authentification locale, les réponses WireMock et les données DEV
 restent exclusivement fictifs. La configuration doit empêcher le mode simulé
@@ -200,8 +210,8 @@ Si Flyway échoue, la nouvelle version de l'API et du worker n'est pas déployé
 ### Déploiement CERTIF réel et manuel
 
 CERTIF utilise les véritables services Microsoft Entra, Microsoft Graph,
-OpenAI et Azure AI Search. Il utilise la base Azure SQL
-`assistantcore-certif` et uniquement des données de certification autorisées.
+OpenAI et Azure AI Search. Il utilise la base `AssistantCoreDb` de son serveur
+Azure SQL CERTIF et uniquement des données de certification autorisées.
 
 Le déploiement CERTIF est déclenché manuellement avec `workflow_dispatch`.
 L'utilisateur fournit le tag d'une image déjà déployée et validée dans DEV.
@@ -218,6 +228,14 @@ Le workflow CERTIF ne reconstruit aucune image. Il :
 Le déclenchement manuel constitue la décision de promotion. Une protection
 GitHub Environment peut exiger une approbation supplémentaire si l'équipe le
 souhaite.
+
+Le workflow `control-certif.yml` met le worker à une réplique seulement pendant
+une séance de certification et le remet à zéro après. Pour arrêter tout
+l'environnement, il désactive aussi les ingress publics de l'API et de la SPA.
+
+Le workflow `release-candidate.yml` produit un manifeste YAML contenant les
+digests ACR exacts déjà validés en DEV. Ce manifeste est l'entrée d'une future
+promotion PROD; il ne reconstruit aucune image.
 
 <a id="production-deployment-secrets"></a>
 ### Secrets

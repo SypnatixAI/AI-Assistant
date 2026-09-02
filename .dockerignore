@@ -1,0 +1,16 @@
+.git
+.github
+.local
+.env
+.env.*
+!*.csproj
+!*.sln
+bin
+obj
+artifacts
+TestResults
+coverage
+*.pfx
+*.p12
+*.pem
+*.key

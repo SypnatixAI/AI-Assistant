@@ -13,7 +13,8 @@ public static class WorkerProgram
     public static async Task Main(string[] args)
     {
         var builder = Host.CreateApplicationBuilder(args);
-        if (builder.Environment.IsEnvironment("Certif"))
+        if (builder.Environment.IsEnvironment("Certif")
+            || builder.Environment.IsEnvironment("LocalLive"))
         {
             builder.Configuration.AddUserSecrets(Assembly.GetExecutingAssembly());
         }
