@@ -101,6 +101,9 @@ dans les fichiers `appsettings.Local.json`; elles ne sont pas lues depuis les
 bash scripts/start-local-wiremock.sh
 ```
 
+Le script fonctionne tel quel sous Linux, macOS et Windows avec Git Bash. Aucune
+variable d'environnement ni fonction preparatoire n'est necessaire.
+
 Le script :
 
 1. démarre SQL Server et recrée la base isolée `AssistantCoreLocalDb`;
