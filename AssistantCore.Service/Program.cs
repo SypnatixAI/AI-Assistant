@@ -5,13 +5,16 @@ using AssistantCore.Service.Infrastructure.AiModels;
 using AssistantCore.Service.Infrastructure.Connectors;
 using AssistantCore.Service.Infrastructure.Cors;
 using AssistantCore.Service.Infrastructure.Microsoft365;
+using AssistantCore.Service.Infrastructure.Health;
 using AssistantCore.Service.Middleware;
 using AssistantCore.Repository.Persistence;
+using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.OpenApi;
 using System.Reflection;
 
 var builder = WebApplication.CreateBuilder(args);
-if (builder.Environment.IsEnvironment("Certif"))
+if (builder.Environment.IsEnvironment("Certif")
+    || builder.Environment.IsEnvironment("LocalLive"))
 {
     builder.Configuration.AddUserSecrets<Program>();
 }
@@ -45,11 +48,16 @@ builder.Services.AddConnectorInfrastructure(builder.Configuration);
 builder.Services.AddMicrosoft365Infrastructure(builder.Configuration);
 builder.Services.AddDispatcher(Assembly.GetExecutingAssembly());
 builder.Services.AddPersistence(builder.Configuration);
+builder.Services.AddHealthChecks()
+    .AddCheck<SqlDatabaseHealthCheck>(SqlDatabaseHealthCheck.Name, tags: ["ready"]);
 
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.
-if (app.Environment.IsDevelopment() || app.Environment.IsEnvironment("Local"))
+if (app.Environment.IsDevelopment()
+    || app.Environment.IsEnvironment("Local")
+    || app.Environment.IsEnvironment("LocalLive")
+    || app.Environment.IsEnvironment("Dev"))
 {
     app.UseSwagger();
     app.UseSwaggerUI();
@@ -66,6 +74,17 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapGet("/", () => Results.Redirect("/swagger"));
+
+app.MapHealthChecks("/health/live", new HealthCheckOptions
+{
+    Predicate = _ => false,
+    ResponseWriter = HealthCheckResponseWriter.WriteAsync
+});
+app.MapHealthChecks("/health/ready", new HealthCheckOptions
+{
+    Predicate = healthCheck => healthCheck.Tags.Contains("ready"),
+    ResponseWriter = HealthCheckResponseWriter.WriteAsync
+});
 
 app.MapControllers();
 

@@ -1,0 +1,140 @@
+name: Deploy DEV
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [master]
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: deploy-backend-dev
+  cancel-in-progress: false
+
+env:
+  AZURE_CORE_OUTPUT: none
+  RESOURCE_GROUP: ${{ vars.AZURE_DEV_RESOURCE_GROUP }}
+  ACR_NAME: ${{ vars.AZURE_ACR_NAME }}
+
+jobs:
+  deploy:
+    name: Build once and deploy DEV
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    environment: dev
+
+    steps:
+      - name: Checkout validated commit
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+
+      - name: Sign in to Azure with OIDC
+        uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Sign in to ACR
+        run: az acr login --name "$ACR_NAME"
+
+      - name: Build and push immutable images
+        env:
+          COMMIT_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          IMAGE_TAG="sha-${COMMIT_SHA}"
+          LOGIN_SERVER="${ACR_NAME}.azurecr.io"
+
+          docker build --file deploy/docker/api.Dockerfile --tag "${LOGIN_SERVER}/assistant-api:${IMAGE_TAG}" .
+          docker build --file deploy/docker/worker.Dockerfile --tag "${LOGIN_SERVER}/assistant-worker:${IMAGE_TAG}" .
+          docker build --file AssistantCore.Repository/Database/Flyway/Dockerfile --tag "${LOGIN_SERVER}/assistant-migrations:${IMAGE_TAG}" AssistantCore.Repository/Database/Flyway
+          docker build --file deploy/docker/wiremock.Dockerfile --tag "${LOGIN_SERVER}/assistant-wiremock:${IMAGE_TAG}" .
+
+          docker push "${LOGIN_SERVER}/assistant-api:${IMAGE_TAG}"
+          docker push "${LOGIN_SERVER}/assistant-worker:${IMAGE_TAG}"
+          docker push "${LOGIN_SERVER}/assistant-migrations:${IMAGE_TAG}"
+          docker push "${LOGIN_SERVER}/assistant-wiremock:${IMAGE_TAG}"
+
+          echo "IMAGE_TAG=${IMAGE_TAG}" >> "$GITHUB_ENV"
+          echo "LOGIN_SERVER=${LOGIN_SERVER}" >> "$GITHUB_ENV"
+
+      - name: Detect initial infrastructure bootstrap
+        run: |
+          if az containerapp show \
+            --name ca-assistant-api-dev \
+            --resource-group "$RESOURCE_GROUP" \
+            --only-show-errors >/dev/null 2>&1; then
+            echo "APPLICATIONS_PROVISIONED=true" >> "$GITHUB_ENV"
+          else
+            echo "APPLICATIONS_PROVISIONED=false" >> "$GITHUB_ENV"
+            {
+              echo "### Images published; infrastructure not deployed yet"
+              echo
+              echo "Use backend tag \`${IMAGE_TAG}\` with the Provision Azure infrastructure workflow."
+              echo "After provisioning, rerun this workflow to execute Flyway and deploy DEV."
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Update and run Flyway job
+        if: ${{ env.APPLICATIONS_PROVISIONED == 'true' }}
+        run: |
+          az containerapp job update \
+            --name caj-assistant-migrations-dev \
+            --resource-group "$RESOURCE_GROUP" \
+            --image "${LOGIN_SERVER}/assistant-migrations:${IMAGE_TAG}"
+
+          EXECUTION_NAME="$(az containerapp job start \
+            --name caj-assistant-migrations-dev \
+            --resource-group "$RESOURCE_GROUP" \
+            --query name --output tsv)"
+
+          for attempt in $(seq 1 60); do
+            STATUS="$(az containerapp job execution show \
+              --name caj-assistant-migrations-dev \
+              --job-execution-name "$EXECUTION_NAME" \
+              --resource-group "$RESOURCE_GROUP" \
+              --query properties.status --output tsv)"
+            if [ "$STATUS" = "Succeeded" ]; then
+              exit 0
+            fi
+            if [ "$STATUS" = "Failed" ]; then
+              exit 1
+            fi
+            sleep 10
+          done
+
+          echo "Flyway did not finish within 10 minutes." >&2
+          exit 1
+
+      - name: Deploy backend revision
+        if: ${{ env.APPLICATIONS_PROVISIONED == 'true' }}
+        run: |
+          az containerapp update \
+            --name ca-assistant-wiremock-dev \
+            --resource-group "$RESOURCE_GROUP" \
+            --image "${LOGIN_SERVER}/assistant-wiremock:${IMAGE_TAG}"
+          az containerapp update \
+            --name ca-assistant-api-dev \
+            --resource-group "$RESOURCE_GROUP" \
+            --image "${LOGIN_SERVER}/assistant-api:${IMAGE_TAG}"
+          az containerapp update \
+            --name ca-assistant-worker-dev \
+            --resource-group "$RESOURCE_GROUP" \
+            --image "${LOGIN_SERVER}/assistant-worker:${IMAGE_TAG}"
+
+      - name: Verify DEV readiness
+        if: ${{ env.APPLICATIONS_PROVISIONED == 'true' }}
+        run: |
+          API_FQDN="$(az containerapp show \
+            --name ca-assistant-api-dev \
+            --resource-group "$RESOURCE_GROUP" \
+            --query properties.configuration.ingress.fqdn --output tsv)"
+          curl --fail --retry 12 --retry-delay 10 --retry-all-errors \
+            "https://${API_FQDN}/health/live"
+          curl --fail --retry 12 --retry-delay 10 --retry-all-errors \
+            "https://${API_FQDN}/health/ready"

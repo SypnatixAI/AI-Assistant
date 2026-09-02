@@ -25,6 +25,9 @@ docker --version
 docker compose version
 ```
 
+Pour créer DEV et CERTIF dans Azure Container Apps, suivre le guide
+[Installer DEV et CERTIF dans Azure Container Apps](docs/operations/azure-dev-certif-setup.md).
+
 ## Demarrage rapide
 
 ### 1. Restaurer et compiler
