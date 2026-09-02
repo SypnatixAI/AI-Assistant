@@ -1,5 +1,6 @@
 using AssistantCore.Repository.Abstractions;
 using AssistantCore.Service.Application.Commands.SendMessage;
+using AssistantCore.Service.Application.Models.Conversations;
 using AssistantCore.Service.Application.Commands.SendMessage.Models;
 using AssistantCore.Service.Application.Exceptions;
 using AssistantCore.Service.Application.Models.Messages;
@@ -158,6 +159,105 @@ public sealed class SendMessageCommandHandlerTests
         Assert.Equal(
             progressMessage,
             progressEvent.Data.GetType().GetProperty("Message")?.GetValue(progressEvent.Data));
+    }
+
+    [Theory, AutoDomainData]
+    public async Task Given_ANewlyCreatedConversation_When_HandleAsyncStreaming_Then_TheAcceptedEventCarriesItsSummary(
+        SendMessageCommand command,
+        MessageUserContext userContext,
+        SelectedAiModel selectedModel,
+        StartedMessageProcessing processing,
+        MessageOrchestrationResult orchestrationResult,
+        CompletedMessageProcessing completedProcessing,
+        SendMessageResponse response,
+        ConversationSummaryResponse createdConversation)
+    {
+        // Given
+        var operations = new List<string>();
+        var handler = CreateStreamHandler(
+            operations,
+            userContext,
+            selectedModel,
+            processing with { CreatedConversation = createdConversation },
+            completedProcessing,
+            orchestrationResult,
+            response);
+
+        // When
+        var receivedEvents = await ReadAllAsync(handler, command);
+
+        // Then
+        var acceptedEvent = Assert.Single(receivedEvents, streamEvent =>
+            streamEvent.Name == SendMessageStreamEvent.Accepted);
+        Assert.Same(
+            createdConversation,
+            acceptedEvent.Data.GetType().GetProperty("Conversation")?.GetValue(acceptedEvent.Data));
+    }
+
+    [Theory, AutoDomainData]
+    public async Task Given_AnExistingConversation_When_HandleAsyncStreaming_Then_TheAcceptedEventOmitsTheSummary(
+        SendMessageCommand command,
+        MessageUserContext userContext,
+        SelectedAiModel selectedModel,
+        StartedMessageProcessing processing,
+        MessageOrchestrationResult orchestrationResult,
+        CompletedMessageProcessing completedProcessing,
+        SendMessageResponse response)
+    {
+        // Given
+        var operations = new List<string>();
+        var handler = CreateStreamHandler(
+            operations,
+            userContext,
+            selectedModel,
+            processing with { CreatedConversation = null },
+            completedProcessing,
+            orchestrationResult,
+            response);
+
+        // When
+        var receivedEvents = await ReadAllAsync(handler, command);
+
+        // Then
+        var acceptedEvent = Assert.Single(receivedEvents, streamEvent =>
+            streamEvent.Name == SendMessageStreamEvent.Accepted);
+        Assert.Null(acceptedEvent.Data.GetType().GetProperty("Conversation"));
+        Assert.NotNull(acceptedEvent.Data.GetType().GetProperty("ConversationId"));
+    }
+
+    private static SendMessageStreamCommandHandler CreateStreamHandler(
+        List<string> operations,
+        MessageUserContext userContext,
+        SelectedAiModel selectedModel,
+        StartedMessageProcessing processing,
+        CompletedMessageProcessing completedProcessing,
+        MessageOrchestrationResult orchestrationResult,
+        SendMessageResponse response) =>
+        new(
+            new StubCommandValidator(operations),
+            new StubUserContextService(operations, userContext),
+            new StubModelSelector(operations, selectedModel),
+            new StubLifecycleService(operations, processing, completedProcessing),
+            new StubToolRegistry(operations),
+            new StubOrchestrator(operations, orchestrationResult),
+            new StubResponseFactory(operations, response),
+            new StubMessageStreamErrorReporter());
+
+    private static async Task<List<SendMessageStreamEvent>> ReadAllAsync(
+        SendMessageStreamCommandHandler handler,
+        SendMessageCommand command)
+    {
+        var events = await handler.HandleAsync(
+            new SendMessageStreamCommand(command.ConversationId, command.Message, command.Model),
+            CancellationToken.None);
+        var receivedEvents = new List<SendMessageStreamEvent>();
+
+        await foreach (var streamEvent in events)
+        {
+            receivedEvents.Add(streamEvent);
+        }
+
+        return receivedEvents;
     }
 
     [Theory, AutoDomainData]

@@ -59,6 +59,70 @@ public sealed class MessageProcessingLifecycleServiceTests
     }
 
     [Theory, AutoDomainData]
+    public async Task Given_NoConversationIdentifier_When_StartAsync_Then_DescribesTheCreatedConversation(
+        Organization organization,
+        OrganizationMember member,
+        DateTimeOffset now)
+    {
+        // Given
+        member.OrganizationId = organization.Id;
+        var repository = new RecordingConversationRepository();
+        var service = new MessageProcessingLifecycleService(
+            repository,
+            new StubTimeProvider(now));
+
+        // When
+        var result = await service.StartAsync(
+            null,
+            "Politique de teletravail",
+            organization,
+            member,
+            CancellationToken.None);
+
+        // Then
+        Assert.NotNull(repository.CreatedConversation);
+        Assert.NotNull(result.CreatedConversation);
+        Assert.Equal(repository.CreatedConversation.Id, result.CreatedConversation.Id);
+        Assert.Equal("Politique de teletravail", result.CreatedConversation.Title);
+        Assert.Equal(nameof(ConversationStatus.Active), result.CreatedConversation.Status);
+        Assert.Equal(1, result.CreatedConversation.Version);
+        Assert.Equal(now, result.CreatedConversation.CreatedAt);
+        Assert.Equal(now, result.CreatedConversation.UpdatedAt);
+        Assert.Null(result.CreatedConversation.LastMessagePreview);
+    }
+
+    [Theory, AutoDomainData]
+    public async Task Given_AnOwnedConversation_When_StartAsync_Then_DoesNotDescribeTheConversation(
+        Organization organization,
+        OrganizationMember member,
+        Conversation conversation,
+        DateTimeOffset now)
+    {
+        // Given
+        member.OrganizationId = organization.Id;
+        conversation.OrganizationId = organization.Id;
+        conversation.OwnerMemberId = member.Id;
+        var repository = new RecordingConversationRepository
+        {
+            FoundConversation = conversation
+        };
+        var service = new MessageProcessingLifecycleService(
+            repository,
+            new StubTimeProvider(now));
+
+        // When
+        var result = await service.StartAsync(
+            conversation.Id,
+            "Another validated question",
+            organization,
+            member,
+            CancellationToken.None);
+
+        // Then
+        Assert.Null(result.CreatedConversation);
+    }
+
+    [Theory, AutoDomainData]
     public async Task Given_ALongFirstMessage_When_StartAsync_Then_TruncatesTheDerivedTitle(
         Organization organization,
         OrganizationMember member,
@@ -556,6 +620,8 @@ public sealed class MessageProcessingLifecycleServiceTests
             CancellationToken cancellationToken = default)
         {
             Operations.Add("CreateConversation");
+            // La persistance reelle affecte la version initiale avant d'enregistrer.
+            conversation.Version = 1;
             CreatedConversation = conversation;
             CreatedFirstMessage = userMessage;
             ReceivedCancellationToken = cancellationToken;

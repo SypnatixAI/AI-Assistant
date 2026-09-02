@@ -2,6 +2,7 @@ using AssistantCore.Repository.Domain.Entities;
 using AssistantCore.Repository.Domain.Enums;
 using AssistantCore.Repository.Repositories;
 using AssistantCore.Service.Application.Exceptions;
+using AssistantCore.Service.Application.Models.Conversations;
 using AssistantCore.Service.Application.Models.Messages;
 using AssistantCore.Service.Application.Models.Messages.AiModels;
 using AssistantCore.Service.Application.Models.Messages.Lifecycle;
@@ -71,13 +72,31 @@ public sealed class MessageProcessingLifecycleService(
             userMessage.Id,
             userMessage.Content)
         {
-            ConversationHistory = conversationHistory
+            ConversationHistory = conversationHistory,
+            CreatedConversation = conversationId is null ? MapSummary(conversation) : null
         };
 
         await MarkAsInProgressAsync(processing, cancellationToken);
 
         return processing;
     }
+
+    /// <summary>
+    /// Projette la conversation vers le resume que la liste retourne, afin qu'un
+    /// client puisse l'inserer directement sans convertir une forme parallele.
+    /// L'apercu reste null : au moment ou la conversation est creee, la reponse de
+    /// l'Assistant n'existe pas encore et deviendra le dernier message quelques
+    /// instants plus tard.
+    /// </summary>
+    private static ConversationSummaryResponse MapSummary(Conversation conversation) =>
+        new(
+            conversation.Id,
+            conversation.Title,
+            conversation.Status.ToString(),
+            conversation.Version,
+            conversation.CreatedAt,
+            conversation.UpdatedAt,
+            LastMessagePreview: null);
 
     private async Task<Conversation> CreateConversationWithFirstMessageAsync(
         Organization organization,
