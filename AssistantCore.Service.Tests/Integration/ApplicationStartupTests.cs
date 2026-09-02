@@ -30,7 +30,7 @@ public sealed class ApplicationStartupTests
             {
                 builder.UseEnvironment(Environments.Development);
                 builder.ConfigureAppConfiguration(configuration =>
-                    configuration.AddInMemoryCollection(
+                    configuration.AddIntegrationTestDefaults().AddInMemoryCollection(
                         new Dictionary<string, string?>
                         {
                             [$"Messages:Orchestration:{optionName}"] = "0",
@@ -62,7 +62,7 @@ public sealed class ApplicationStartupTests
             {
                 builder.UseEnvironment(Environments.Development);
                 builder.ConfigureAppConfiguration(configuration =>
-                    configuration.AddInMemoryCollection(
+                    configuration.AddIntegrationTestDefaults().AddInMemoryCollection(
                         new Dictionary<string, string?>
                         {
                             ["Messages:MaximumMessageLength"] = maximumMessageLength.ToString(),
@@ -91,7 +91,7 @@ public sealed class ApplicationStartupTests
             {
                 builder.UseEnvironment(Environments.Development);
                 builder.ConfigureAppConfiguration(configuration =>
-                    configuration.AddInMemoryCollection(
+                    configuration.AddIntegrationTestDefaults().AddInMemoryCollection(
                         new Dictionary<string, string?>
                         {
                             ["AiModels:Providers:OpenAI:ApiKey"] = string.Empty,
@@ -120,7 +120,7 @@ public sealed class ApplicationStartupTests
             {
                 builder.UseEnvironment(Environments.Development);
                 builder.ConfigureAppConfiguration(configuration =>
-                    configuration.AddInMemoryCollection(
+                    configuration.AddIntegrationTestDefaults().AddInMemoryCollection(
                         new Dictionary<string, string?>
                         {
                             ["AiModels:Providers:OpenAI:ApiKey"] = openAiSecret,
@@ -147,7 +147,7 @@ public sealed class ApplicationStartupTests
             {
                 builder.UseEnvironment(Environments.Development);
                 builder.ConfigureAppConfiguration(configuration =>
-                    configuration.AddInMemoryCollection(
+                    configuration.AddIntegrationTestDefaults().AddInMemoryCollection(
                         new Dictionary<string, string?>
                         {
                             ["AiModels:Providers:OpenAI:ApiKey"] = openAiSecret,
@@ -175,7 +175,7 @@ public sealed class ApplicationStartupTests
             {
                 builder.UseEnvironment(Environments.Development);
                 builder.ConfigureAppConfiguration(configuration =>
-                    configuration.AddInMemoryCollection(
+                    configuration.AddIntegrationTestDefaults().AddInMemoryCollection(
                         new Dictionary<string, string?>
                         {
                             ["AiModels:Providers:OpenAI:ApiKey"] = openAiSecret,
@@ -201,7 +201,7 @@ public sealed class ApplicationStartupTests
             {
                 builder.UseEnvironment(Environments.Development);
                 builder.ConfigureAppConfiguration(configuration =>
-                    configuration.AddInMemoryCollection(
+                    configuration.AddIntegrationTestDefaults().AddInMemoryCollection(
                         new Dictionary<string, string?>
                         {
                             ["AiModels:Providers:OpenAI:ApiKey"] = "integration-test-secret",
@@ -234,7 +234,7 @@ public sealed class ApplicationStartupTests
             {
                 builder.UseEnvironment(Environments.Development);
                 builder.ConfigureAppConfiguration(configuration =>
-                    configuration.AddInMemoryCollection(
+                    configuration.AddIntegrationTestDefaults().AddInMemoryCollection(
                         new Dictionary<string, string?>
                         {
                             ["AiModels:Providers:OpenAI:ApiKey"] = "integration-test-secret",
@@ -261,7 +261,7 @@ public sealed class ApplicationStartupTests
             {
                 builder.UseEnvironment(Environments.Development);
                 builder.ConfigureAppConfiguration(configuration =>
-                    configuration.AddInMemoryCollection(
+                    configuration.AddIntegrationTestDefaults().AddInMemoryCollection(
                         new Dictionary<string, string?>
                         {
                             ["AiModels:Providers:OpenAI:ApiKey"] = "integration-test-secret",
