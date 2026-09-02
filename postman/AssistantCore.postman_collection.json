@@ -852,6 +852,93 @@
             "description": "Pose question à l'assistant. Une valeur model vide utilise le modèle par défaut."
           },
           "response": []
+        },
+        {
+          "name": "Send Message (stream)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Response is a Server-Sent Events stream', function () {",
+                  "    pm.expect(pm.response.headers.get('Content-Type')).to.include('text/event-stream');",
+                  "});",
+                  "",
+                  "const raw = pm.response.text();",
+                  "",
+                  "function readEvent(name) {",
+                  "    const marker = 'event: ' + name;",
+                  "    const start = raw.indexOf(marker);",
+                  "    if (start === -1) { return null; }",
+                  "    const dataStart = raw.indexOf('data: ', start) + 6;",
+                  "    const dataEnd = raw.indexOf('\n', dataStart);",
+                  "    const payload = dataEnd === -1 ? raw.slice(dataStart) : raw.slice(dataStart, dataEnd);",
+                  "    try { return JSON.parse(payload); } catch (error) { return null; }",
+                  "}",
+                  "",
+                  "pm.test('The stream opens with message.accepted', function () {",
+                  "    const accepted = readEvent('message.accepted');",
+                  "    pm.expect(accepted, 'message.accepted introuvable').to.not.equal(null);",
+                  "    pm.expect(accepted.conversationId).to.be.a('string');",
+                  "});",
+                  "",
+                  "pm.test('A new conversation is fully described', function () {",
+                  "    const accepted = readEvent('message.accepted');",
+                  "    pm.expect(accepted.conversation, 'le resume est absent').to.be.an('object');",
+                  "    pm.expect(accepted.conversation.title).to.be.a('string').and.not.empty;",
+                  "    pm.expect(accepted.conversation.status).to.eql('Active');",
+                  "    pm.expect(accepted.conversation.version).to.be.a('number');",
+                  "});",
+                  "",
+                  "const accepted = readEvent('message.accepted');",
+                  "if (accepted && accepted.conversation) {",
+                  "    pm.environment.set('conversation_id', accepted.conversation.id);",
+                  "    pm.environment.set('conversation_version', accepted.conversation.version);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "text/event-stream"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\\n  \"conversationId\": null,\\n  \"message\": \"{{question}}\",\\n  \"model\": \"{{model}}\"\\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/messages/stream",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "messages",
+                "stream"
+              ]
+            },
+            "description": "Meme contrat d'entree que Send Message, mais la reponse arrive progressivement en Server-Sent Events.\n\nLaisser conversationId a null cree une conversation : l'evenement message.accepted porte alors un champ conversation decrivant entierement la nouvelle conversation, titre, statut et version compris. Le test enregistre conversation_id et conversation_version, ce qui alimente Update Conversation sans passer par la liste.\n\nLorsque conversationId est renseigne, le champ conversation est absent : le client connait deja la conversation."
+          },
+          "response": []
         }
       ]
     }

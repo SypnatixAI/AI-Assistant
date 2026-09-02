@@ -32,6 +32,16 @@ public sealed class MessagesController(IDispatcher dispatcher) : ControllerBase
         return Ok(result);
     }
 
+    /// <summary>
+    /// Le flux emploie la meme convention de nommage que les reponses JSON ordinaires
+    /// de l'API. Sans ces options, <c>JsonSerializer</c> conserverait les noms de
+    /// proprietes C# et le flux serait le seul endroit de l'API en PascalCase.
+    /// </summary>
+    private static readonly JsonSerializerOptions StreamSerializerOptions = new()
+    {
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+    };
+
     [HttpPost("stream")]
     [Produces("text/event-stream")]
     [SwaggerOperation(Summary = "Envoyer un message et recevoir la réponse progressivement")]
@@ -55,7 +65,7 @@ public sealed class MessagesController(IDispatcher dispatcher) : ControllerBase
 
         await foreach (var streamEvent in events.WithCancellation(cancellationToken))
         {
-            var payload = JsonSerializer.Serialize(streamEvent.Data);
+            var payload = JsonSerializer.Serialize(streamEvent.Data, StreamSerializerOptions);
             await Response.WriteAsync($"event: {streamEvent.Name}\ndata: {payload}\n\n", cancellationToken);
             await Response.Body.FlushAsync(cancellationToken);
         }

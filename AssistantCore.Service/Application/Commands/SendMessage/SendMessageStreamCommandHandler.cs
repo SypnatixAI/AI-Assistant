@@ -63,11 +63,7 @@ public sealed class SendMessageStreamCommandHandler(
             await writer.WriteAsync(
                 new SendMessageStreamEvent(
                     SendMessageStreamEvent.Accepted,
-                    new
-                    {
-                        processing.ConversationId,
-                        UserMessageId = processing.UserMessageId
-                    }),
+                    CreateAcceptedPayload(processing)),
                 cancellationToken);
 
             var availableTools = await toolRegistry.GetAvailableToolsAsync(
@@ -123,6 +119,25 @@ public sealed class SendMessageStreamCommandHandler(
             writer.TryComplete();
         }
     }
+
+    /// <summary>
+    /// Construit la charge utile du premier evenement. Le resume de la conversation
+    /// n'y figure que lorsque l'envoi vient de la creer : le champ reste absent, et
+    /// non nul, lorsque le client connait deja la conversation.
+    /// </summary>
+    private static object CreateAcceptedPayload(StartedMessageProcessing processing) =>
+        processing.CreatedConversation is null
+            ? new
+            {
+                processing.ConversationId,
+                UserMessageId = processing.UserMessageId
+            }
+            : new
+            {
+                processing.ConversationId,
+                UserMessageId = processing.UserMessageId,
+                Conversation = processing.CreatedConversation
+            };
 
     private static string GetErrorCode(Exception exception) => exception switch
     {
