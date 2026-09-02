@@ -323,6 +323,7 @@ public sealed class Microsoft365ListActivationServiceTests
             DateTimeOffset requestedAt,
             CancellationToken cancellationToken = default)
         {
+            list.EnableIndexing(requestedAt);
             SaveActivationCallCount++;
             ReceivedRequestedAt = requestedAt;
             ReceivedCancellationToken = cancellationToken;

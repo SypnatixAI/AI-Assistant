@@ -2,12 +2,14 @@ using AssistantCore.Service.Application.Abstractions;
 using AssistantCore.Service.Application.Commands.CreateOrganization;
 using AssistantCore.Service.Application.Commands.CreateOrganization.Models;
 using AssistantCore.Service.Application.Models.Organizations;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Swashbuckle.AspNetCore.Annotations;
 
 namespace AssistantCore.Service.Controllers;
 
 [ApiController]
+[AllowAnonymous]
 [Route("api/organizations")]
 public sealed class OrganizationsController(IDispatcher dispatcher) : ControllerBase
 {
