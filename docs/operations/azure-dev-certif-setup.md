@@ -29,6 +29,7 @@ Créer deux environnements isolés et reproductibles :
 - CERTIF utilise Microsoft Entra, Microsoft Graph, OpenAI et Azure AI Search;
 - chaque environnement possède son serveur et sa base Azure SQL, son Key Vault,
   ses identités managées et ses Container Apps;
+- chaque environnement expose SQLPad aux membres d'un groupe Microsoft Entra;
 - les deux environnements partagent uniquement un ACR Basic;
 - un merge déploie automatiquement DEV après la réussite du CI;
 - une action manuelle promeut vers CERTIF exactement les images validées en DEV;
@@ -50,8 +51,10 @@ DEV
 ├── Container Apps Environment
 │   ├── SPA ───────────────┐
 │   ├── API                ├── WireMock
-│   └── Worker ────────────┘
+│   ├── Worker ────────────┘
+│   └── SQLPad + EasyAuth Entra
 ├── Job Flyway
+├── Azure Files pour SQLPad
 ├── Key Vault DEV
 └── Serveur Azure SQL DEV / AssistantCoreDb
 
@@ -59,8 +62,10 @@ CERTIF
 ├── Container Apps Environment
 │   ├── SPA
 │   ├── API
-│   └── Worker, 0 réplique hors utilisation
+│   ├── Worker, 0 réplique hors utilisation
+│   └── SQLPad + EasyAuth Entra
 ├── Job Flyway
+├── Azure Files pour SQLPad
 ├── Key Vault CERTIF
 └── Serveur Azure SQL CERTIF / AssistantCoreDb
 ```
@@ -77,8 +82,9 @@ identité managée.
   autour de 5 USD par mois avant taxes et conversion. Vérifier le prix affiché
   pour la région et l’abonnement avant de créer la ressource.
 - Azure Container Apps offre une allocation mensuelle gratuite au niveau de
-  l’abonnement. Les applications sont configurées avec `minReplicas: 0` et une
-  seule réplique maximale afin de rester adaptées à un environnement de test.
+  l’abonnement. Les applications HTTP sont configurées avec `minReplicas: 0` et
+  une seule réplique maximale. Le worker DEV conserve une réplique, car il
+  interroge SQL sur minuterie et aucun événement ne peut le réveiller de zéro.
 - Les bases utilisent Azure SQL serverless avec `useFreeLimit: true`, une pause
   après 60 minutes et `freeLimitExhaustionBehavior: AutoPause`. La création
   échouera si l’abonnement n’est pas admissible à cette offre.
@@ -187,9 +193,25 @@ ajouter les variables suivantes dans les deux dépôts :
 | `AZURE_SHARED_RESOURCE_GROUP` | `rg-assistant-shared` |
 | `AZURE_DEV_RESOURCE_GROUP` | `rg-assistant-dev` |
 | `AZURE_CERTIF_RESOURCE_GROUP` | `rg-assistant-certif` |
+| `SQLPAD_ENTRA_CLIENT_ID` | Application ID SQLPad propre à l'environnement |
+| `SQLPAD_ALLOWED_GROUP_OBJECT_ID` | Object ID du groupe autorisé à SQLPad |
 
 Ces identifiants et noms ne sont pas des secrets. Ne créer aucun
 `AZURE_CLIENT_SECRET`.
+
+Créer une App Registration SQLPad distincte pour DEV et CERTIF. Pour chacune :
+
+1. choisir **Accounts in this organizational directory only**;
+2. activer les ID tokens;
+3. créer un Client Secret;
+4. déposer l'Application ID dans `SQLPAD_ENTRA_CLIENT_ID` de l'environnement;
+5. créer ou choisir un groupe Entra pour l'équipe et déposer son Object ID dans
+   `SQLPAD_ALLOWED_GROUP_OBJECT_ID`.
+
+Après le premier déploiement, ajouter à chaque App Registration la Redirect URI
+Web `https://<url-sqlpad>/.auth/login/aad/callback`, puis redéployer. Tous les
+membres ajoutés au groupe accèdent à SQLPad avec leur identité Microsoft.
+EasyAuth refuse les autres identités avant que la requête atteigne SQLPad.
 
 Le BFF déploie automatiquement depuis `master`; la SPA déploie automatiquement
 depuis `main`, conformément aux branches par défaut actuelles.
@@ -255,6 +277,7 @@ Dans Azure Portal, ouvrir le Key Vault, puis **Objects**, **Secrets**,
 | --- | --- |
 | `sql-admin-password` | mot de passe SQL robuste et unique pour DEV |
 | `dev-jwt-signing-key` | valeur aléatoire longue, réservée au JWT fictif DEV |
+| `sqlpad-entra-client-secret` | secret de l'App Registration SQLPad DEV |
 
 ### Secrets CERTIF
 
@@ -264,6 +287,7 @@ Dans Azure Portal, ouvrir le Key Vault, puis **Objects**, **Secrets**,
 | `microsoft365-client-secret` | secret de l’application Microsoft 365 CERTIF |
 | `openai-api-key` | clé OpenAI autorisée pour CERTIF |
 | `azure-search-api-key` | clé Azure AI Search autorisée pour CERTIF |
+| `sqlpad-entra-client-secret` | secret de l'App Registration SQLPad CERTIF |
 
 Ne jamais copier ces valeurs dans :
 
@@ -311,6 +335,7 @@ Le workflow exécute d’abord `what-if`, puis crée :
 - le Container Apps Environment;
 - les identités managées;
 - l’API, la SPA, le worker et WireMock;
+- SQLPad protégé par Microsoft Entra et son partage Azure Files persistant;
 - le job manuel Flyway;
 - les références vers les secrets du Key Vault.
 
@@ -322,6 +347,9 @@ Une fois le workflow réussi :
    fichier `assets/config/config.json` généré au démarrage.
 3. Dans Azure Portal, ouvrir **Container Apps**, puis
    `ca-assistant-spa-dev`, **Application Url**.
+4. Ouvrir `ca-assistant-sqlpad-dev`, copier son URL, puis ajouter la Redirect
+   URI correspondante à l'App Registration SQLPad DEV.
+5. Redéployer et vérifier qu'un membre du groupe peut ouvrir SQLPad.
 
 Dans DEV, le fichier Angular généré contient :
 
@@ -367,6 +395,21 @@ WireMock n’est pas créé dans cet environnement. Les URL réelles viennent de
 `appsettings.Certif.json` et des variables non sensibles Bicep; les clés et le
 Client Secret viennent de Key Vault.
 
+Copier aussi l'URL de `ca-assistant-sqlpad-certif`, ajouter sa Redirect URI à
+l'App Registration SQLPad CERTIF, puis redéployer. DEV et CERTIF utilisent des
+App Registrations, groupes et secrets distincts.
+
+SQLPad contient une connexion préconfigurée à `AssistantCoreDb`. À la demande
+de l'équipe, elle utilise le compte administrateur du serveur Azure SQL : tous
+les membres du groupe peuvent donc effectuer des lectures, écritures et
+opérations DDL. Ce pouvoir doit rester limité aux environnements non productifs
+et à un groupe restreint.
+
+SQLPad 7.5.7 est épinglé, car le projet amont est archivé. EasyAuth fournit
+l'authentification multiutilisateur en amont; l'authentification interne de
+SQLPad est désactivée et chaque utilisateur autorisé reçoit le rôle SQLPad
+`admin`. Azure Files conserve les requêtes enregistrées lors des redémarrages.
+
 <a id="azure-setup-deployments"></a>
 ## Étape 9 — Utiliser les déploiements courants
 
@@ -399,16 +442,16 @@ Avant une séance complète :
 - action : `start`;
 - scope : `all`.
 
-Le workflow active les ingress de l’API et de la SPA et met le worker à une
-réplique.
+Le workflow active les ingress de l’API, de la SPA et de SQLPad et met le worker
+à une réplique.
 
 Après la séance :
 
 - action : `stop`;
 - scope : `all`.
 
-Le workflow désactive les ingress publics et remet le worker, l’API et la SPA à
-zéro réplique. Pour ne contrôler que le coût continu du worker, choisir le
+Le workflow désactive les ingress publics et remet le worker, l’API, la SPA et
+SQLPad à zéro réplique. Pour ne contrôler que le coût continu du worker, choisir le
 scope `worker`.
 
 Azure SQL se remet en pause après sa période d’inactivité. Le premier appel
@@ -480,6 +523,19 @@ modifier une migration déjà appliquée.
 Lancer **Start or stop CERTIF** avec `start` et `all`. Un simple passage à zéro
 ne réactive pas un ingress qui a été explicitement désactivé.
 
+### SQLPad retourne 401 ou 403
+
+Vérifier l'App Registration propre à l'environnement, la Redirect URI exacte,
+le secret actif dans le bon Key Vault et l'appartenance de l'utilisateur au
+groupe dont l'Object ID est fourni à Bicep. Une modification du groupe peut
+nécessiter une nouvelle connexion Microsoft.
+
+### SQLPad ne se connecte pas à Azure SQL
+
+Vérifier `sql-admin-password` dans le Key Vault de l'environnement et le nom
+d'administrateur SQL fourni au template. Ne corriger ni le mot de passe ni les
+données directement dans le stockage interne SQLPad.
+
 ### Validation locale des fichiers Bicep
 
 Installer Azure CLI avec le composant Bicep, puis exécuter :
@@ -491,7 +547,7 @@ az bicep build --file deploy/infra/main.bicep
 ```
 
 Les trois templates doivent compiler sans erreur avant le premier `what-if`
-Azure. Cette validation a aussi été effectuée avec Bicep CLI 0.46.1 lors de leur
+Azure. Cette validation a aussi été effectuée avec Bicep CLI 0.45.15 lors de leur
 mise en place initiale.
 
 <a id="azure-setup-references"></a>
@@ -501,6 +557,9 @@ mise en place initiale.
 - [Secrets Key Vault dans Container Apps](https://learn.microsoft.com/azure/container-apps/manage-secrets)
 - [Tirer une image avec une identité managée](https://learn.microsoft.com/azure/container-apps/managed-identity-image-pull)
 - [Mise à l’échelle de Container Apps](https://learn.microsoft.com/azure/container-apps/scale-app)
+- [Authentification de Container Apps](https://learn.microsoft.com/azure/container-apps/authentication)
+- [Montages de stockage de Container Apps](https://learn.microsoft.com/azure/container-apps/storage-mounts)
+- [SQLPad](https://github.com/sqlpad/sqlpad)
 - [Jobs Azure Container Apps](https://learn.microsoft.com/azure/container-apps/jobs)
 - [Images et tags ACR](https://learn.microsoft.com/azure/container-registry/container-registry-image-tag-version)
 - [OIDC GitHub vers Azure](https://docs.github.com/actions/security-for-github-actions/security-hardening-your-deployments/configuring-openid-connect-in-azure)

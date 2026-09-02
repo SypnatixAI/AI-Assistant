@@ -47,6 +47,11 @@
       "fixture": {"outcome": "cannotAnswer", "answer": "I cannot confirm the organization-specific policy from the available information.", "retrievalRounds": [], "citedSourceReferences": [], "searchQueries": []}
     },
     {
+      "id": "fr-implicit-enterprise-employee-benefits", "language": "fr", "conversation": ["Quels sont les avantages des employés ?"], "toolsAvailable": true, "modes": ["offline", "model"], "documents": [],
+      "expected": {"outcome": "cannotAnswer", "requiredAnswerTerms": ["avantages"], "forbiddenAnswerTerms": ["peuvent inclure"], "expectedSourceReferences": [], "forbiddenSourceReferences": [], "minimumSearchRounds": 1},
+      "fixture": {"outcome": "cannotAnswer", "answer": "Je n’ai trouvé aucune information interne permettant de confirmer les avantages offerts aux employés.", "retrievalRounds": [[]], "citedSourceReferences": [], "searchQueries": ["avantages sociaux employés assurances congés retraite"]}
+    },
+    {
       "id": "fr-material-clarification", "language": "fr", "conversation": ["Quel est le responsable du dossier ?"], "toolsAvailable": true, "modes": ["offline", "model"], "documents": [],
       "expected": {"outcome": "clarify", "requiredAnswerTerms": ["dossier"], "forbiddenAnswerTerms": [], "expectedSourceReferences": [], "forbiddenSourceReferences": []},
       "fixture": {"outcome": "clarify", "answer": "De quel dossier parlez-vous ?", "retrievalRounds": [], "citedSourceReferences": [], "searchQueries": []}
@@ -104,6 +109,12 @@
       "documents": [{"reference": "atlas-owner", "title": "Projet Atlas", "content": "La responsable du projet Atlas est Marie."}],
       "expected": {"outcome": "answer", "requiredAnswerTerms": ["Marie", "date", "manque"], "forbiddenAnswerTerms": [], "expectedSourceReferences": ["atlas-owner"], "forbiddenSourceReferences": [], "minimumSearchRounds": 1},
       "fixture": {"outcome": "answer", "answer": "La responsable est Marie; la date manque dans les informations disponibles.", "retrievalRounds": [["atlas-owner"]], "citedSourceReferences": ["atlas-owner"], "searchQueries": ["projet Atlas responsable date"]}
+    },
+    {
+      "id": "fr-homonymous-atlas-entities", "language": "fr", "conversation": ["Le projet Atlas et Atlas Logistics sont-ils liés ?"], "toolsAvailable": true, "modes": ["offline", "model"],
+      "documents": [{"reference": "atlas-project", "title": "Projet Atlas", "content": "Le projet Atlas porte le code ORANGE-7429 et doit se terminer le 1er septembre."}, {"reference": "atlas-logistics-contract", "title": "Contrat Atlas Logistics", "content": "Nordrive Technologies a signé une entente commerciale de trois ans avec Atlas Logistics."}],
+      "expected": {"outcome": "answer", "requiredAnswerTerms": ["ORANGE-7429", "Atlas Logistics", "ne confirment pas"], "forbiddenAnswerTerms": [], "expectedSourceReferences": ["atlas-project", "atlas-logistics-contract"], "forbiddenSourceReferences": [], "minimumSearchRounds": 1},
+      "fixture": {"outcome": "answer", "answer": "Le projet Atlas porte le code ORANGE-7429. Atlas Logistics est présenté séparément comme une partie à une entente commerciale. Les informations disponibles ne confirment pas de lien entre les deux.", "retrievalRounds": [["atlas-project", "atlas-logistics-contract"]], "citedSourceReferences": ["atlas-project", "atlas-logistics-contract"], "searchQueries": ["projet Atlas Atlas Logistics lien"]}
     }
   ]
 }

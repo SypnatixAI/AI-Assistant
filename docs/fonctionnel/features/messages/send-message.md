@@ -189,13 +189,15 @@ acces refuse, restent des reponses HTTP ordinaires decrites dans
 
 ## Qui peut utiliser cet endpoint
 
-Un membre avec le role `Admin` ou `User` peut envoyer un message si :
+Un membre peut envoyer un message si :
 
 - il est authentifie
+- son jeton contient `AssistantCore.Access`
 - son compte interne est actif
 - son organisation est active
+- la configuration Microsoft 365 est terminee, ou son jeton contient aussi `tenantAdmin`
 
-Aucune permission applicative supplementaire n'est utilisee.
+Le role indicatif conserve en base ne participe pas a cette autorisation.
 
 ---
 

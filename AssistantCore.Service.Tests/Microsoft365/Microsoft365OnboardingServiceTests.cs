@@ -34,7 +34,7 @@ public sealed class Microsoft365OnboardingServiceTests
     }
 
     [Theory, AutoDomainData]
-    public async Task Given_ActiveConnectionAndSelectedSite_When_GetStatusAsync_Then_ReturnsCompletedOnboarding(
+    public async Task Given_ActiveConnectionAndSelectedSiteWithoutIndexedSource_When_GetStatusAsync_Then_ReturnsIncompleteOnboarding(
         Guid organizationId,
         string siteId,
         CancellationToken cancellationToken)
@@ -58,7 +58,7 @@ public sealed class Microsoft365OnboardingServiceTests
         Assert.True(status.IsConsentComplete);
         Assert.True(status.HasSelectedSite);
         Assert.False(status.HasIndexedSource);
-        Assert.True(status.IsComplete);
+        Assert.False(status.IsComplete);
     }
 
     [Theory, AutoDomainData]

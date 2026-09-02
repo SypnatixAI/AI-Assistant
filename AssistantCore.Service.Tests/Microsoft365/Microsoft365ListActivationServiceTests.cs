@@ -42,7 +42,7 @@ public sealed class Microsoft365ListActivationServiceTests
     }
 
     [Theory, AutoDomainData]
-    public async Task Given_AnEnabledList_When_SetIndexingAsync_Then_NoSecondUsefulWorkIsRequested(
+    public async Task Given_AnEnabledList_When_SetIndexingAsync_Then_ReconcilesMissingWorkWithoutChangingEnabledAt(
         Guid organizationId,
         Guid connectionId,
         Guid connectorId,
@@ -62,7 +62,7 @@ public sealed class Microsoft365ListActivationServiceTests
 
         // Then
         Assert.Same(list, result);
-        Assert.Equal(0, repository.SaveActivationCallCount);
+        Assert.Equal(1, repository.SaveActivationCallCount);
         Assert.Equal(now.AddMinutes(-1), list.EnabledAt);
     }
 

@@ -161,6 +161,75 @@ public sealed class Microsoft365SearchRepositoryTests
         Assert.True(document.RootElement.TryGetProperty("vectorQueries", out _));
     }
 
+    [Theory, AutoDomainData]
+    public async Task Given_ResultsBelowTheSemanticThreshold_When_SearchAsync_Then_ExcludesWeakResults(
+        Guid organizationId,
+        Guid userId,
+        string apiKey,
+        string query,
+        string weakChunkId,
+        string strongChunkId,
+        string title,
+        string content,
+        float[] queryVector)
+    {
+        // Given
+        using var httpClient = new HttpClient(new StubHttpMessageHandler(_ =>
+            new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(JsonSerializer.Serialize(new
+                {
+                    value = new[]
+                    {
+                        new Dictionary<string, object?>
+                        {
+                            ["@search.score"] = 4.0,
+                            ["@search.rerankerScore"] = 1.49,
+                            ["chunkId"] = weakChunkId,
+                            ["title"] = title,
+                            ["content"] = content
+                        },
+                        new Dictionary<string, object?>
+                        {
+                            ["@search.score"] = 1.0,
+                            ["@search.rerankerScore"] = 1.5,
+                            ["chunkId"] = strongChunkId,
+                            ["title"] = title,
+                            ["content"] = content
+                        }
+                    }
+                }))
+            }));
+        var repository = new Microsoft365SearchRepositoryAdapter(
+            new AzureAiSearchPassageSearchClient(httpClient),
+            Options.Create(new AzureAiSearchOptions
+            {
+                Endpoint = "https://search.example",
+                IndexName = "content-index",
+                ApiKey = apiKey,
+                MinimumSemanticRelevanceScore = 1.5
+            }),
+            new StubEmbeddingGenerator(queryVector));
+        var parameters = new Microsoft365SearchParameters(
+            query,
+            null,
+            null,
+            null,
+            new Microsoft365SearchSecurityContext(
+                organizationId,
+                userId.ToString("D"),
+                []),
+            10);
+
+        // When
+        var results = await repository.SearchAsync(parameters, CancellationToken.None);
+
+        // Then
+        var result = Assert.Single(results);
+        Assert.Equal(strongChunkId, result.Reference);
+        Assert.Equal(1.5, result.RelevanceScore);
+    }
+
     private sealed class StubEmbeddingGenerator(IReadOnlyList<float> vector)
         : IMicrosoft365EmbeddingGenerator
     {

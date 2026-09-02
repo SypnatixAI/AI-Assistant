@@ -4,9 +4,9 @@ using Microsoft.AspNetCore.Authorization;
 namespace AssistantCore.Service.Infrastructure.Authentication.Authorization;
 
 /// <summary>
-/// Verifie que le token porte le role d'admission Entra attendu (ex. AssistantCore.Access).
-/// Ce role prouve seulement que l'organisation cliente a admis l'utilisateur sur la
-/// plateforme ; il ne doit jamais etre mappe vers un role metier interne comme Admin.
+/// Verifie que le token porte un role Entra autorisant l'admission sur la plateforme.
+/// Le role d'admission standard ou tenantAdmin permet l'acces ; tenantAdmin conserve
+/// ensuite sa signification de role metier Admin dans la couche Application.
 /// </summary>
 public sealed class RequiredAppRoleAuthorizationHandler
     : AuthorizationHandler<RequiredAppRoleRequirement>
@@ -21,7 +21,7 @@ public sealed class RequiredAppRoleAuthorizationHandler
         AuthorizationHandlerContext context,
         RequiredAppRoleRequirement requirement)
     {
-        if (HasRequiredRole(context.User, requirement.RequiredRole))
+        if (HasAcceptedRole(context.User, requirement.AcceptedRoles))
         {
             context.Succeed(requirement);
         }
@@ -29,11 +29,13 @@ public sealed class RequiredAppRoleAuthorizationHandler
         return Task.CompletedTask;
     }
 
-    private static bool HasRequiredRole(ClaimsPrincipal principal, string requiredRole) =>
+    private static bool HasAcceptedRole(
+        ClaimsPrincipal principal,
+        IReadOnlyCollection<string> acceptedRoles) =>
         RoleClaimTypes
             .SelectMany(claimType => principal.FindAll(claimType))
             .SelectMany(claim => claim.Value.Split(
                 ' ',
                 StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
-            .Any(role => string.Equals(role, requiredRole, StringComparison.Ordinal));
+            .Any(role => acceptedRoles.Contains(role, StringComparer.Ordinal));
 }

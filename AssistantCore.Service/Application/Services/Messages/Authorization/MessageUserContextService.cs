@@ -4,6 +4,7 @@ using AssistantCore.Repository.Queries;
 using AssistantCore.Service.Application.Abstractions;
 using AssistantCore.Service.Application.Exceptions;
 using AssistantCore.Service.Application.Models.Messages;
+using AssistantCore.Service.Application.Services.AuthenticateUser;
 using AssistantCore.Service.Application.Services.Microsoft365;
 using AssistantCore.Service.Application.Services.TenantAdmission;
 
@@ -13,6 +14,7 @@ public sealed class MessageUserContextService(
     ICurrentIdentity currentIdentity,
     IOrganizationQueries organizationQueries,
     IOrganizationMemberQueries memberQueries,
+    IOrganizationRoleResolver organizationRoleResolver,
     IMicrosoft365OnboardingCompletionChecker onboardingCompletionChecker,
     ITenantAdmissionPolicy tenantAdmissionPolicy) : IMessageUserContextService
 {
@@ -36,12 +38,13 @@ public sealed class MessageUserContextService(
             identity.ExternalUserId,
             cancellationToken);
 
-        if (member is null
-            || member.Status != RecordStatus.Active
-            || member.Role is not (OrganizationRole.Admin or OrganizationRole.User))
+        if (member is null || member.Status != RecordStatus.Active)
         {
             throw new ForbiddenException("Organization member access denied.");
         }
+
+        // Le rôle effectif vient du JWT; la valeur persistée reste informative.
+        member.Role = organizationRoleResolver.Resolve(identity.AppRoles);
 
         var isOnboardingComplete = await onboardingCompletionChecker.IsCompleteAsync(
             organization.Id,

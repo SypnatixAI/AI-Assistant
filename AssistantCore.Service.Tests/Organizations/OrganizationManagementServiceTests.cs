@@ -1,3 +1,4 @@
+using AssistantCore.Repository.Domain.Entities;
 using AssistantCore.Repository.Domain.Enums;
 using AssistantCore.Service.Application.Exceptions;
 using AssistantCore.Service.Application.Services.Organizations;
@@ -13,7 +14,7 @@ public sealed class OrganizationManagementServiceTests
     {
         // Given
         var repository = new StubOrganizationRepository();
-        var service = new OrganizationManagementService(repository);
+        var service = new OrganizationManagementService(repository, new StubOrganizationQueries());
 
         // When
         var organization = await service.CreateOrganizationAsync(domain, cancellationToken);
@@ -35,7 +36,7 @@ public sealed class OrganizationManagementServiceTests
     {
         // Given
         var repository = new StubOrganizationRepository();
-        var service = new OrganizationManagementService(repository);
+        var service = new OrganizationManagementService(repository, new StubOrganizationQueries());
 
         // When
         var action = () => service.CreateOrganizationAsync(domain);
@@ -46,20 +47,26 @@ public sealed class OrganizationManagementServiceTests
     }
 
     [Theory, AutoDomainData]
-    public async Task Given_AnExistingDomain_When_CreateOrganizationAsync_Then_ThrowsConflict(
-        string domain)
+    public async Task Given_AnExistingDomain_When_CreateOrganizationAsync_Then_ReturnsTheExistingOrganization(
+        string domain,
+        Organization existingOrganization,
+        CancellationToken cancellationToken)
     {
         // Given
+        existingOrganization.Domain = domain.Trim().ToLowerInvariant();
+        existingOrganization.IdentityProvider = IdentityProvider.MicrosoftEntraId;
+        existingOrganization.Status = RecordStatus.Active;
         var repository = new StubOrganizationRepository { SimulateConflict = true };
-        var service = new OrganizationManagementService(repository);
+        var queries = new StubOrganizationQueries { DomainResult = existingOrganization };
+        var service = new OrganizationManagementService(repository, queries);
 
         // When
-        var action = () => service.CreateOrganizationAsync(domain);
+        var result = await service.CreateOrganizationAsync(domain, cancellationToken);
 
         // Then
-        var exception = await Assert.ThrowsAsync<ConflictException>(action);
-        Assert.Equal(
-            "An organization already exists for this identity provider and domain.",
-            exception.Message);
+        Assert.Same(existingOrganization, result);
+        Assert.Equal(IdentityProvider.MicrosoftEntraId, queries.ReceivedIdentityProvider);
+        Assert.Equal(existingOrganization.Domain, queries.ReceivedDomain);
+        Assert.Equal(cancellationToken, queries.ReceivedCancellationToken);
     }
 }

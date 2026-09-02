@@ -69,17 +69,10 @@ public sealed class Microsoft365ListActivationService(
         if (isIndexed)
         {
             EnsureDeactivationIsComplete(list);
-            if (!list.EnableIndexing(requestedAt))
-            {
-                requestCounts = Microsoft365ListIndexingRequestCounts.Empty;
-            }
-            else
-            {
-                requestCounts = await sourceDiscoveryRepository.SaveListActivationAsync(
-                    list,
-                    requestedAt,
-                    cancellationToken);
-            }
+            requestCounts = await sourceDiscoveryRepository.SaveListActivationAsync(
+                list,
+                requestedAt,
+                cancellationToken);
         }
         else
         {

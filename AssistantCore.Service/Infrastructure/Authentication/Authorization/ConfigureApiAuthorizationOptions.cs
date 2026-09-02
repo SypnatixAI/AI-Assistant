@@ -17,7 +17,11 @@ public sealed class ConfigureApiAuthorizationOptions(IOptions<ApiAccessOptions> 
             .RequireAuthenticatedUser()
             .AddRequirements(
                 new RequiredScopeRequirement(apiAccessOptions.Value.RequiredScope),
-                new RequiredAppRoleRequirement(apiAccessOptions.Value.RequiredAdmissionRole))
+                new RequiredAppRoleRequirement(
+                [
+                    apiAccessOptions.Value.RequiredAdmissionRole,
+                    apiAccessOptions.Value.TenantAdminRole
+                ]))
             .Build();
     }
 }

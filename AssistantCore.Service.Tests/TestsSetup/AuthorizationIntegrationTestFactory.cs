@@ -24,6 +24,7 @@ internal static class AuthorizationIntegrationTestFactory
     public const string RoleHeaderName = "X-Test-Roles";
     public const string RequiredScope = "access_as_user";
     public const string RequiredAdmissionRole = "AssistantCore.Access";
+    public const string TenantAdminRole = "TenantAdmin";
 
     public static WebApplicationFactory<Program> CreateFactory(bool useTestAuthentication)
     {

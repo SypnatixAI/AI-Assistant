@@ -159,6 +159,7 @@ public sealed class AzureAiSearchPassageSearchClient
             document.Title,
             document.Content,
             document.RerankerScore ?? document.Score,
+            document.RerankerScore,
             document.Url,
             document.ModifiedAt);
     }

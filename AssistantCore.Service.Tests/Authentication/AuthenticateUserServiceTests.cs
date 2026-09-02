@@ -275,7 +275,7 @@ public sealed class AuthenticateUserServiceTests
     }
 
     [Theory, AutoDomainData]
-    public async Task Given_AnExistingUser_When_ResolverReturnsAdmin_Then_PromotesTheMemberToAdmin(
+    public async Task Given_AnExistingUser_When_GetOrganizationAsync_Then_UsesTokenAdminRoleWithoutPersistingIt(
         Organization organization,
         OrganizationMember member,
         AuthenticatedIdentity authenticatedIdentity)
@@ -300,13 +300,12 @@ public sealed class AuthenticateUserServiceTests
         var result = await service.GetOrganizationAsync(CancellationToken.None);
 
         // Then
-        Assert.Equal(1, memberQueries.UpdateRoleCallCount);
-        Assert.Equal(OrganizationRole.Admin, memberQueries.ReceivedRole);
+        Assert.Equal(0, memberQueries.UpdateRoleCallCount);
         Assert.Equal(OrganizationRole.Admin, result.Member.Role);
     }
 
     [Theory, AutoDomainData]
-    public async Task Given_AnExistingAdmin_When_ResolverReturnsUser_Then_DemotesTheMemberToUser(
+    public async Task Given_AnExistingAdmin_When_GetOrganizationAsync_Then_UsesTokenUserRoleWithoutPersistingIt(
         Organization organization,
         OrganizationMember member,
         AuthenticatedIdentity authenticatedIdentity)
@@ -331,8 +330,7 @@ public sealed class AuthenticateUserServiceTests
         var result = await service.GetOrganizationAsync(CancellationToken.None);
 
         // Then
-        Assert.Equal(1, memberQueries.UpdateRoleCallCount);
-        Assert.Equal(OrganizationRole.User, memberQueries.ReceivedRole);
+        Assert.Equal(0, memberQueries.UpdateRoleCallCount);
         Assert.Equal(OrganizationRole.User, result.Member.Role);
     }
 
@@ -374,7 +372,7 @@ public sealed class AuthenticateUserServiceTests
         // Given
         member.OrganizationId = organization.Id;
         member.Status = RecordStatus.Active;
-        member.Role = OrganizationRole.User;
+        member.Role = OrganizationRole.Admin;
         var memberQueries = new StubOrganizationMemberQueries { FoundMember = member };
         var onboardingCompletionChecker = new StubMicrosoft365OnboardingCompletionChecker
         {
@@ -409,7 +407,7 @@ public sealed class AuthenticateUserServiceTests
         // Given
         member.OrganizationId = organization.Id;
         member.Status = RecordStatus.Active;
-        member.Role = OrganizationRole.Admin;
+        member.Role = OrganizationRole.User;
         var memberQueries = new StubOrganizationMemberQueries { FoundMember = member };
         var service = new AuthenticateUserService(
             new StubCurrentIdentity { Identity = authenticatedIdentity },
@@ -426,6 +424,7 @@ public sealed class AuthenticateUserServiceTests
 
         // Then
         Assert.Same(member, result.Member);
+        Assert.Equal(OrganizationRole.Admin, result.Member.Role);
         Assert.Equal(1, memberQueries.RecordSuccessfulAuthenticationCallCount);
     }
 
@@ -438,7 +437,7 @@ public sealed class AuthenticateUserServiceTests
         // Given
         member.OrganizationId = organization.Id;
         member.Status = RecordStatus.Active;
-        member.Role = OrganizationRole.User;
+        member.Role = OrganizationRole.Admin;
         var memberQueries = new StubOrganizationMemberQueries { FoundMember = member };
         var service = new AuthenticateUserService(
             new StubCurrentIdentity { Identity = authenticatedIdentity },
@@ -455,6 +454,7 @@ public sealed class AuthenticateUserServiceTests
 
         // Then
         Assert.Same(member, result.Member);
+        Assert.Equal(OrganizationRole.User, result.Member.Role);
         Assert.Equal(1, memberQueries.RecordSuccessfulAuthenticationCallCount);
     }
 }

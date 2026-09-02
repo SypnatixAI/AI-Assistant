@@ -29,6 +29,15 @@ param microsoft365ClientId string = environmentName == 'certif'
   ? '558d6670-3549-423e-ae92-c5ff1d3b326b'
   : '00000000-0000-0000-0000-000000000001'
 param spaEntraClientId string = '97fda345-b54e-4243-b05a-31623871df18'
+@description('Microsoft Entra tenant that authenticates SQLPad users.')
+param sqlpadEntraTenantId string
+
+@description('Client ID of the environment-specific SQLPad App Registration.')
+param sqlpadEntraClientId string
+
+@description('Object ID of the Microsoft Entra group allowed to access SQLPad.')
+param sqlpadAllowedGroupObjectId string
+
 param azureSearchEndpoint string = 'https://synaptixsearch.search.windows.net'
 param azureSearchIndexName string = 'microsoft-content-${environmentName}'
 
@@ -48,9 +57,13 @@ var apiAppName = 'ca-assistant-api-${environmentName}'
 var workerAppName = 'ca-assistant-worker-${environmentName}'
 var spaAppName = 'ca-assistant-spa-${environmentName}'
 var wiremockAppName = 'ca-assistant-wiremock-${environmentName}'
+var sqlpadAppName = 'ca-assistant-sqlpad-${environmentName}'
 var migrationsJobName = 'caj-assistant-migrations-${environmentName}'
 var workloadIdentityName = 'id-assistant-workload-${environmentName}'
 var acrPullIdentityName = 'id-assistant-acr-${environmentName}'
+var sqlpadStorageAccountName = 'stasqlpad${environmentName}${nameSuffix}'
+var sqlpadStorageName = 'sqlpad-files'
+var sqlpadFileShareName = 'sqlpad'
 
 resource keyVault 'Microsoft.KeyVault/vaults@2023-07-01' existing = {
   name: keyVaultName
@@ -115,10 +128,55 @@ resource containerEnvironment 'Microsoft.App/managedEnvironments@2024-03-01' = {
   }
 }
 
+resource sqlpadStorageAccount 'Microsoft.Storage/storageAccounts@2023-05-01' = {
+  name: sqlpadStorageAccountName
+  location: location
+  tags: tags
+  sku: {
+    name: 'Standard_LRS'
+  }
+  kind: 'StorageV2'
+  properties: {
+    allowBlobPublicAccess: false
+    allowSharedKeyAccess: true
+    minimumTlsVersion: 'TLS1_2'
+    supportsHttpsTrafficOnly: true
+  }
+}
+
+resource sqlpadFileService 'Microsoft.Storage/storageAccounts/fileServices@2023-05-01' = {
+  parent: sqlpadStorageAccount
+  name: 'default'
+}
+
+resource sqlpadFileShare 'Microsoft.Storage/storageAccounts/fileServices/shares@2023-05-01' = {
+  parent: sqlpadFileService
+  name: sqlpadFileShareName
+  properties: {
+    accessTier: 'TransactionOptimized'
+    enabledProtocols: 'SMB'
+    shareQuota: 5
+  }
+}
+
+resource sqlpadEnvironmentStorage 'Microsoft.App/managedEnvironments/storages@2024-03-01' = {
+  parent: containerEnvironment
+  name: sqlpadStorageName
+  properties: {
+    azureFile: {
+      accessMode: 'ReadWrite'
+      accountName: sqlpadStorageAccount.name
+      accountKey: sqlpadStorageAccount.listKeys().keys[0].value
+      shareName: sqlpadFileShare.name
+    }
+  }
+}
+
 var apiBaseUrl = 'https://${apiAppName}.${containerEnvironment.properties.defaultDomain}'
 var spaBaseUrl = 'https://${spaAppName}.${containerEnvironment.properties.defaultDomain}'
 var wiremockPublicBaseUrl = 'https://${wiremockAppName}.${containerEnvironment.properties.defaultDomain}'
 var wiremockInternalBaseUrl = 'http://${wiremockAppName}'
+var sqlpadBaseUrl = 'https://${sqlpadAppName}.${containerEnvironment.properties.defaultDomain}'
 var keyVaultBaseUrl = '${keyVault.properties.vaultUri}secrets'
 
 var managedIdentities = {
@@ -438,7 +496,10 @@ resource worker 'Microsoft.App/containerApps@2024-03-01' = {
         }
       ]
       scale: {
-        minReplicas: 0
+        // This worker polls SQL on a timer. DEV must keep one replica alive
+        // because there is no event scaler capable of waking it from zero.
+        // CERTIF remains controlled by the explicit start/stop workflow.
+        minReplicas: isDev ? 1 : 0
         maxReplicas: 1
       }
     }
@@ -575,6 +636,169 @@ resource wiremock 'Microsoft.App/containerApps@2024-03-01' = if (isDev) {
   dependsOn: [acrPullRole, keyVaultSecretsUser]
 }
 
+resource sqlpad 'Microsoft.App/containerApps@2024-03-01' = {
+  name: sqlpadAppName
+  location: location
+  tags: tags
+  identity: {
+    type: 'UserAssigned'
+    userAssignedIdentities: {
+      '${workloadIdentity.id}': {}
+    }
+  }
+  properties: {
+    managedEnvironmentId: containerEnvironment.id
+    configuration: {
+      activeRevisionsMode: 'Single'
+      ingress: {
+        external: true
+        allowInsecure: false
+        targetPort: 3000
+        transport: 'auto'
+      }
+      secrets: [
+        {
+          name: 'sql-admin-password'
+          keyVaultUrl: '${keyVaultBaseUrl}/sql-admin-password'
+          identity: workloadIdentity.id
+        }
+        {
+          name: 'sqlpad-entra-client-secret'
+          keyVaultUrl: '${keyVaultBaseUrl}/sqlpad-entra-client-secret'
+          identity: workloadIdentity.id
+        }
+      ]
+    }
+    template: {
+      containers: [
+        {
+          name: 'sqlpad'
+          image: 'sqlpad/sqlpad:7.5.7'
+          env: [
+            {
+              name: 'MICROSOFT_PROVIDER_AUTHENTICATION_SECRET'
+              secretRef: 'sqlpad-entra-client-secret'
+            }
+            {
+              name: 'SQLPAD_AUTH_DISABLED'
+              value: 'true'
+            }
+            {
+              name: 'SQLPAD_AUTH_DISABLED_DEFAULT_ROLE'
+              value: 'admin'
+            }
+            {
+              name: 'SQLPAD_APP_LOG_LEVEL'
+              value: 'info'
+            }
+            {
+              name: 'SQLPAD_DB_PATH'
+              value: '/var/lib/sqlpad/db'
+            }
+            {
+              name: 'SQLPAD_CONNECTIONS__assistantcore__name'
+              value: 'AssistantCoreDb ${toUpper(environmentName)}'
+            }
+            {
+              name: 'SQLPAD_CONNECTIONS__assistantcore__driver'
+              value: 'sqlserver'
+            }
+            {
+              name: 'SQLPAD_CONNECTIONS__assistantcore__host'
+              value: sql.outputs.serverFqdn
+            }
+            {
+              name: 'SQLPAD_CONNECTIONS__assistantcore__port'
+              value: '1433'
+            }
+            {
+              name: 'SQLPAD_CONNECTIONS__assistantcore__database'
+              value: sql.outputs.databaseName
+            }
+            {
+              name: 'SQLPAD_CONNECTIONS__assistantcore__username'
+              value: sqlAdministratorLogin
+            }
+            {
+              name: 'SQLPAD_CONNECTIONS__assistantcore__password'
+              secretRef: 'sql-admin-password'
+            }
+            {
+              name: 'SQLPAD_CONNECTIONS__assistantcore__encrypt'
+              value: 'true'
+            }
+            {
+              name: 'SQLPAD_CONNECTIONS__assistantcore__trustServerCertificate'
+              value: 'false'
+            }
+          ]
+          resources: {
+            cpu: json('0.5')
+            memory: '1Gi'
+          }
+          volumeMounts: [
+            {
+              volumeName: 'sqlpad-data'
+              mountPath: '/var/lib/sqlpad'
+            }
+          ]
+        }
+      ]
+      scale: {
+        minReplicas: 0
+        maxReplicas: 1
+      }
+      volumes: [
+        {
+          name: 'sqlpad-data'
+          storageName: sqlpadEnvironmentStorage.name
+          storageType: 'AzureFile'
+        }
+      ]
+    }
+  }
+  dependsOn: [keyVaultSecretsUser]
+}
+
+resource sqlpadAuthentication 'Microsoft.App/containerApps/authConfigs@2024-03-01' = {
+  parent: sqlpad
+  name: 'current'
+  properties: {
+    platform: {
+      enabled: true
+      runtimeVersion: '~1'
+    }
+    globalValidation: {
+      unauthenticatedClientAction: 'RedirectToLoginPage'
+      redirectToProvider: 'azureactivedirectory'
+    }
+    httpSettings: {
+      requireHttps: true
+    }
+    identityProviders: {
+      azureActiveDirectory: {
+        enabled: true
+        registration: {
+          clientId: sqlpadEntraClientId
+          clientSecretSettingName: 'MICROSOFT_PROVIDER_AUTHENTICATION_SECRET'
+          openIdIssuer: '${environment().authentication.loginEndpoint}${sqlpadEntraTenantId}/v2.0'
+        }
+        validation: {
+          allowedAudiences: [
+            sqlpadEntraClientId
+            'api://${sqlpadEntraClientId}'
+          ]
+          defaultAuthorizationPolicy: {
+            allowedPrincipals: {
+              groups: [sqlpadAllowedGroupObjectId]
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
 resource migrationsJob 'Microsoft.App/jobs@2024-03-01' = {
   name: migrationsJobName
   location: location
@@ -647,6 +871,8 @@ output spaName string = spa.name
 output spaUrl string = spaBaseUrl
 output workerName string = worker.name
 output wiremockName string = isDev ? wiremockAppName : ''
+output sqlpadName string = sqlpad.name
+output sqlpadUrl string = sqlpadBaseUrl
 output migrationsJobName string = migrationsJob.name
 output keyVaultName string = keyVault.name
 output sqlServerName string = sql.outputs.serverName

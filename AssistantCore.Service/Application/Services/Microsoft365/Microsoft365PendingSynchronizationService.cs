@@ -1,16 +1,20 @@
 using AssistantCore.Repository.Domain.Enums;
 using AssistantCore.Repository.Repositories;
+using AssistantCore.Service.Application.Models.Microsoft365;
 
 namespace AssistantCore.Service.Application.Services.Microsoft365;
 
 public sealed class Microsoft365PendingSynchronizationService(
     IMicrosoft365PendingSynchronizationRepository repository,
     IMicrosoft365DriveSynchronizationService driveSynchronizationService,
+    IMicrosoft365ListSynchronizationService listSynchronizationService,
+    IMicrosoft365IndexCleanupService indexCleanupService,
+    IMicrosoft365SourceSynchronizationRepository synchronizationRepository,
     TimeProvider timeProvider) : IMicrosoft365PendingSynchronizationService
 {
     public async Task<bool> ProcessNextAsync(CancellationToken cancellationToken = default)
     {
-        var work = await repository.ClaimNextDriveAsync(
+        var work = await repository.ClaimNextAsync(
             timeProvider.GetUtcNow(),
             cancellationToken);
         if (work is null)
@@ -18,19 +22,69 @@ public sealed class Microsoft365PendingSynchronizationService(
             return false;
         }
 
-        if (work.Type == Microsoft365SynchronizationType.Initial)
+        if (work.Type == Microsoft365SynchronizationType.IndexCleanup)
         {
-            await driveSynchronizationService.StartInitialSynchronizationAsync(
+            await indexCleanupService.CleanupAsync(
+                work.OrganizationId,
                 work.SourceId,
                 work.SynchronizationId,
                 cancellationToken);
+            return true;
+        }
+
+        if (!work.IsIndexed
+            || work.SourceStatus is not Microsoft365SourceStatus.Enabled
+                and not Microsoft365SourceStatus.FullResyncRequired)
+        {
+            var cancelled = await synchronizationRepository.RecordSynchronizationOutcomeAsync(
+                work.SourceId,
+                work.SynchronizationId,
+                Microsoft365SynchronizationStatus.Cancelled,
+                Microsoft365SynchronizationCounters.Empty,
+                timeProvider.GetUtcNow(),
+                "Microsoft365SourceNoLongerIndexable",
+                CancellationToken.None);
+            if (!cancelled)
+            {
+                throw new InvalidOperationException(
+                    "The obsolete Microsoft 365 synchronization could not be cancelled.");
+            }
+            return true;
+        }
+
+        if (work.SourceKind == Microsoft365SourceKind.SharePointList)
+        {
+            if (work.Type == Microsoft365SynchronizationType.Initial)
+            {
+                await listSynchronizationService.StartInitialSynchronizationAsync(
+                    work.SourceId,
+                    work.SynchronizationId,
+                    cancellationToken);
+            }
+            else
+            {
+                await listSynchronizationService.StartDeltaSynchronizationAsync(
+                    work.SourceId,
+                    work.SynchronizationId,
+                    cancellationToken);
+            }
         }
         else
         {
-            await driveSynchronizationService.StartDeltaSynchronizationAsync(
-                work.SourceId,
-                work.SynchronizationId,
-                cancellationToken);
+            if (work.Type == Microsoft365SynchronizationType.Initial)
+            {
+                await driveSynchronizationService.StartInitialSynchronizationAsync(
+                    work.SourceId,
+                    work.SynchronizationId,
+                    cancellationToken);
+            }
+            else
+            {
+                await driveSynchronizationService.StartDeltaSynchronizationAsync(
+                    work.SourceId,
+                    work.SynchronizationId,
+                    cancellationToken);
+            }
         }
 
         return true;

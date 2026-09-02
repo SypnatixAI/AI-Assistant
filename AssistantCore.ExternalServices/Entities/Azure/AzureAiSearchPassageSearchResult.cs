@@ -5,5 +5,6 @@ public sealed record AzureAiSearchPassageSearchResult(
     string Title,
     string Content,
     double? Score,
+    double? SemanticScore,
     string? Url = null,
     DateTimeOffset? ModifiedAt = null);
