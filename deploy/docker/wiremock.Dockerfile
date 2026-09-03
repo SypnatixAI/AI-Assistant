@@ -1,5 +1,8 @@
 FROM wiremock/wiremock:3.13.2-alpine
 
+ARG DEV_ORGANIZATION_DOMAIN=dev.test
+ENV DEV_ORGANIZATION_DOMAIN=$DEV_ORGANIZATION_DOMAIN
+
 USER root
 RUN apk add --no-cache openssl
 
