@@ -1,4 +1,4 @@
-name: Start or stop CERTIF
+name: Start or stop DEV worker
 
 on:
   workflow_dispatch:
@@ -8,31 +8,25 @@ on:
         required: true
         type: choice
         options: [start, stop]
-      scope:
-        description: Control only the worker or the complete environment
-        required: true
-        default: all
-        type: choice
-        options: [all, worker]
 
 permissions:
   contents: read
   id-token: write
 
 concurrency:
-  group: control-certif
+  group: control-dev-worker
   cancel-in-progress: true
 
 env:
   AZURE_CORE_OUTPUT: none
-  RESOURCE_GROUP: ${{ vars.AZURE_CERTIF_RESOURCE_GROUP }}
+  RESOURCE_GROUP: ${{ vars.AZURE_DEV_RESOURCE_GROUP }}
 
 jobs:
   control:
-    name: ${{ inputs.action }} CERTIF (${{ inputs.scope }})
+    name: ${{ inputs.action }} DEV worker
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    environment: certif
+    environment: dev
 
     steps:
       - name: Sign in to Azure with OIDC
@@ -42,7 +36,7 @@ jobs:
           tenant-id: ${{ vars.AZURE_TENANT_ID }}
           subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
 
-      - name: Control worker
+      - name: Control DEV worker
         run: |
           if [ "${{ inputs.action }}" = "start" ]; then
             MIN_REPLICAS=1
@@ -53,45 +47,18 @@ jobs:
           fi
 
           az containerapp update \
-            --name ca-assistant-worker-certif \
+            --name ca-assistant-worker-dev \
             --resource-group "$RESOURCE_GROUP" \
             "${EXTRA_ARGUMENTS[@]}" \
             --min-replicas "$MIN_REPLICAS"
 
-      - name: Control public applications
-        if: ${{ inputs.scope == 'all' }}
-        run: |
-          for app in ca-assistant-api-certif ca-assistant-spa-certif ca-assistant-sqlpad-certif; do
-            if [ "${{ inputs.action }}" = "start" ]; then
-              if [ "$app" = "ca-assistant-sqlpad-certif" ]; then
-                TARGET_PORT=3000
-              else
-                TARGET_PORT=8080
-              fi
-              az containerapp ingress enable \
-                --name "$app" \
-                --resource-group "$RESOURCE_GROUP" \
-                --type external \
-                --target-port "$TARGET_PORT" \
-                --transport auto
-            else
-              az containerapp ingress disable \
-                --name "$app" \
-                --resource-group "$RESOURCE_GROUP"
-              az containerapp update \
-                --name "$app" \
-                --resource-group "$RESOURCE_GROUP" \
-                --min-replicas 0
-            fi
-          done
-
   auto-stop-worker:
-    name: Stop CERTIF worker after 30 minutes
+    name: Stop DEV worker after 30 minutes
     needs: control
     if: ${{ inputs.action == 'start' }}
     runs-on: ubuntu-latest
     timeout-minutes: 40
-    environment: certif
+    environment: dev
 
     steps:
       - name: Wait before stopping worker
@@ -104,21 +71,21 @@ jobs:
           tenant-id: ${{ vars.AZURE_TENANT_ID }}
           subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
 
-      - name: Stop CERTIF worker
+      - name: Stop DEV worker
         run: |
           EXPECTED_TOKEN="control-${{ github.run_id }}-${{ github.run_attempt }}"
           CURRENT_TOKEN="$(az containerapp show \
-            --name ca-assistant-worker-certif \
+            --name ca-assistant-worker-dev \
             --resource-group "$RESOURCE_GROUP" \
             --query "properties.template.containers[?name == 'worker'] | [0].env[?name == 'WorkerAutoStopToken'].value | [0]" \
             --output tsv)"
 
           if [ "$CURRENT_TOKEN" != "$EXPECTED_TOKEN" ]; then
-            echo "The CERTIF worker was restarted more recently; skipping this stale stop."
+            echo "The DEV worker was restarted more recently; skipping this stale stop."
             exit 0
           fi
 
           az containerapp update \
-            --name ca-assistant-worker-certif \
+            --name ca-assistant-worker-dev \
             --resource-group "$RESOURCE_GROUP" \
             --min-replicas 0
