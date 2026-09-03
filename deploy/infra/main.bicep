@@ -56,6 +56,10 @@ var containerEnvironmentName = 'cae-assistant-${environmentName}'
 var apiAppName = 'ca-assistant-api-${environmentName}'
 var workerAppName = 'ca-assistant-worker-${environmentName}'
 var spaAppName = 'ca-assistant-spa-${environmentName}'
+var devSpaCustomDomain = 'assistant-dev.onpremia.ca'
+var devBffCustomDomain = 'assistant-bff-dev.onpremia.ca'
+var devSpaCertificateName = 'assistant-dev.onpremia.ca-cae-assi-260903024140'
+var devBffCertificateName = 'assistant-bff-dev.onpremia.c-cae-assi-260903025937'
 var wiremockAppName = 'ca-assistant-wiremock-${environmentName}'
 var sqlpadAppName = 'ca-assistant-sqlpad-${environmentName}'
 var migrationsJobName = 'caj-assistant-migrations-${environmentName}'
@@ -172,12 +176,25 @@ resource sqlpadEnvironmentStorage 'Microsoft.App/managedEnvironments/storages@20
   }
 }
 
-var apiBaseUrl = 'https://${apiAppName}.${containerEnvironment.properties.defaultDomain}'
-var spaBaseUrl = 'https://${spaAppName}.${containerEnvironment.properties.defaultDomain}'
+var generatedApiBaseUrl = 'https://${apiAppName}.${containerEnvironment.properties.defaultDomain}'
+var generatedSpaBaseUrl = 'https://${spaAppName}.${containerEnvironment.properties.defaultDomain}'
+var apiBaseUrl = isDev ? 'https://${devBffCustomDomain}' : generatedApiBaseUrl
+var spaBaseUrl = isDev ? 'https://${devSpaCustomDomain}' : generatedSpaBaseUrl
 var wiremockPublicBaseUrl = 'https://${wiremockAppName}.${containerEnvironment.properties.defaultDomain}'
 var wiremockInternalBaseUrl = 'http://${wiremockAppName}'
 var sqlpadBaseUrl = 'https://${sqlpadAppName}.${containerEnvironment.properties.defaultDomain}'
 var keyVaultBaseUrl = '${keyVault.properties.vaultUri}secrets'
+
+var devSpaCertificateId = resourceId(
+  'Microsoft.App/managedEnvironments/managedCertificates',
+  containerEnvironmentName,
+  devSpaCertificateName
+)
+var devBffCertificateId = resourceId(
+  'Microsoft.App/managedEnvironments/managedCertificates',
+  containerEnvironmentName,
+  devBffCertificateName
+)
 
 var managedIdentities = {
   '${workloadIdentity.id}': {}
@@ -343,6 +360,13 @@ resource api 'Microsoft.App/containerApps@2024-03-01' = {
         allowInsecure: false
         targetPort: 8080
         transport: 'auto'
+        customDomains: isDev ? [
+          {
+            name: devBffCustomDomain
+            certificateId: devBffCertificateId
+            bindingType: 'SniEnabled'
+          }
+        ] : []
       }
       registries: registryConfiguration
       secrets: apiSecrets
@@ -496,10 +520,9 @@ resource worker 'Microsoft.App/containerApps@2024-03-01' = {
         }
       ]
       scale: {
-        // This worker polls SQL on a timer. DEV must keep one replica alive
-        // because there is no event scaler capable of waking it from zero.
+        // The DEV deployment starts the worker temporarily.
         // CERTIF remains controlled by the explicit start/stop workflow.
-        minReplicas: isDev ? 1 : 0
+        minReplicas: 0
         maxReplicas: 1
       }
     }
@@ -526,6 +549,13 @@ resource spa 'Microsoft.App/containerApps@2024-03-01' = {
         allowInsecure: false
         targetPort: 8080
         transport: 'auto'
+        customDomains: isDev ? [
+          {
+            name: devSpaCustomDomain
+            certificateId: devSpaCertificateId
+            bindingType: 'SniEnabled'
+          }
+        ] : []
       }
       registries: registryConfiguration
     }

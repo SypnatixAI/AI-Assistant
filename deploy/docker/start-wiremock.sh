@@ -17,7 +17,7 @@ base64_url_encode() {
 issued_at="$(date +%s)"
 expires_at="$((issued_at + 28800))"
 header="$(printf '%s' '{"alg":"HS256","typ":"JWT"}' | base64_url_encode)"
-payload="$(printf '%s' "{\"iss\":\"AssistantCore.Dev\",\"aud\":\"AssistantCore.Api\",\"iat\":${issued_at},\"nbf\":${issued_at},\"exp\":${expires_at},\"tid\":\"00000000-0000-0000-0000-000000000100\",\"oid\":\"00000000-0000-0000-0000-000000000200\",\"name\":\"Administrateur DEV\",\"preferred_username\":\"admin@dev.test\",\"scp\":\"access_as_user\",\"roles\":[\"AssistantCore.Access\"]}" | base64_url_encode)"
+payload="$(printf '%s' "{\"iss\":\"AssistantCore.Dev\",\"aud\":\"AssistantCore.Api\",\"iat\":${issued_at},\"nbf\":${issued_at},\"exp\":${expires_at},\"tid\":\"00000000-0000-0000-0000-000000000100\",\"oid\":\"00000000-0000-0000-0000-000000000200\",\"name\":\"Administrateur DEV\",\"preferred_username\":\"admin@dev.test\",\"scp\":\"access_as_user\",\"roles\":[\"AssistantCore.Access\",\"TenantAdmin\"]}" | base64_url_encode)"
 unsigned_token="${header}.${payload}"
 signature="$(printf '%s' "$unsigned_token" \
     | openssl dgst -sha256 -hmac "$DEV_JWT_SIGNING_KEY" -binary \
