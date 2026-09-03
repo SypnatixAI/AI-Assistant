@@ -706,10 +706,6 @@ resource sqlpad 'Microsoft.App/containerApps@2024-03-01' = {
           image: 'sqlpad/sqlpad:7.5.7'
           env: [
             {
-              name: 'MICROSOFT_PROVIDER_AUTHENTICATION_SECRET'
-              secretRef: 'sqlpad-entra-client-secret'
-            }
-            {
               name: 'SQLPAD_AUTH_DISABLED'
               value: 'true'
             }
@@ -810,7 +806,7 @@ resource sqlpadAuthentication 'Microsoft.App/containerApps/authConfigs@2024-03-0
         enabled: true
         registration: {
           clientId: sqlpadEntraClientId
-          clientSecretSettingName: 'MICROSOFT_PROVIDER_AUTHENTICATION_SECRET'
+          clientSecretSettingName: 'sqlpad-entra-client-secret'
           openIdIssuer: '${environment().authentication.loginEndpoint}${sqlpadEntraTenantId}/v2.0'
         }
         validation: {
