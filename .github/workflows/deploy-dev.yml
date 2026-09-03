@@ -14,6 +14,7 @@ env:
   AZURE_CORE_OUTPUT: none
   RESOURCE_GROUP: ${{ vars.AZURE_DEV_RESOURCE_GROUP }}
   ACR_NAME: ${{ vars.AZURE_ACR_NAME }}
+  DEV_ORGANIZATION_DOMAIN: dev.test
 
 jobs:
   deploy:
@@ -54,7 +55,11 @@ jobs:
           docker build --file deploy/docker/api.Dockerfile --tag "${LOGIN_SERVER}/assistant-api:${IMAGE_TAG}" .
           docker build --file deploy/docker/worker.Dockerfile --tag "${LOGIN_SERVER}/assistant-worker:${IMAGE_TAG}" .
           docker build --file AssistantCore.Repository/Database/Flyway/Dockerfile --tag "${LOGIN_SERVER}/assistant-migrations:${IMAGE_TAG}" AssistantCore.Repository/Database/Flyway
-          docker build --file deploy/docker/wiremock.Dockerfile --tag "${LOGIN_SERVER}/assistant-wiremock:${IMAGE_TAG}" .
+          docker build \
+            --file deploy/docker/wiremock.Dockerfile \
+            --build-arg "DEV_ORGANIZATION_DOMAIN=${DEV_ORGANIZATION_DOMAIN}" \
+            --tag "${LOGIN_SERVER}/assistant-wiremock:${IMAGE_TAG}" \
+            .
 
           docker push "${LOGIN_SERVER}/assistant-api:${IMAGE_TAG}"
           docker push "${LOGIN_SERVER}/assistant-worker:${IMAGE_TAG}"
@@ -144,6 +149,20 @@ jobs:
             "https://${API_FQDN}/health/live"
           curl --fail --retry 12 --retry-delay 10 --retry-all-errors \
             "https://${API_FQDN}/health/ready"
+
+          ORGANIZATION_RESPONSE="$(curl --fail-with-body --retry 5 --retry-delay 5 --retry-all-errors \
+            --request POST \
+            --header "Content-Type: application/json" \
+            --data "{\"domain\":\"${DEV_ORGANIZATION_DOMAIN}\"}" \
+            "https://${API_FQDN}/api/organizations")"
+
+          if ! jq --exit-status \
+            --arg domain "$DEV_ORGANIZATION_DOMAIN" \
+            '.domain == $domain and .identityProvider == "MicrosoftEntraId" and .status == "Active"' \
+            <<< "$ORGANIZATION_RESPONSE" >/dev/null; then
+            echo "The DEV organization response is invalid." >&2
+            exit 1
+          fi
 
   stop-worker:
     name: Stop DEV worker after 30 minutes
