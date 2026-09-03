@@ -750,7 +750,7 @@ resource sqlpad 'Microsoft.App/containerApps@2024-03-01' = {
               secretRef: 'sql-admin-password'
             }
             {
-              name: 'SQLPAD_CONNECTIONS__assistantcore__encrypt'
+              name: 'SQLPAD_CONNECTIONS__assistantcore__sqlserverEncrypt'
               value: 'true'
             }
             {
