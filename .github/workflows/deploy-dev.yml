@@ -26,6 +26,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     environment: dev
+    outputs:
+      applications_provisioned: ${{ steps.detect_infrastructure.outputs.applications_provisioned }}
 
     steps:
       - name: Checkout validated commit
@@ -64,14 +66,17 @@ jobs:
           echo "LOGIN_SERVER=${LOGIN_SERVER}" >> "$GITHUB_ENV"
 
       - name: Detect initial infrastructure bootstrap
+        id: detect_infrastructure
         run: |
           if az containerapp show \
             --name ca-assistant-api-dev \
             --resource-group "$RESOURCE_GROUP" \
             --only-show-errors >/dev/null 2>&1; then
             echo "APPLICATIONS_PROVISIONED=true" >> "$GITHUB_ENV"
+            echo "applications_provisioned=true" >> "$GITHUB_OUTPUT"
           else
             echo "APPLICATIONS_PROVISIONED=false" >> "$GITHUB_ENV"
+            echo "applications_provisioned=false" >> "$GITHUB_OUTPUT"
             {
               echo "### Images published; infrastructure not deployed yet"
               echo
@@ -125,7 +130,8 @@ jobs:
           az containerapp update \
             --name ca-assistant-worker-dev \
             --resource-group "$RESOURCE_GROUP" \
-            --image "${LOGIN_SERVER}/assistant-worker:${IMAGE_TAG}"
+            --image "${LOGIN_SERVER}/assistant-worker:${IMAGE_TAG}" \
+            --min-replicas 1
 
       - name: Verify DEV readiness
         if: ${{ env.APPLICATIONS_PROVISIONED == 'true' }}
@@ -138,3 +144,29 @@ jobs:
             "https://${API_FQDN}/health/live"
           curl --fail --retry 12 --retry-delay 10 --retry-all-errors \
             "https://${API_FQDN}/health/ready"
+
+  stop-worker:
+    name: Stop DEV worker after 30 minutes
+    needs: deploy
+    if: ${{ always() && needs.deploy.outputs.applications_provisioned == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    environment: dev
+
+    steps:
+      - name: Wait before stopping worker
+        run: sleep 1800
+
+      - name: Sign in to Azure with OIDC
+        uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Stop DEV worker
+        run: |
+          az containerapp update \
+            --name ca-assistant-worker-dev \
+            --resource-group "$RESOURCE_GROUP" \
+            --min-replicas 0
