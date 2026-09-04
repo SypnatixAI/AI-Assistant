@@ -63,6 +63,7 @@ public sealed class Microsoft365AclReconciliationServiceTests
             [],
             [],
             false,
+            false,
             Microsoft365AclInheritance.Unique);
         var synchronizationService = new RecordingAclSynchronizationService();
         var service = CreateService(

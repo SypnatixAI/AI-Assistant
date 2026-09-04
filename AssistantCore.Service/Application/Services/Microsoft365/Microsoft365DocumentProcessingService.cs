@@ -2,6 +2,7 @@ using AssistantCore.Repository.Domain.Entities;
 using AssistantCore.Repository.Domain.Enums;
 using AssistantCore.Repository.Repositories;
 using AssistantCore.Service.Application.Configuration;
+using AssistantCore.Service.Application.Exceptions;
 using AssistantCore.Service.Application.Models.Microsoft365;
 using AssistantCore.Service.Application.Models.Microsoft365.ContentExtraction;
 using AssistantCore.Service.Application.Models.Microsoft365.Permissions;
@@ -55,13 +56,15 @@ public sealed class Microsoft365DocumentProcessingService(
         }
         catch (Exception exception)
         {
-            var permanent = work.AttemptCount >= options.Value.DocumentWorkMaximumAttempts
-                || exception is InvalidDataException or ArgumentException;
+            var failure = Microsoft365DocumentFailurePolicy.Evaluate(
+                exception,
+                work.AttemptCount,
+                options.Value);
             await workRepository.FailAsync(
                 work,
-                permanent,
+                failure.IsPermanent,
                 exception.GetType().Name,
-                timeProvider.GetUtcNow().AddMinutes(options.Value.DocumentWorkRetryMinutes),
+                timeProvider.GetUtcNow().Add(failure.RetryDelay),
                 cancellationToken);
         }
 
@@ -112,7 +115,7 @@ public sealed class Microsoft365DocumentProcessingService(
                 source.Id,
                 work.DriveItemId,
                 cancellationToken);
-            throw new InvalidDataException("The document ACL could not be resolved.");
+            throw new Microsoft365AclResolutionException();
         }
 
         var bytes = await contentClient.DownloadAsync(

@@ -39,6 +39,7 @@ public sealed class AzureAiSearchPassageAclClientTests
             [groupId],
             [sharePointGroupId],
             true,
+            true,
             fingerprint,
             false);
 
@@ -61,6 +62,7 @@ public sealed class AzureAiSearchPassageAclClientTests
             sharePointGroupId,
             action.GetProperty("allowedSharePointGroupIds").EnumerateArray().Single().GetString());
         Assert.True(action.GetProperty("hasAnonymousLink").GetBoolean());
+        Assert.True(action.GetProperty("hasOrganizationLink").GetBoolean());
         Assert.False(action.GetProperty("isAvailable").GetBoolean());
     }
 
@@ -75,7 +77,8 @@ public sealed class AzureAiSearchPassageAclClientTests
             "allowedUserIds",
             "allowedGroupIds",
             "allowedSharePointGroupIds",
-            "hasAnonymousLink"
+            "hasAnonymousLink",
+            "hasOrganizationLink"
         };
 
         // When
@@ -126,6 +129,7 @@ public sealed class AzureAiSearchPassageAclClientTests
             [groupId],
             [sharePointGroupId],
             false,
+            true,
             fingerprint);
 
         // When
@@ -144,6 +148,7 @@ public sealed class AzureAiSearchPassageAclClientTests
         Assert.Equal("merge", action.GetProperty("@search.action").GetString());
         Assert.Equal(chunkId, action.GetProperty("chunkId").GetString());
         Assert.Equal(fingerprint, action.GetProperty("aclFingerprint").GetString());
+        Assert.True(action.GetProperty("hasOrganizationLink").GetBoolean());
         Assert.False(action.GetProperty("isAvailable").GetBoolean());
         Assert.Equal(userId, action.GetProperty("allowedUserIds").EnumerateArray().Single().GetString());
     }

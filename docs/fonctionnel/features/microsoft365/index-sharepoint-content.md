@@ -100,6 +100,8 @@ La première version couvre :
 - les permissions accordées à des groupes Microsoft Entra;
 - les utilisateurs invités externes autorisés dans le tenant du client;
 - les liens « Toute personne disposant du lien »;
+- les liens « Personnes de l’organisation disposant du lien »;
+- les liens destinés à des personnes précises;
 - les tests avec le tenant Microsoft 365 fictif.
 
 La première version ne couvre pas :
@@ -1450,6 +1452,7 @@ Champs proposés :
 | `allowedGroupIds` | groupes Entra autorisés |
 | `allowedSharePointGroupIds` | groupes SharePoint autorisés |
 | `hasAnonymousLink` | présence d’un lien anonyme |
+| `hasOrganizationLink` | présence d’un lien réservé aux personnes de l’organisation qui possèdent le lien |
 | `aclFingerprint` | empreinte canonique des permissions |
 | `isAvailable` | passage entièrement publié et consultable |
 | `contentVector` | embedding du passage |
@@ -1458,11 +1461,12 @@ Champs proposés :
 
 `organizationId`, `sourceType`, `siteId`, `driveId`, `documentId`,
 `allowedUserIds`, `allowedGroupIds`, `allowedSharePointGroupIds`,
-`hasAnonymousLink` et `isAvailable` sont filtrables.
+`hasAnonymousLink`, `hasOrganizationLink` et `isAvailable` sont filtrables.
 
 `organizationId`, `allowedUserIds`, `allowedGroupIds`,
-`allowedSharePointGroupIds` et `hasAnonymousLink` ne sont pas récupérables dans
-Azure AI Search et ne sont donc pas retournés dans les résultats normaux.
+`allowedSharePointGroupIds`, `hasAnonymousLink` et `hasOrganizationLink` ne
+sont pas récupérables dans Azure AI Search et ne sont donc pas retournés dans
+les résultats normaux.
 Chaque recherche impose également `isAvailable = true`.
 
 `contentVector` utilise un profil vectoriel compatible avec le modèle
@@ -1545,8 +1549,18 @@ L’adapter Infrastructure choisit la source de permissions selon le contenu :
 
 L’adapter transforme les réponses externes en `Microsoft365Acl`. Pour un
 utilisateur ou un groupe Entra provenant de SharePoint REST, il utilise
-uniquement `AadObjectId`. Un principal qui ne fournit pas d’identifiant stable
-et une permission qui ne peut pas être représentée produisent `Unresolved`.
+uniquement `AadObjectId`.
+
+Chaque autorisation additive est évaluée séparément. Une autorisation connue
+et représentable reste utilisable même lorsqu’une autre autorisation du même
+document utilise un type de partage plus restrictif ou encore inconnu. Une
+autorisation inconnue est ignorée comme source d’accès et n’élargit jamais
+l’ACL. Si aucune autorisation fiable ne peut être représentée, le résultat est
+`Unresolved` et le document reste invisible.
+
+Pour les liens destinés à des personnes précises (`scope=users`), seuls les
+utilisateurs ou groupes possédant un identifiant Microsoft stable sont ajoutés
+à l’ACL. Une adresse courriel ou un nom affiché ne suffit jamais.
 
 Les appels Graph utilisent un token Graph. Les appels REST SharePoint utilisent
 un token limité à l’origine du tenant SharePoint concerné. Les clients HTTP
@@ -1739,6 +1753,19 @@ Une adresse courriel externe seule ne constitue jamais une autorisation.
 Une invitation SharePoint non encore acceptée ne donne pas accès au document
 dans AssistantCore.
 
+### Liens « Personnes de l’organisation disposant du lien »
+
+Un lien de portée `organization` est fondé sur deux conditions : la personne
+appartient au tenant et elle possède le lien. Il ne doit donc pas être converti
+en droit de découverte accordé à tous les membres de l’organisation.
+
+Le document est indexé avec `hasOrganizationLink=true`. Ce champ décrit le
+type de partage et participe à l’empreinte des permissions, mais il n’accorde
+pas à lui seul l’accès dans une recherche normale. Les autorisations
+utilisateur et groupe présentes sur le même document continuent d’être
+appliquées normalement. Une future recherche initiée depuis le lien exact doit
+valider ce lien auprès de Microsoft avant d’utiliser ce droit.
+
 ### Liens « Toute personne disposant du lien »
 
 Un lien anonyme est une autorisation fondée sur la possession du lien. Il ne
@@ -1816,6 +1843,13 @@ Réessayer avec une attente progressive :
 - erreur temporaire Azure AI Search;
 - indisponibilité Azure Service Bus.
 
+Une ACL momentanément impossible à résoudre reste également récupérable. Le
+Worker effectue les premières reprises avec le délai normal des documents. Une
+fois le nombre habituel de tentatives atteint, il conserve le travail en échec
+temporaire et utilise l’intervalle long de réconciliation ACL. Une correction
+de permission ou la prise en charge d’un nouveau type de partage ne laisse donc
+pas définitivement le document hors de l’index.
+
 Respecter `Retry-After` lorsqu’il est fourni.
 
 ### Erreurs permanentes
@@ -1824,7 +1858,6 @@ Ne pas réessayer indéfiniment :
 
 - format non supporté;
 - document chiffré;
-- permissions impossibles à représenter;
 - site retiré;
 - consentement supprimé;
 - configuration invalide.

@@ -191,6 +191,159 @@ public sealed class Microsoft365AclResolverAdapterTests
     }
 
     [Theory, AutoDomainData]
+    public async Task Given_AnOrganizationLinkAndAnExplicitUser_When_ResolveAsync_Then_PreservesTheExplicitGrant(
+        Guid organizationId,
+        Guid userObjectId)
+    {
+        // Given
+        using var identityHttpClient = CreateTokenHttpClient();
+        using var graphHttpClient = new HttpClient(new StubHttpMessageHandler(_ =>
+            CreateJsonResponse($$$"""
+                {"value":[
+                  {
+                    "id":"organization-link",
+                    "roles":["write"],
+                    "link":{"type":"edit","scope":"organization"}
+                  },
+                  {
+                    "id":"user-grant",
+                    "roles":["owner"],
+                    "grantedToV2":{"user":{"id":"{{{userObjectId:D}}}"}}
+                  }
+                ]}
+                """)));
+        using var sharePointHttpClient = new HttpClient(new StubHttpMessageHandler(_ =>
+            CreateJsonResponse("{}")));
+        var adapter = CreateAdapter(
+            identityHttpClient,
+            graphHttpClient,
+            sharePointHttpClient,
+            new CapturingLogger());
+
+        // When
+        var result = await adapter.ResolveAsync(
+            CreateOrganization(organizationId),
+            CreateDriveItemReference(),
+            CancellationToken.None);
+
+        // Then
+        var acl = Assert.IsType<Microsoft365AclResolution.ResolvedAcl>(result).Acl;
+        Assert.True(acl.HasOrganizationLink);
+        Assert.False(acl.HasAnonymousLink);
+        Assert.Equal([userObjectId.ToString("D")], acl.AllowedEntraUserIds);
+    }
+
+    [Theory, AutoDomainData]
+    public async Task Given_AUsersLinkWithAStableRecipient_When_ResolveAsync_Then_MapsTheRecipient(
+        Guid organizationId,
+        Guid userObjectId)
+    {
+        // Given
+        using var identityHttpClient = CreateTokenHttpClient();
+        using var graphHttpClient = new HttpClient(new StubHttpMessageHandler(_ =>
+            CreateJsonResponse($$$"""
+                {"value":[{
+                  "id":"users-link",
+                  "roles":["read"],
+                  "link":{"type":"view","scope":"users"},
+                  "grantedToIdentitiesV2":[{"user":{"id":"{{{userObjectId:D}}}"}}]
+                }]}
+                """)));
+        using var sharePointHttpClient = new HttpClient(new StubHttpMessageHandler(_ =>
+            CreateJsonResponse("{}")));
+        var adapter = CreateAdapter(
+            identityHttpClient,
+            graphHttpClient,
+            sharePointHttpClient,
+            new CapturingLogger());
+
+        // When
+        var result = await adapter.ResolveAsync(
+            CreateOrganization(organizationId),
+            CreateDriveItemReference(),
+            CancellationToken.None);
+
+        // Then
+        var acl = Assert.IsType<Microsoft365AclResolution.ResolvedAcl>(result).Acl;
+        Assert.Equal([userObjectId.ToString("D")], acl.AllowedEntraUserIds);
+        Assert.False(acl.HasOrganizationLink);
+        Assert.False(acl.HasAnonymousLink);
+    }
+
+    [Theory, AutoDomainData]
+    public async Task Given_AnUnsupportedGrantAndAStableUser_When_ResolveAsync_Then_UsesOnlyTheStableGrant(
+        Guid organizationId,
+        Guid userObjectId)
+    {
+        // Given
+        using var identityHttpClient = CreateTokenHttpClient();
+        using var graphHttpClient = new HttpClient(new StubHttpMessageHandler(_ =>
+            CreateJsonResponse("""
+                {"value":[
+                  {"id":"future-link","roles":["read"],"link":{"scope":"future-scope"}},
+                  {"id":"user-grant","roles":["read"],"grantedToV2":{"user":{"id":"USER_OBJECT_ID"}
+                  }
+                  }
+                ]}
+                """.Replace(
+                    "USER_OBJECT_ID",
+                    userObjectId.ToString("D"),
+                    StringComparison.Ordinal))));
+        using var sharePointHttpClient = new HttpClient(new StubHttpMessageHandler(_ =>
+            CreateJsonResponse("{}")));
+        var adapter = CreateAdapter(
+            identityHttpClient,
+            graphHttpClient,
+            sharePointHttpClient,
+            new CapturingLogger());
+
+        // When
+        var result = await adapter.ResolveAsync(
+            CreateOrganization(organizationId),
+            CreateDriveItemReference(),
+            CancellationToken.None);
+
+        // Then
+        var acl = Assert.IsType<Microsoft365AclResolution.ResolvedAcl>(result).Acl;
+        Assert.Equal([userObjectId.ToString("D")], acl.AllowedEntraUserIds);
+        Assert.False(acl.HasOrganizationLink);
+        Assert.False(acl.HasAnonymousLink);
+    }
+
+    [Theory, AutoDomainData]
+    public async Task Given_OnlyAnUnsupportedGrant_When_ResolveAsync_Then_ReturnsUnsupportedPermission(
+        Guid organizationId)
+    {
+        // Given
+        using var identityHttpClient = CreateTokenHttpClient();
+        using var graphHttpClient = new HttpClient(new StubHttpMessageHandler(_ =>
+            CreateJsonResponse("""
+                {"value":[{
+                  "id":"future-link",
+                  "roles":["read"],
+                  "link":{"scope":"future-scope"}
+                }]}
+                """)));
+        using var sharePointHttpClient = new HttpClient(new StubHttpMessageHandler(_ =>
+            CreateJsonResponse("{}")));
+        var adapter = CreateAdapter(
+            identityHttpClient,
+            graphHttpClient,
+            sharePointHttpClient,
+            new CapturingLogger());
+
+        // When
+        var result = await adapter.ResolveAsync(
+            CreateOrganization(organizationId),
+            CreateDriveItemReference(),
+            CancellationToken.None);
+
+        // Then
+        var unresolved = Assert.IsType<Microsoft365AclResolution.Unresolved>(result);
+        Assert.Equal(Microsoft365AclResolutionFailureReason.UnsupportedPermission, unresolved.Reason);
+    }
+
+    [Theory, AutoDomainData]
     public async Task Given_AnUnrepresentablePrincipal_When_ResolveAsync_Then_ReturnsUnresolvedWithoutLoggingSecrets(
         Guid organizationId)
     {
@@ -257,6 +410,13 @@ public sealed class Microsoft365AclResolverAdapterTests
         Id = organizationId,
         ExternalTenantId = "tenant-id"
     };
+
+    private static Microsoft365ContentReference CreateDriveItemReference() => new(
+        Microsoft365ContentReferenceKind.DriveItem,
+        "contoso.sharepoint.com,site-collection-id,web-id",
+        "drive-id",
+        null,
+        "item-id");
 
     private static HttpClient CreateTokenHttpClient(string accessToken = "access-token") =>
         new(new StubHttpMessageHandler(_ => CreateTokenResponse(accessToken)));

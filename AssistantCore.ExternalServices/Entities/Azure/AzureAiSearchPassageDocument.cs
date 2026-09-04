@@ -9,6 +9,7 @@ public sealed record AzureAiSearchPassageDocument(
     IReadOnlyCollection<string> AllowedGroupIds,
     IReadOnlyCollection<string> AllowedSharePointGroupIds,
     bool HasAnonymousLink,
+    bool HasOrganizationLink,
     string AclFingerprint,
     bool IsAvailable,
     string? SiteId = null,

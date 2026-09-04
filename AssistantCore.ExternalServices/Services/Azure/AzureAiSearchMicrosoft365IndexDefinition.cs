@@ -23,6 +23,7 @@ public static class AzureAiSearchMicrosoft365IndexDefinition
         new("allowedGroupIds", "Collection(Edm.String)", Filterable: true, Retrievable: false),
         new("allowedSharePointGroupIds", "Collection(Edm.String)", Filterable: true, Retrievable: false),
         new("hasAnonymousLink", "Edm.Boolean", Filterable: true, Retrievable: false),
+        new("hasOrganizationLink", "Edm.Boolean", Filterable: true, Retrievable: false),
         new("aclFingerprint", "Edm.String", Filterable: true, Retrievable: false),
         new("isAvailable", "Edm.Boolean", Filterable: true)
     ];
