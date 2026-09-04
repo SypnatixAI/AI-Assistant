@@ -212,14 +212,18 @@ public sealed class MessageProcessingLifecycleService(
                 cancellationToken)
             ?? throw CreateConversationNotFoundException();
 
-        var summary = processing.SelectedModel is { } selectedModel
-            ? await conversationMemorySummaryService.CreateAsync(
-                selectedModel,
-                processing.ConversationHistory,
-                processing.UserMessage,
-                result.Answer,
-                cancellationToken)
-            : null;
+        var containsMicrosoft365Evidence = result.CitedEvidence.Any(evidence =>
+            string.Equals(evidence.SourceType, "Microsoft365", StringComparison.Ordinal));
+        var summary = containsMicrosoft365Evidence
+            ? string.Empty
+            : processing.SelectedModel is { } selectedModel
+                ? await conversationMemorySummaryService.CreateAsync(
+                    selectedModel,
+                    processing.ConversationHistory,
+                    processing.UserMessage,
+                    result.Answer,
+                    cancellationToken)
+                : null;
         summary ??= CreateContextSummaryEntry(processing.UserMessage, result.Answer);
 
         await conversationRepository.UpdateConversationContextSummaryAsync(

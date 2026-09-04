@@ -507,9 +507,9 @@ resource worker 'Microsoft.App/containerApps@2024-03-01' = {
         }
       ]
       scale: {
-        // The DEV deployment starts the worker temporarily.
-        // CERTIF remains controlled by the explicit start/stop workflow.
-        minReplicas: 0
+        // DEV remains explicitly controlled. CERTIF must continuously reconcile
+        // Microsoft 365 content and permissions.
+        minReplicas: isDev ? 0 : 1
         maxReplicas: 1
       }
     }

@@ -64,6 +64,7 @@ public sealed class InternalDataSearchRepository(AssistantCoreDbContext dbContex
                 && message.Conversation.OwnerMemberId == parameters.MemberId
                 && message.Conversation.DeletedAt == null
                 && message.ProcessingStatus == MessageProcessingStatus.Completed
+                && !message.Sources.Any(source => source.SourceType == "Microsoft365")
                 && (message.Content.Contains(parameters.Query)
                     || message.Conversation.Title.Contains(parameters.Query)))
             .OrderByDescending(message => message.UpdatedAt)
