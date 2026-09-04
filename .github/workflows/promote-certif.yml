@@ -55,7 +55,7 @@ jobs:
           ARTIFACT_ID="$(gh api --paginate --slurp \
             -H "Accept: application/vnd.github+json" \
             "/repos/${GITHUB_REPOSITORY}/actions/artifacts?name=${RELEASE_CANDIDATE}&per_page=100" \
-            | jq -r '[.[][] | select(.expired == false)] | sort_by(.created_at) | last.id // empty')"
+            | jq -r '[.[].artifacts[] | select(.expired == false)] | sort_by(.created_at) | last.id // empty')"
 
           if [ -z "$ARTIFACT_ID" ]; then
             echo "No active artifact was found for ${RELEASE_CANDIDATE}." >&2
