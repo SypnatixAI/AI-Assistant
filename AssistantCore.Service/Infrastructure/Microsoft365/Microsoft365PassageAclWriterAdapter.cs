@@ -39,6 +39,7 @@ public sealed class Microsoft365PassageAclWriterAdapter(
             acl.AllowedEntraGroupIds,
             acl.AllowedSharePointGroupIds,
             acl.HasAnonymousLink,
+            acl.HasOrganizationLink,
             acl.Fingerprint)).ToArray();
         return client.UpdateAclAsync(
             configuration.Endpoint,

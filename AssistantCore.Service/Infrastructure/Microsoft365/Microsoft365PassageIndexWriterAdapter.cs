@@ -37,6 +37,7 @@ public sealed class Microsoft365PassageIndexWriterAdapter(
             acl.AllowedEntraGroupIds,
             acl.AllowedSharePointGroupIds,
             acl.HasAnonymousLink,
+            acl.HasOrganizationLink,
             acl.Fingerprint,
             IsAvailable: false,
             passage.SiteId,
