@@ -1,14 +1,15 @@
-name: Promote backend to CERTIF
+name: Promote release candidate to CERTIF
 
 on:
   workflow_dispatch:
     inputs:
-      image_tag:
-        description: Immutable DEV tag to promote, for example sha-0123...cdef
+      release_candidate:
+        description: Release candidate artifact to promote, for example rc-2026.09.1
         required: true
         type: string
 
 permissions:
+  actions: read
   contents: read
   id-token: write
 
@@ -24,18 +25,18 @@ env:
 
 jobs:
   promote:
-    name: Promote existing images
+    name: Promote release candidate
     runs-on: ubuntu-latest
     timeout-minutes: 30
     environment: certif
 
     steps:
-      - name: Validate immutable tag
+      - name: Validate release candidate name
         env:
-          IMAGE_TAG: ${{ inputs.image_tag }}
+          RELEASE_CANDIDATE: ${{ inputs.release_candidate }}
         run: |
-          if ! printf '%s' "$IMAGE_TAG" | grep -Eq '^sha-[0-9a-f]{40}$'; then
-            echo "image_tag must be sha- followed by the complete 40-character Git SHA." >&2
+          if ! printf '%s' "$RELEASE_CANDIDATE" | grep -Eq '^rc-[0-9A-Za-z._-]+$'; then
+            echo "release_candidate must start with rc-." >&2
             exit 1
           fi
 
@@ -46,36 +47,90 @@ jobs:
           tenant-id: ${{ vars.AZURE_TENANT_ID }}
           subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
 
+      - name: Download release candidate manifest
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_CANDIDATE: ${{ inputs.release_candidate }}
+        run: |
+          ARTIFACT_ID="$(gh api --paginate --slurp \
+            -H "Accept: application/vnd.github+json" \
+            "/repos/${GITHUB_REPOSITORY}/actions/artifacts?name=${RELEASE_CANDIDATE}&per_page=100" \
+            | jq -r '[.[][] | select(.expired == false)] | sort_by(.created_at) | last.id // empty')"
+
+          if [ -z "$ARTIFACT_ID" ]; then
+            echo "No active artifact was found for ${RELEASE_CANDIDATE}." >&2
+            exit 1
+          fi
+
+          mkdir -p /tmp/release-candidate
+          gh api \
+            -H "Accept: application/vnd.github+json" \
+            "/repos/${GITHUB_REPOSITORY}/actions/artifacts/${ARTIFACT_ID}/zip" \
+            > /tmp/release-candidate/artifact.zip
+          unzip -q /tmp/release-candidate/artifact.zip -d /tmp/release-candidate
+
+          MANIFEST="/tmp/release-candidate/${RELEASE_CANDIDATE}.yml"
+          if [ ! -f "$MANIFEST" ]; then
+            echo "The release candidate manifest is missing from the artifact." >&2
+            exit 1
+          fi
+
+          API_IMAGE="$(awk '$1 == "api:" {print $2}' "$MANIFEST")"
+          WORKER_IMAGE="$(awk '$1 == "worker:" {print $2}' "$MANIFEST")"
+          MIGRATIONS_IMAGE="$(awk '$1 == "migrations:" {print $2}' "$MANIFEST")"
+          SPA_IMAGE="$(awk '$1 == "spa:" {print $2}' "$MANIFEST")"
+
+          for image in "$API_IMAGE" "$WORKER_IMAGE" "$MIGRATIONS_IMAGE" "$SPA_IMAGE"; do
+            if ! printf '%s' "$image" | grep -Eq "^${ACR_NAME}\\.azurecr\\.io/(assistant-api|assistant-worker|assistant-migrations|assistant-spa)@sha256:[0-9a-f]{64}$"; then
+              echo "The release candidate contains an invalid immutable image reference." >&2
+              exit 1
+            fi
+          done
+
+          {
+            echo "API_IMAGE=${API_IMAGE}"
+            echo "WORKER_IMAGE=${WORKER_IMAGE}"
+            echo "MIGRATIONS_IMAGE=${MIGRATIONS_IMAGE}"
+            echo "SPA_IMAGE=${SPA_IMAGE}"
+          } >> "$GITHUB_ENV"
+
       - name: Verify images and DEV provenance
         env:
-          IMAGE_TAG: ${{ inputs.image_tag }}
+          API_IMAGE: ${{ env.API_IMAGE }}
+          WORKER_IMAGE: ${{ env.WORKER_IMAGE }}
+          MIGRATIONS_IMAGE: ${{ env.MIGRATIONS_IMAGE }}
+          SPA_IMAGE: ${{ env.SPA_IMAGE }}
         run: |
-          for repository in assistant-api assistant-worker assistant-migrations; do
+          for image in "$API_IMAGE" "$WORKER_IMAGE" "$MIGRATIONS_IMAGE" "$SPA_IMAGE"; do
+            REPOSITORY="${image#${ACR_NAME}.azurecr.io/}"
             az acr repository show \
               --name "$ACR_NAME" \
-              --image "${repository}:${IMAGE_TAG}" \
+              --image "$REPOSITORY" \
               --only-show-errors >/dev/null
           done
 
-          DEV_IMAGE="$(az containerapp show \
+          DEV_API_IMAGE="$(az containerapp show \
             --name ca-assistant-api-dev \
             --resource-group "$DEV_RESOURCE_GROUP" \
             --query properties.template.containers[0].image --output tsv)"
-          EXPECTED_IMAGE="${ACR_NAME}.azurecr.io/assistant-api:${IMAGE_TAG}"
-          if [ "$DEV_IMAGE" != "$EXPECTED_IMAGE" ]; then
-            echo "The requested image is not the backend revision currently validated in DEV." >&2
+          DEV_SPA_IMAGE="$(az containerapp show \
+            --name ca-assistant-spa-dev \
+            --resource-group "$DEV_RESOURCE_GROUP" \
+            --query properties.template.containers[0].image --output tsv)"
+
+          DEV_API_DIGEST="$(az acr repository show --name "$ACR_NAME" --image "${DEV_API_IMAGE#${ACR_NAME}.azurecr.io/}" --query digest --output tsv)"
+          DEV_SPA_DIGEST="$(az acr repository show --name "$ACR_NAME" --image "${DEV_SPA_IMAGE#${ACR_NAME}.azurecr.io/}" --query digest --output tsv)"
+          if [ "$DEV_API_DIGEST" != "${API_IMAGE##*@}" ] || [ "$DEV_SPA_DIGEST" != "${SPA_IMAGE##*@}" ]; then
+            echo "The release candidate is not the API and SPA revision currently validated in DEV." >&2
             exit 1
           fi
 
       - name: Run CERTIF Flyway job
-        env:
-          IMAGE_TAG: ${{ inputs.image_tag }}
         run: |
-          LOGIN_SERVER="${ACR_NAME}.azurecr.io"
           az containerapp job update \
             --name caj-assistant-migrations-certif \
             --resource-group "$CERTIF_RESOURCE_GROUP" \
-            --image "${LOGIN_SERVER}/assistant-migrations:${IMAGE_TAG}"
+            --image "$MIGRATIONS_IMAGE"
 
           EXECUTION_NAME="$(az containerapp job start \
             --name caj-assistant-migrations-certif \
@@ -100,21 +155,22 @@ jobs:
           echo "Flyway did not finish within 10 minutes." >&2
           exit 1
 
-      - name: Deploy CERTIF backend at zero replicas
-        env:
-          IMAGE_TAG: ${{ inputs.image_tag }}
+      - name: Deploy CERTIF release candidate at zero replicas
         run: |
-          LOGIN_SERVER="${ACR_NAME}.azurecr.io"
           az containerapp update \
             --name ca-assistant-api-certif \
             --resource-group "$CERTIF_RESOURCE_GROUP" \
-            --image "${LOGIN_SERVER}/assistant-api:${IMAGE_TAG}" \
+            --image "$API_IMAGE" \
             --min-replicas 0
           az containerapp update \
             --name ca-assistant-worker-certif \
             --resource-group "$CERTIF_RESOURCE_GROUP" \
-            --image "${LOGIN_SERVER}/assistant-worker:${IMAGE_TAG}" \
+            --image "$WORKER_IMAGE" \
             --min-replicas 0
+          az containerapp update \
+            --name ca-assistant-spa-certif \
+            --resource-group "$CERTIF_RESOURCE_GROUP" \
+            --image "$SPA_IMAGE"
 
       - name: Verify CERTIF readiness
         run: |
