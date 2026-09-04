@@ -164,6 +164,18 @@ jobs:
             exit 1
           fi
 
+      - name: Publish deployment summary
+        if: ${{ env.APPLICATIONS_PROVISIONED == 'true' }}
+        run: |
+          {
+            echo "### DEV deployment"
+            echo
+            echo "| Application | Image SHA |"
+            echo "| --- | --- |"
+            echo "| SPA | \`${IMAGE_TAG}\` |"
+            echo "| BFF/API | \`${IMAGE_TAG}\` |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
   stop-worker:
     name: Stop DEV worker after 30 minutes
     needs: deploy
