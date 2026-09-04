@@ -60,6 +60,10 @@ var devSpaCustomDomain = 'assistant-dev.onpremia.ca'
 var devBffCustomDomain = 'assistant-bff-dev.onpremia.ca'
 var devSpaCertificateName = 'assistant-dev.onpremia.ca-cae-assi-260903024140'
 var devBffCertificateName = 'assistant-bff-dev.onpremia.c-cae-assi-260903025937'
+var certifSpaCustomDomain = 'assistant-certif.onpremia.ca'
+var certifBffCustomDomain = 'assistant-bff-certif.onpremia.ca'
+var certifSpaCertificateName = 'assistant-certif.onpremia.ca-cae-assi-260904041349'
+var certifBffCertificateName = 'assistant-bff-certif.onpremi-cae-assi-260904035728'
 var wiremockAppName = 'ca-assistant-wiremock-${environmentName}'
 var sqlpadAppName = 'ca-assistant-sqlpad-${environmentName}'
 var migrationsJobName = 'caj-assistant-migrations-${environmentName}'
@@ -129,10 +133,8 @@ resource containerEnvironment 'Microsoft.App/managedEnvironments@2024-03-01' = {
   }
 }
 
-var generatedApiBaseUrl = 'https://${apiAppName}.${containerEnvironment.properties.defaultDomain}'
-var generatedSpaBaseUrl = 'https://${spaAppName}.${containerEnvironment.properties.defaultDomain}'
-var apiBaseUrl = isDev ? 'https://${devBffCustomDomain}' : generatedApiBaseUrl
-var spaBaseUrl = isDev ? 'https://${devSpaCustomDomain}' : generatedSpaBaseUrl
+var apiBaseUrl = isDev ? 'https://${devBffCustomDomain}' : 'https://${certifBffCustomDomain}'
+var spaBaseUrl = isDev ? 'https://${devSpaCustomDomain}' : 'https://${certifSpaCustomDomain}'
 var wiremockPublicBaseUrl = 'https://${wiremockAppName}.${containerEnvironment.properties.defaultDomain}'
 var wiremockInternalBaseUrl = 'http://${wiremockAppName}'
 var sqlpadBaseUrl = 'https://${sqlpadAppName}.${containerEnvironment.properties.defaultDomain}'
@@ -147,6 +149,16 @@ var devBffCertificateId = resourceId(
   'Microsoft.App/managedEnvironments/managedCertificates',
   containerEnvironmentName,
   devBffCertificateName
+)
+var certifSpaCertificateId = resourceId(
+  'Microsoft.App/managedEnvironments/managedCertificates',
+  containerEnvironmentName,
+  certifSpaCertificateName
+)
+var certifBffCertificateId = resourceId(
+  'Microsoft.App/managedEnvironments/managedCertificates',
+  containerEnvironmentName,
+  certifBffCertificateName
 )
 
 var managedIdentities = {
@@ -319,7 +331,13 @@ resource api 'Microsoft.App/containerApps@2024-03-01' = {
             certificateId: devBffCertificateId
             bindingType: 'SniEnabled'
           }
-        ] : []
+        ] : [
+          {
+            name: certifBffCustomDomain
+            certificateId: certifBffCertificateId
+            bindingType: 'SniEnabled'
+          }
+        ]
       }
       registries: registryConfiguration
       secrets: apiSecrets
@@ -524,7 +542,13 @@ resource spa 'Microsoft.App/containerApps@2024-03-01' = {
             certificateId: devSpaCertificateId
             bindingType: 'SniEnabled'
           }
-        ] : []
+        ] : [
+          {
+            name: certifSpaCustomDomain
+            certificateId: certifSpaCertificateId
+            bindingType: 'SniEnabled'
+          }
+        ]
       }
       registries: registryConfiguration
     }
