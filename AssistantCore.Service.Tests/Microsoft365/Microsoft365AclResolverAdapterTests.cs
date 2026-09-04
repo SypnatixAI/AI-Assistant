@@ -271,6 +271,95 @@ public sealed class Microsoft365AclResolverAdapterTests
     }
 
     [Theory, AutoDomainData]
+    public async Task Given_AGroupOwnersClaimAndAnExplicitUser_When_ResolveAsync_Then_DoesNotBroadenTheGrantToGroupMembers(
+        Guid organizationId,
+        Guid groupObjectId,
+        Guid userObjectId)
+    {
+        // Given
+        using var identityHttpClient = CreateTokenHttpClient();
+        using var graphHttpClient = new HttpClient(new StubHttpMessageHandler(_ =>
+            CreateJsonResponse($$$"""
+                {"value":[
+                  {
+                    "id":"group-owners-grant",
+                    "roles":["owner"],
+                    "grantedToV2":{
+                      "group":{"id":"{{{groupObjectId:D}}}"},
+                      "siteUser":{
+                        "id":"6",
+                        "loginName":"c:0o.c|federateddirectoryclaimprovider|{{{groupObjectId:D}}}_o"
+                      }
+                    }
+                  },
+                  {
+                    "id":"user-grant",
+                    "roles":["owner"],
+                    "grantedToV2":{"user":{"id":"{{{userObjectId:D}}}"}}
+                  }
+                ]}
+                """)));
+        using var sharePointHttpClient = new HttpClient(new StubHttpMessageHandler(_ =>
+            CreateJsonResponse("{}")));
+        var adapter = CreateAdapter(
+            identityHttpClient,
+            graphHttpClient,
+            sharePointHttpClient,
+            new CapturingLogger());
+
+        // When
+        var result = await adapter.ResolveAsync(
+            CreateOrganization(organizationId),
+            CreateDriveItemReference(),
+            CancellationToken.None);
+
+        // Then
+        var acl = Assert.IsType<Microsoft365AclResolution.ResolvedAcl>(result).Acl;
+        Assert.Equal([userObjectId.ToString("D")], acl.AllowedEntraUserIds);
+        Assert.Empty(acl.AllowedEntraGroupIds);
+    }
+
+    [Theory, AutoDomainData]
+    public async Task Given_OnlyAGroupOwnersClaim_When_ResolveAsync_Then_ReturnsUnknownPrincipal(
+        Guid organizationId,
+        Guid groupObjectId)
+    {
+        // Given
+        using var identityHttpClient = CreateTokenHttpClient();
+        using var graphHttpClient = new HttpClient(new StubHttpMessageHandler(_ =>
+            CreateJsonResponse($$$"""
+                {"value":[{
+                  "id":"group-owners-grant",
+                  "roles":["owner"],
+                  "grantedToV2":{
+                    "group":{"id":"{{{groupObjectId:D}}}"},
+                    "siteUser":{
+                      "id":"6",
+                      "loginName":"c:0o.c|federateddirectoryclaimprovider|{{{groupObjectId:D}}}_o"
+                    }
+                  }
+                }]}
+                """)));
+        using var sharePointHttpClient = new HttpClient(new StubHttpMessageHandler(_ =>
+            CreateJsonResponse("{}")));
+        var adapter = CreateAdapter(
+            identityHttpClient,
+            graphHttpClient,
+            sharePointHttpClient,
+            new CapturingLogger());
+
+        // When
+        var result = await adapter.ResolveAsync(
+            CreateOrganization(organizationId),
+            CreateDriveItemReference(),
+            CancellationToken.None);
+
+        // Then
+        var unresolved = Assert.IsType<Microsoft365AclResolution.Unresolved>(result);
+        Assert.Equal(Microsoft365AclResolutionFailureReason.UnknownPrincipal, unresolved.Reason);
+    }
+
+    [Theory, AutoDomainData]
     public async Task Given_AnUnsupportedGrantAndAStableUser_When_ResolveAsync_Then_UsesOnlyTheStableGrant(
         Guid organizationId,
         Guid userObjectId)

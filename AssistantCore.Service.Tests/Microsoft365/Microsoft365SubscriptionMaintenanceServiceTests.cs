@@ -311,6 +311,7 @@ public sealed class Microsoft365SubscriptionMaintenanceServiceTests
         public Task<Microsoft365SubscriptionRenewalResult> RenewAsync(
             string tenantId,
             string subscriptionId,
+            string notificationUrl,
             DateTimeOffset expiresAt,
             CancellationToken cancellationToken = default)
         {

@@ -138,6 +138,7 @@ public sealed class Microsoft365SubscriptionMaintenanceService(
         var result = await subscriptionClient.RenewAsync(
             GetTenantId(subscription),
             subscription.MicrosoftSubscriptionId!,
+            BuildNotificationUrl(configuration),
             now.AddHours(configuration.SubscriptionLifetimeHours),
             cancellationToken);
         if (!result.Exists)

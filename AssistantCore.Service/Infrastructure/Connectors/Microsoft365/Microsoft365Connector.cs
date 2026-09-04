@@ -13,6 +13,7 @@ namespace AssistantCore.Service.Infrastructure.Connectors.Microsoft365;
 public sealed class Microsoft365Connector(
     IMicrosoft365UserGroupResolver groupResolver,
     IMicrosoft365SearchRepository searchRepository,
+    IMicrosoft365SearchAccessVerifier accessVerifier,
     Microsoft365ConnectorOptions options,
     IEvidenceNormalizer evidenceNormalizer) : IMicrosoft365Connector
 {
@@ -51,8 +52,15 @@ public sealed class Microsoft365Connector(
                 groupIds),
             Math.Min(options.MaximumResults, context.RetrievalCandidateLimit));
         var records = await searchRepository.SearchAsync(searchParameters, cancellationToken);
+        var authorizedRecords = await accessVerifier.KeepAuthorizedAsync(
+            context.OrganizationId,
+            context.ExternalTenantId!,
+            normalizedUserId,
+            groupIds,
+            records,
+            cancellationToken);
         var evidence = evidenceNormalizer.Normalize(
-            records.Select(MapCandidate).ToArray(),
+            authorizedRecords.Select(MapCandidate).ToArray(),
             new EvidenceNormalizationOptions(
                 options.MaximumContentLength,
                 context.RetrievalCandidateLimit));

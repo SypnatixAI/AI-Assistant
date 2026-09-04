@@ -18,6 +18,9 @@ public sealed class Microsoft365AclResolverAdapter(
     IOptions<Microsoft365Options> options,
     ILogger<Microsoft365AclResolverAdapter> logger) : IMicrosoft365AclResolver
 {
+    private const string Microsoft365GroupClaimPrefix =
+        "c:0o.c|federateddirectoryclaimprovider|";
+
     public async Task<Microsoft365AclResolution> ResolveAsync(
         Organization organization,
         Microsoft365ContentReference contentReference,
@@ -280,6 +283,11 @@ public sealed class Microsoft365AclResolverAdapter(
 
         if (identity.Group is not null)
         {
+            if (IsMicrosoft365GroupOwnersClaim(identity))
+            {
+                return false;
+            }
+
             return TryNormalize(
                 () => identityNormalizer.NormalizeEntraGroupId(identity.Group.Id!),
                 accumulator.EntraGroupIds);
@@ -294,6 +302,16 @@ public sealed class Microsoft365AclResolverAdapter(
         }
 
         return false;
+    }
+
+    private static bool IsMicrosoft365GroupOwnersClaim(
+        MicrosoftDriveItemPermissionIdentitySet identity)
+    {
+        var loginName = identity.SiteUser?.LoginName ?? identity.Group?.LoginName;
+        return loginName?.StartsWith(
+                Microsoft365GroupClaimPrefix,
+                StringComparison.OrdinalIgnoreCase) == true
+            && loginName.EndsWith("_o", StringComparison.OrdinalIgnoreCase);
     }
 
     private bool TryAddSharePointPrincipal(

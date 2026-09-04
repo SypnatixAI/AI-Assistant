@@ -76,7 +76,7 @@ public sealed class AzureAiSearchPassageSearchClient
         {
             ["search"] = query,
             ["filter"] = filter,
-            ["select"] = "chunkId,title,content,url,modifiedAt",
+            ["select"] = "chunkId,title,content,siteId,driveId,driveItemId,url,modifiedAt",
             ["top"] = maximumResults
         };
         if (semanticRankingEnabled)
@@ -160,6 +160,9 @@ public sealed class AzureAiSearchPassageSearchClient
             document.Content,
             document.RerankerScore ?? document.Score,
             document.RerankerScore,
+            document.SiteId,
+            document.DriveId,
+            document.DriveItemId,
             document.Url,
             document.ModifiedAt);
     }
@@ -185,6 +188,9 @@ public sealed class AzureAiSearchPassageSearchClient
         [property: JsonPropertyName("chunkId")] string? ChunkId,
         [property: JsonPropertyName("title")] string? Title,
         [property: JsonPropertyName("content")] string? Content,
+        [property: JsonPropertyName("siteId")] string? SiteId,
+        [property: JsonPropertyName("driveId")] string? DriveId,
+        [property: JsonPropertyName("driveItemId")] string? DriveItemId,
         [property: JsonPropertyName("url")] string? Url,
         [property: JsonPropertyName("modifiedAt")] DateTimeOffset? ModifiedAt,
         [property: JsonPropertyName("@search.score")] double? Score,

@@ -17,6 +17,7 @@
 - [Renouvellement des webhooks](#m365-sharepoint-webhook-renewal)
 - [Synchronisation initiale](#m365-sharepoint-initial-sync)
 - [Synchronisation des changements](#m365-sharepoint-delta-sync)
+- [Réindexation administrative d’un client](#m365-sharepoint-admin-reindex)
 - [Traitement par le worker](#m365-sharepoint-worker)
 - [Téléchargement et extraction](#m365-sharepoint-extraction)
 - [Traitement des archives](#m365-sharepoint-archives)
@@ -1083,6 +1084,122 @@ son checkpoint à la fois.
 Pour une liste, le webhook ne contient pas toutes les nouvelles valeurs. Il
 réveille uniquement la synchronisation delta. Une réconciliation planifiée
 relance aussi le delta afin de couvrir une notification perdue.
+
+<a id="m365-sharepoint-admin-reindex"></a>
+## Réindexation administrative d’un client
+
+L’équipe Synaptix doit pouvoir relancer une indexation complète depuis sa
+future interface d’administration interne. Cette opération sert notamment à
+reprendre les documents restés en échec après une correction du connecteur,
+des permissions Microsoft 365 ou du pipeline d’ingestion.
+
+Cette capacité n’est jamais exposée dans l’application du client. Un
+administrateur du tenant client, même autorisé à configurer Microsoft 365, ne
+peut pas la déclencher. Seul un opérateur Synaptix authentifié et autorisé dans
+l’interface interne peut agir sur une autre organisation.
+
+### Déclenchement
+
+L’opérateur Synaptix :
+
+1. ouvre la fiche d’une organisation cliente dans l’interface interne;
+2. consulte les sources SharePoint de cette organisation;
+3. clique sur `Relancer l’indexation SharePoint`;
+4. confirme l’opération;
+5. reçoit l’identifiant et l’état initial de la réindexation.
+
+La commande vise toutes les bibliothèques SharePoint activées pour
+l’indexation dans cette organisation. L’interface affiche clairement le nom du
+client et le nombre de bibliothèques concernées avant la confirmation.
+
+La requête interne contient l’identifiant de l’organisation. Le backend
+retrouve lui-même ses connexions et ses sources : il n’accepte pas des
+identifiants de bibliothèques appartenant à une autre organisation. Une
+réponse acceptée retourne un identifiant d’opération et l’état `Pending`.
+
+### Flow backend et worker
+
+La requête suit le chemin obligatoire :
+
+```text
+Interface d’administration Synaptix
+  -> Controller interne
+  -> IDispatcher
+  -> CommandHandler
+  -> Service applicatif de réindexation
+  -> Persistence
+  -> Worker d’ingestion Microsoft 365
+```
+
+Le controller vérifie l’authentification interne et transmet uniquement la
+commande au dispatcher. Le handler orchestre l’appel au service applicatif. Le
+service :
+
+1. vérifie que l’opérateur possède le droit interne de réindexer les contenus;
+2. charge l’organisation, sa connexion Microsoft 365 active et ses
+   bibliothèques activées pour l’indexation;
+3. refuse la demande si une réindexation complète est déjà en cours pour cette
+   organisation;
+4. crée une opération suivie et une synchronisation complète `Pending` pour
+   chaque bibliothèque admissible;
+5. enregistre l’identité de l’opérateur, l’organisation ciblée, la date et le
+   motif facultatif;
+6. retourne immédiatement l’identifiant de l’opération sans attendre le
+   traitement des documents.
+
+Le worker réclame ensuite chaque synchronisation. Il relit toute la
+bibliothèque depuis Microsoft Graph sans dépendre de l’ancien `deltaLink`. Il
+crée un nouveau travail pour chaque version courante, y compris lorsqu’un
+travail portant le même document ou la même version avait terminé en
+`PermanentFailure`. Les clés de déduplication distinguent la nouvelle opération
+tout en empêchant les doublons à l’intérieur de celle-ci.
+
+Chaque document repasse par le pipeline normal : téléchargement, extraction,
+résolution des permissions, découpage, embeddings et écriture dans Azure AI
+Search. Les permissions sont donc recalculées à partir de l’état courant dans
+SharePoint. Un document ne devient jamais visible grâce à une ancienne ACL.
+
+La réindexation n’efface pas l’index au démarrage. Les passages valides restent
+disponibles jusqu’au remplacement réussi de leur document. À la fin du
+parcours, les contenus qui n’existent plus dans SharePoint sont retirés. Le
+nouveau checkpoint delta devient actif uniquement lorsque la synchronisation
+complète a enregistré toutes ses pages durablement.
+
+### Suivi et résultat
+
+L’interface interne peut relire l’état de l’opération et affiche au minimum :
+
+- `Pending`, `Running`, `Succeeded`, `TemporaryFailure` ou
+  `PermanentFailure`;
+- le nombre de bibliothèques terminées et le nombre total;
+- les nombres de documents découverts, traités, ignorés et en échec;
+- les heures de demande, de début et de fin;
+- un code d’erreur exploitable sans contenu documentaire sensible.
+
+Une reprise technique du même message ou du même lot reste idempotente. Une
+erreur temporaire est retentée par le worker. Une erreur permanente sur un
+document est visible dans le bilan sans empêcher les autres documents ou
+bibliothèques de terminer.
+
+Avant l’opération, certains documents du client peuvent être absents ou
+obsolètes dans Azure AI Search, notamment après un ancien échec permanent.
+Après une opération réussie, toutes les versions courantes et autorisées des
+bibliothèques activées ont été retraitées, les documents supprimés ont été
+retirés et la synchronisation delta normale peut reprendre depuis le nouveau
+checkpoint.
+
+### Limites
+
+La première version de cette commande :
+
+- agit sur toutes les bibliothèques activées d’une organisation, pas sur un
+  dossier ou un document isolé;
+- ne réindexe pas les listes SharePoint ni les OneDrive individuels;
+- ne permet pas à un administrateur client de déclencher l’opération;
+- ne permet pas deux réindexations complètes simultanées pour la même
+  organisation;
+- ne contourne jamais les permissions Microsoft 365 ni les règles de sécurité
+  d’Azure AI Search.
 
 <a id="m365-sharepoint-worker"></a>
 ## Traitement par le worker

@@ -15,6 +15,7 @@ public interface IMicrosoft365SubscriptionClient
     Task<Microsoft365SubscriptionRenewalResult> RenewAsync(
         string tenantId,
         string subscriptionId,
+        string notificationUrl,
         DateTimeOffset expiresAt,
         CancellationToken cancellationToken = default);
 

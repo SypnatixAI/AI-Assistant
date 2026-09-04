@@ -33,6 +33,7 @@ public static class ConnectorServiceCollectionExtensions
         services.AddScoped<IInternalDataConnector, InternalDataConnector>();
         services.AddScoped<IAiToolExecutionHandler, InternalDataToolExecutionHandler>();
         services.AddScoped<IMicrosoft365SearchRepository, Microsoft365SearchRepositoryAdapter>();
+        services.AddScoped<IMicrosoft365SearchAccessVerifier, Microsoft365SearchAccessVerifierAdapter>();
         services.AddScoped<IMicrosoft365Connector, Microsoft365Connector>();
         services.AddScoped<IAiToolExecutionHandler, Microsoft365SearchToolExecutionHandler>();
 

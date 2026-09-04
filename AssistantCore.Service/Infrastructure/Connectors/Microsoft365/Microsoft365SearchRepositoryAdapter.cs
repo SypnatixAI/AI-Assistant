@@ -63,6 +63,9 @@ public sealed class Microsoft365SearchRepositoryAdapter(
                 result.Title,
                 result.Content,
                 result.ChunkId,
+                result.SiteId,
+                result.DriveId,
+                result.DriveItemId,
                 result.Url,
                 result.ModifiedAt,
                 result.Score))

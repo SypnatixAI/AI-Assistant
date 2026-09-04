@@ -85,7 +85,7 @@ public sealed class Microsoft365SearchRepositoryTests
         Assert.Contains("modifiedAt ge 2026-01-02T00:00:00Z", filter, StringComparison.Ordinal);
         Assert.Contains("modifiedAt lt 2026-02-04T00:00:00Z", filter, StringComparison.Ordinal);
         Assert.Equal(
-            "chunkId,title,content,url,modifiedAt",
+            "chunkId,title,content,siteId,driveId,driveItemId,url,modifiedAt",
             document.RootElement.GetProperty("select").GetString());
         Assert.DoesNotContain("allowedUserIds", document.RootElement.GetProperty("select").GetString());
         var vectorQuery = document.RootElement.GetProperty("vectorQueries")[0];
