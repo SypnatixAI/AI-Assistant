@@ -4,8 +4,8 @@ on:
   workflow_dispatch:
     inputs:
       release_candidate:
-        description: Release candidate artifact to promote, for example rc-2026.09.1
-        required: true
+        description: Optional candidate name; defaults to the latest active rc-* artifact
+        required: false
         type: string
 
 permissions:
@@ -31,15 +31,6 @@ jobs:
     environment: certif
 
     steps:
-      - name: Validate release candidate name
-        env:
-          RELEASE_CANDIDATE: ${{ inputs.release_candidate }}
-        run: |
-          if ! printf '%s' "$RELEASE_CANDIDATE" | grep -Eq '^rc-[0-9A-Za-z._-]+$'; then
-            echo "release_candidate must start with rc-." >&2
-            exit 1
-          fi
-
       - name: Sign in to Azure with OIDC
         uses: azure/login@v2
         with:
@@ -50,15 +41,29 @@ jobs:
       - name: Download release candidate manifest
         env:
           GH_TOKEN: ${{ github.token }}
-          RELEASE_CANDIDATE: ${{ inputs.release_candidate }}
+          REQUESTED_RELEASE_CANDIDATE: ${{ inputs.release_candidate }}
         run: |
-          ARTIFACT_ID="$(gh api --paginate --slurp \
+          if [ -n "$REQUESTED_RELEASE_CANDIDATE" ] \
+            && ! printf '%s' "$REQUESTED_RELEASE_CANDIDATE" | grep -Eq '^rc-[0-9A-Za-z._-]+$'; then
+            echo "release_candidate must start with rc-." >&2
+            exit 1
+          fi
+
+          ARTIFACT="$(gh api --paginate --slurp \
             -H "Accept: application/vnd.github+json" \
-            "/repos/${GITHUB_REPOSITORY}/actions/artifacts?name=${RELEASE_CANDIDATE}&per_page=100" \
-            | jq -r '[.[].artifacts[] | select(.expired == false)] | sort_by(.created_at) | last.id // empty')"
+            "/repos/${GITHUB_REPOSITORY}/actions/artifacts?per_page=100" \
+            | jq -c --arg requested "$REQUESTED_RELEASE_CANDIDATE" \
+              '[.[].artifacts[]
+                | select(.expired == false)
+                | select(if $requested == "" then (.name | startswith("rc-")) else .name == $requested end)]
+              | sort_by(.created_at)
+              | last // empty')"
+
+          ARTIFACT_ID="$(printf '%s' "$ARTIFACT" | jq -r '.id // empty')"
+          RELEASE_CANDIDATE="$(printf '%s' "$ARTIFACT" | jq -r '.name // empty')"
 
           if [ -z "$ARTIFACT_ID" ]; then
-            echo "No active artifact was found for ${RELEASE_CANDIDATE}." >&2
+            echo "No matching active release candidate artifact was found." >&2
             exit 1
           fi
 
@@ -92,6 +97,7 @@ jobs:
             echo "WORKER_IMAGE=${WORKER_IMAGE}"
             echo "MIGRATIONS_IMAGE=${MIGRATIONS_IMAGE}"
             echo "SPA_IMAGE=${SPA_IMAGE}"
+            echo "RELEASE_CANDIDATE=${RELEASE_CANDIDATE}"
           } >> "$GITHUB_ENV"
 
       - name: Verify images and DEV provenance

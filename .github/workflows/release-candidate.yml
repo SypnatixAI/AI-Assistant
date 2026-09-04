@@ -4,16 +4,16 @@ on:
   workflow_dispatch:
     inputs:
       backend_image_tag:
-        description: Backend tag already validated in DEV
-        required: true
+        description: Optional backend tag; defaults to the image deployed in DEV
+        required: false
         type: string
       spa_image_tag:
-        description: SPA tag already validated in DEV
-        required: true
+        description: Optional SPA tag; defaults to the image deployed in DEV
+        required: false
         type: string
       release_candidate:
-        description: Candidate name, for example rc-2026.09.1
-        required: true
+        description: Optional candidate name; generated automatically when empty
+        required: false
         type: string
 
 permissions:
@@ -40,12 +40,20 @@ jobs:
           tenant-id: ${{ vars.AZURE_TENANT_ID }}
           subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
 
-      - name: Validate inputs and DEV revisions
+      - name: Resolve and validate release candidate inputs
+        id: release
         env:
-          BACKEND_TAG: ${{ inputs.backend_image_tag }}
-          SPA_TAG: ${{ inputs.spa_image_tag }}
-          RC_NAME: ${{ inputs.release_candidate }}
+          REQUESTED_BACKEND_TAG: ${{ inputs.backend_image_tag }}
+          REQUESTED_SPA_TAG: ${{ inputs.spa_image_tag }}
+          REQUESTED_RC_NAME: ${{ inputs.release_candidate }}
         run: |
+          CURRENT_API="$(az containerapp show --name ca-assistant-api-dev --resource-group "$DEV_RESOURCE_GROUP" --query properties.template.containers[0].image --output tsv)"
+          CURRENT_SPA="$(az containerapp show --name ca-assistant-spa-dev --resource-group "$DEV_RESOURCE_GROUP" --query properties.template.containers[0].image --output tsv)"
+
+          BACKEND_TAG="${REQUESTED_BACKEND_TAG:-${CURRENT_API##*:}}"
+          SPA_TAG="${REQUESTED_SPA_TAG:-${CURRENT_SPA##*:}}"
+          RC_NAME="${REQUESTED_RC_NAME:-rc-$(date -u +%Y.%m.%d).${GITHUB_RUN_NUMBER}.${GITHUB_RUN_ATTEMPT}}"
+
           for tag in "$BACKEND_TAG" "$SPA_TAG"; do
             if ! printf '%s' "$tag" | grep -Eq '^sha-[0-9a-f]{40}$'; then
               echo "Every image tag must contain a complete Git SHA." >&2
@@ -57,16 +65,20 @@ jobs:
             exit 1
           fi
 
-          CURRENT_API="$(az containerapp show --name ca-assistant-api-dev --resource-group "$DEV_RESOURCE_GROUP" --query properties.template.containers[0].image --output tsv)"
-          CURRENT_SPA="$(az containerapp show --name ca-assistant-spa-dev --resource-group "$DEV_RESOURCE_GROUP" --query properties.template.containers[0].image --output tsv)"
           test "$CURRENT_API" = "${ACR_NAME}.azurecr.io/assistant-api:${BACKEND_TAG}"
           test "$CURRENT_SPA" = "${ACR_NAME}.azurecr.io/assistant-spa:${SPA_TAG}"
 
+          {
+            echo "backend_tag=${BACKEND_TAG}"
+            echo "spa_tag=${SPA_TAG}"
+            echo "name=${RC_NAME}"
+          } >> "$GITHUB_OUTPUT"
+
       - name: Resolve digests and write manifest
         env:
-          BACKEND_TAG: ${{ inputs.backend_image_tag }}
-          SPA_TAG: ${{ inputs.spa_image_tag }}
-          RC_NAME: ${{ inputs.release_candidate }}
+          BACKEND_TAG: ${{ steps.release.outputs.backend_tag }}
+          SPA_TAG: ${{ steps.release.outputs.spa_tag }}
+          RC_NAME: ${{ steps.release.outputs.name }}
         run: |
           mkdir -p release-candidate
           API_DIGEST="$(az acr repository show --name "$ACR_NAME" --image "assistant-api:${BACKEND_TAG}" --query digest --output tsv)"
@@ -89,8 +101,7 @@ jobs:
       - name: Upload release candidate manifest
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ inputs.release_candidate }}
-          path: release-candidate/${{ inputs.release_candidate }}.yml
+          name: ${{ steps.release.outputs.name }}
+          path: release-candidate/${{ steps.release.outputs.name }}.yml
           if-no-files-found: error
           retention-days: 90
-
