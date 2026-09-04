@@ -65,9 +65,6 @@ var sqlpadAppName = 'ca-assistant-sqlpad-${environmentName}'
 var migrationsJobName = 'caj-assistant-migrations-${environmentName}'
 var workloadIdentityName = 'id-assistant-workload-${environmentName}'
 var acrPullIdentityName = 'id-assistant-acr-${environmentName}'
-var sqlpadStorageAccountName = 'stasqlpad${environmentName}${nameSuffix}'
-var sqlpadStorageName = 'sqlpad-files'
-var sqlpadFileShareName = 'sqlpad'
 
 resource keyVault 'Microsoft.KeyVault/vaults@2023-07-01' existing = {
   name: keyVaultName
@@ -129,50 +126,6 @@ resource containerEnvironment 'Microsoft.App/managedEnvironments@2024-03-01' = {
       destination: 'azure-monitor'
     }
     zoneRedundant: false
-  }
-}
-
-resource sqlpadStorageAccount 'Microsoft.Storage/storageAccounts@2023-05-01' = {
-  name: sqlpadStorageAccountName
-  location: location
-  tags: tags
-  sku: {
-    name: 'Standard_LRS'
-  }
-  kind: 'StorageV2'
-  properties: {
-    allowBlobPublicAccess: false
-    allowSharedKeyAccess: true
-    minimumTlsVersion: 'TLS1_2'
-    supportsHttpsTrafficOnly: true
-  }
-}
-
-resource sqlpadFileService 'Microsoft.Storage/storageAccounts/fileServices@2023-05-01' = {
-  parent: sqlpadStorageAccount
-  name: 'default'
-}
-
-resource sqlpadFileShare 'Microsoft.Storage/storageAccounts/fileServices/shares@2023-05-01' = {
-  parent: sqlpadFileService
-  name: sqlpadFileShareName
-  properties: {
-    accessTier: 'TransactionOptimized'
-    enabledProtocols: 'SMB'
-    shareQuota: 5
-  }
-}
-
-resource sqlpadEnvironmentStorage 'Microsoft.App/managedEnvironments/storages@2024-03-01' = {
-  parent: containerEnvironment
-  name: sqlpadStorageName
-  properties: {
-    azureFile: {
-      accessMode: 'ReadWrite'
-      accountName: sqlpadStorageAccount.name
-      accountKey: sqlpadStorageAccount.listKeys().keys[0].value
-      shareName: sqlpadFileShare.name
-    }
   }
 }
 
@@ -719,7 +672,7 @@ resource sqlpad 'Microsoft.App/containerApps@2024-03-01' = {
             }
             {
               name: 'SQLPAD_DB_PATH'
-              value: '/var/lib/sqlpad/db'
+              value: '/tmp/sqlpad'
             }
             {
               name: 'SQLPAD_CONNECTIONS__assistantcore__name'
@@ -762,25 +715,12 @@ resource sqlpad 'Microsoft.App/containerApps@2024-03-01' = {
             cpu: json('0.5')
             memory: '1Gi'
           }
-          volumeMounts: [
-            {
-              volumeName: 'sqlpad-data'
-              mountPath: '/var/lib/sqlpad'
-            }
-          ]
         }
       ]
       scale: {
         minReplicas: 0
         maxReplicas: 1
       }
-      volumes: [
-        {
-          name: 'sqlpad-data'
-          storageName: sqlpadEnvironmentStorage.name
-          storageType: 'AzureFile'
-        }
-      ]
     }
   }
   dependsOn: [keyVaultSecretsUser]
