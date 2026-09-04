@@ -163,10 +163,6 @@ jobs:
             sqlpadAllowedGroupObjectId="${{ vars.SQLPAD_ALLOWED_GROUP_OBJECT_ID }}"
           )
 
-          if [ "${{ inputs.environment_name }}" = "certif" ]; then
-            PARAMETERS+=(azureSearchIndexName="microsoft-content-dev")
-          fi
-
           az deployment group what-if \
             --resource-group "$RESOURCE_GROUP" \
             --template-file deploy/infra/main.bicep \
