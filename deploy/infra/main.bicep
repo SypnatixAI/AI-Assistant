@@ -397,6 +397,22 @@ var commonWorkerEnvironmentVariables = [
     name: 'ConnectionStrings__AssistantCoreDatabase'
     secretRef: 'database-connection'
   }
+  {
+    name: 'Microsoft365__ConsentCallbackUrl'
+    value: '${apiBaseUrl}/api/microsoft365/consent/callback'
+  }
+  {
+    name: 'Microsoft365__ConsentSuccessRedirectUrl'
+    value: '${spaBaseUrl}/microsoft365/consent/success'
+  }
+  {
+    name: 'Microsoft365__ConsentErrorRedirectUrl'
+    value: '${spaBaseUrl}/microsoft365/consent/error'
+  }
+  {
+    name: 'Microsoft365__WebhookBaseUrl'
+    value: apiBaseUrl
+  }
 ]
 
 var devWorkerEnvironmentVariables = [
