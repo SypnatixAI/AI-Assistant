@@ -17,15 +17,6 @@ on:
         default: dev
         type: choice
         options: [dev, certif]
-      backend_image_tag:
-        description: Required by deploy-environment
-        required: false
-        type: string
-      spa_image_tag:
-        description: Required by deploy-environment
-        required: false
-        type: string
-
 permissions:
   contents: read
   id-token: write
@@ -109,10 +100,32 @@ jobs:
 
       - name: Validate application image tags
         if: ${{ inputs.operation == 'deploy-environment' }}
-        env:
-          BACKEND_TAG: ${{ inputs.backend_image_tag }}
-          SPA_TAG: ${{ inputs.spa_image_tag }}
         run: |
+          API_IMAGE="$(az containerapp show \
+            --name ca-assistant-api-dev \
+            --resource-group "${{ vars.AZURE_DEV_RESOURCE_GROUP }}" \
+            --query properties.template.containers[0].image \
+            --output tsv)"
+          SPA_IMAGE="$(az containerapp show \
+            --name ca-assistant-spa-dev \
+            --resource-group "${{ vars.AZURE_DEV_RESOURCE_GROUP }}" \
+            --query properties.template.containers[0].image \
+            --output tsv)"
+
+          if ! printf '%s' "$API_IMAGE" | grep -Eq "^${ACR_NAME}\\.azurecr\\.io/assistant-api:sha-[0-9a-f]{40}$"; then
+            echo "The DEV API does not use a valid immutable SHA image." >&2
+            exit 1
+          fi
+          if ! printf '%s' "$SPA_IMAGE" | grep -Eq "^${ACR_NAME}\\.azurecr\\.io/assistant-spa:sha-[0-9a-f]{40}$"; then
+            echo "The DEV SPA does not use a valid immutable SHA image." >&2
+            exit 1
+          fi
+
+          BACKEND_TAG="${API_IMAGE##*:}"
+          SPA_TAG="${SPA_IMAGE##*:}"
+          echo "BACKEND_TAG=${BACKEND_TAG}" >> "$GITHUB_ENV"
+          echo "SPA_TAG=${SPA_TAG}" >> "$GITHUB_ENV"
+
           for tag in "$BACKEND_TAG" "$SPA_TAG"; do
             if ! printf '%s' "$tag" | grep -Eq '^sha-[0-9a-f]{40}$'; then
               echo "Both image tags must be sha- followed by a complete 40-character Git SHA." >&2
@@ -136,8 +149,6 @@ jobs:
       - name: Preview and deploy environment
         if: ${{ inputs.operation == 'deploy-environment' }}
         env:
-          BACKEND_TAG: ${{ inputs.backend_image_tag }}
-          SPA_TAG: ${{ inputs.spa_image_tag }}
           SHARED_RESOURCE_GROUP: ${{ vars.AZURE_SHARED_RESOURCE_GROUP }}
         run: |
           PARAMETERS=(
@@ -151,6 +162,10 @@ jobs:
             sqlpadEntraClientId="${{ vars.SQLPAD_ENTRA_CLIENT_ID }}"
             sqlpadAllowedGroupObjectId="${{ vars.SQLPAD_ALLOWED_GROUP_OBJECT_ID }}"
           )
+
+          if [ "${{ inputs.environment_name }}" = "certif" ]; then
+            PARAMETERS+=(azureSearchIndexName="microsoft-content-dev")
+          fi
 
           az deployment group what-if \
             --resource-group "$RESOURCE_GROUP" \
