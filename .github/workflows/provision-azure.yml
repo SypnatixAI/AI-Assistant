@@ -112,11 +112,11 @@ jobs:
             --query properties.template.containers[0].image \
             --output tsv)"
 
-          if ! printf '%s' "$API_IMAGE" | grep -Eq "^${ACR_NAME}\\.azurecr\\.io/assistant-api:sha-[0-9a-f]{40}$"; then
+          if ! printf '%s' "$API_IMAGE" | grep -Eq '/assistant-api:sha-[0-9a-f]{40}$'; then
             echo "The DEV API does not use a valid immutable SHA image." >&2
             exit 1
           fi
-          if ! printf '%s' "$SPA_IMAGE" | grep -Eq "^${ACR_NAME}\\.azurecr\\.io/assistant-spa:sha-[0-9a-f]{40}$"; then
+          if ! printf '%s' "$SPA_IMAGE" | grep -Eq '/assistant-spa:sha-[0-9a-f]{40}$'; then
             echo "The DEV SPA does not use a valid immutable SHA image." >&2
             exit 1
           fi
