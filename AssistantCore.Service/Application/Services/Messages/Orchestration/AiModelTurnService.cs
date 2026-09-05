@@ -24,7 +24,9 @@ public sealed class AiModelTurnService(
 
         Interpret the current message in its conversation context. Resolve implicit references from
         that context before deciding what to do, and make tool calls self-contained without adding
-        facts that are absent from the conversation.
+        facts that are absent from the conversation. When the current message answers a clarification,
+        reconstruct the complete request from the earlier user request, the clarification question,
+        and the user's answer before searching.
 
         This assistant operates in the user's organization. When a request is ambiguous but naturally
         refers to employees, benefits, workplace policies, projects, customers, operations, or other
@@ -59,6 +61,17 @@ public sealed class AiModelTurnService(
         missing and a different query or source can reasonably find it. Independent searches may be
         requested together. A weak or empty result is not sufficient reason to stop when a
         materially different retrieval path remains.
+
+        Distinguish dates that describe the requested business period from dates that restrict which
+        source files are eligible. Put accounting periods, reporting periods, event dates, and other
+        dates mentioned inside documents in the search query. Use a tool's file-date filters only
+        when the user explicitly restricts files by publication or modification date.
+
+        For requests requiring an aggregation, ratio, comparison, or other derived result, retrieve
+        every required input and derive the result only from supported values. Account for the full
+        requested scope and period. Use additional, materially different searches when the required
+        inputs may be located in different passages or documents. Do not assume missing values or
+        invent a calculation rule that the request and evidence do not support.
 
         Return "askClarification" only when missing user-provided information materially changes the
         answer or prevents a useful search. Ask one narrow question. Do not ask the user for facts an
@@ -105,6 +118,16 @@ public sealed class AiModelTurnService(
         reached. Produce the best supported terminal decision from the evidence already collected.
         Answer partially when useful, ask for a material user-provided detail when appropriate, or
         explain the remaining limitation. Do not request a tool.
+        """;
+
+    private const string CitationRepairInstructions =
+        """
+
+        Your previous terminal response cited evidence identifiers that are not available for this
+        turn. Produce a corrected terminal response. Cite only evidenceIds listed in the current
+        successful tool results. If no available evidence supports the answer, return cannotAnswer
+        or answer without citations only when the request can be answered from general knowledge
+        under the main instructions. Do not request a tool.
         """;
 
     public async Task<AiModelResponse> RequestNextActionAsync(
@@ -167,14 +190,22 @@ public sealed class AiModelTurnService(
         return response;
     }
 
-    private static string CreateInstructions(MessageOrchestrationState state) =>
-        state.FinalResponseRequired
+    private static string CreateInstructions(MessageOrchestrationState state)
+    {
+        var instructions = state.FinalResponseRequired
             ? OrchestrationInstructions + FinalResponseInstructions
             : OrchestrationInstructions;
 
+        return state.CitationRepairResponseRequired
+            ? instructions + CitationRepairInstructions
+            : instructions;
+    }
+
     private static IReadOnlyCollection<AiToolDefinition> GetAvailableTools(
         MessageOrchestrationState state) =>
-        state.FinalResponseRequired ? [] : state.AllowedTools;
+        state.FinalResponseRequired || state.CitationRepairResponseRequired
+            ? []
+            : state.AllowedTools;
 
     private IAiModelProvider FindSelectedProvider(string providerName)
     {

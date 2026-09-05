@@ -79,6 +79,18 @@ public sealed class AiToolRegistryTests
             .ToArray();
         Assert.Equal(["onedrive", "sharepoint"], allowedSourceTypes);
         Assert.False(sourceTypesSchema.TryGetProperty("uniqueItems", out _));
+        var microsoft365Properties = microsoft365Tool.InputSchema
+            .GetProperty("properties");
+        Assert.Contains(
+            "Date minimale de modification des fichiers",
+            microsoft365Properties.GetProperty("dateFrom").GetProperty("anyOf")[0]
+                .GetProperty("description").GetString(),
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "Ne filtre pas les dates mentionnees dans leur contenu",
+            microsoft365Properties.GetProperty("dateTo").GetProperty("anyOf")[0]
+                .GetProperty("description").GetString(),
+            StringComparison.Ordinal);
 
         var crmTool = tools.Single(tool => tool.Name == AiToolNames.QueryCrm);
         var entityTypesSchema = crmTool.InputSchema

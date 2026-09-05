@@ -271,7 +271,7 @@ public sealed class Microsoft365AclResolverAdapterTests
     }
 
     [Theory, AutoDomainData]
-    public async Task Given_AGroupOwnersClaimAndAnExplicitUser_When_ResolveAsync_Then_DoesNotBroadenTheGrantToGroupMembers(
+    public async Task Given_AGroupOwnersClaimAndAnExplicitUser_When_ResolveAsync_Then_KeepsOwnerScopedPrincipal(
         Guid organizationId,
         Guid groupObjectId,
         Guid userObjectId)
@@ -316,11 +316,13 @@ public sealed class Microsoft365AclResolverAdapterTests
         // Then
         var acl = Assert.IsType<Microsoft365AclResolution.ResolvedAcl>(result).Acl;
         Assert.Equal([userObjectId.ToString("D")], acl.AllowedEntraUserIds);
-        Assert.Empty(acl.AllowedEntraGroupIds);
+        Assert.Equal(
+            [$"{Microsoft365SecurityIdentityNormalizer.EntraGroupOwnerPrefix}{groupObjectId:D}"],
+            acl.AllowedEntraGroupIds);
     }
 
     [Theory, AutoDomainData]
-    public async Task Given_OnlyAGroupOwnersClaim_When_ResolveAsync_Then_ReturnsUnknownPrincipal(
+    public async Task Given_OnlyAGroupOwnersClaim_When_ResolveAsync_Then_ReturnsOwnerScopedPrincipal(
         Guid organizationId,
         Guid groupObjectId)
     {
@@ -355,8 +357,10 @@ public sealed class Microsoft365AclResolverAdapterTests
             CancellationToken.None);
 
         // Then
-        var unresolved = Assert.IsType<Microsoft365AclResolution.Unresolved>(result);
-        Assert.Equal(Microsoft365AclResolutionFailureReason.UnknownPrincipal, unresolved.Reason);
+        var acl = Assert.IsType<Microsoft365AclResolution.ResolvedAcl>(result).Acl;
+        Assert.Equal(
+            [$"{Microsoft365SecurityIdentityNormalizer.EntraGroupOwnerPrefix}{groupObjectId:D}"],
+            acl.AllowedEntraGroupIds);
     }
 
     [Theory, AutoDomainData]

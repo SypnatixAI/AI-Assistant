@@ -9,6 +9,8 @@ partagent le même magasin local `user-secrets` :
 
 ```bash
 dotnet user-secrets --project AssistantCore.Service set "Microsoft365:ClientSecret" "<secret>"
+dotnet user-secrets --project AssistantCore.Service set "Microsoft365:SharePointCertificatePath" "<absolute-pfx-path>"
+dotnet user-secrets --project AssistantCore.Service set "Microsoft365:SharePointCertificatePassword" "<pfx-password>"
 dotnet user-secrets --project AssistantCore.Service set "ConnectionStrings:AssistantCoreDatabase" "<connection-string>"
 dotnet user-secrets --project AssistantCore.Service set "Microsoft365:EmbeddingApiKey" "<openai-api-key>"
 dotnet user-secrets --project AssistantCore.Service set "AzureSearch:ApiKey" "<azure-search-api-key>"

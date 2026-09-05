@@ -8,6 +8,11 @@ public interface IMicrosoft365SourceDiscoveryRepository
         Guid organizationId,
         CancellationToken cancellationToken = default);
 
+    Task<IReadOnlyCollection<Microsoft365SharePointSiteData>> GetIndexedSitesAsync(
+        Guid organizationId,
+        CancellationToken cancellationToken = default) =>
+        Task.FromResult<IReadOnlyCollection<Microsoft365SharePointSiteData>>([]);
+
     Task<bool> HasIndexedSourceAsync(
         Guid organizationId,
         CancellationToken cancellationToken = default) => Task.FromResult(false);

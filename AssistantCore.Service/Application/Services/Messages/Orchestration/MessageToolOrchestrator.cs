@@ -69,7 +69,14 @@ public sealed class MessageToolOrchestrator(
             {
                 if (continuation.StopReason == OrchestrationStopReason.ModelCompleted)
                 {
-                    var result = resultBuilder.Build(state, modelResponse);
+                    if (!TryBuildResultOrRequestCitationRepair(
+                            state,
+                            modelResponse,
+                            out var result))
+                    {
+                        continue;
+                    }
+
                     activity?.SetStatus(ActivityStatusCode.Ok);
                     return result;
                 }
@@ -135,7 +142,14 @@ public sealed class MessageToolOrchestrator(
             {
                 if (continuation.StopReason == OrchestrationStopReason.ModelCompleted)
                 {
-                    var result = resultBuilder.Build(state, modelResponse);
+                    if (!TryBuildResultOrRequestCitationRepair(
+                            state,
+                            modelResponse,
+                            out var result))
+                    {
+                        continue;
+                    }
+
                     activity?.SetStatus(ActivityStatusCode.Ok);
                     await WriteProgressAsync(modelResponse.Decision, onProgress, cancellationToken);
                     var streamedAnswer = string.Concat(turnAnswerDeltas);
@@ -174,6 +188,25 @@ public sealed class MessageToolOrchestrator(
                 state,
                 modelResponse.Decision.ToolCalls,
                 cancellationToken);
+        }
+    }
+
+    private bool TryBuildResultOrRequestCitationRepair(
+        MessageOrchestrationState state,
+        AiModelResponse modelResponse,
+        out MessageOrchestrationResult result)
+    {
+        try
+        {
+            result = resultBuilder.Build(state, modelResponse);
+            return true;
+        }
+        catch (AiProviderInvalidCitationResponseException) when (
+            !state.CitationRepairResponseRequired)
+        {
+            state.RequireCitationRepairResponse();
+            result = null!;
+            return false;
         }
     }
 

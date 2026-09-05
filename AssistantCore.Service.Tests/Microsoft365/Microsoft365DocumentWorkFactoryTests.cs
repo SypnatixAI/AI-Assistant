@@ -1,3 +1,6 @@
+using System.Security.Cryptography;
+using System.Text;
+using System.Text.Json;
 using AssistantCore.Repository.Domain.Entities;
 using AssistantCore.Repository.Domain.Enums;
 using AssistantCore.Service.Application.Models.Microsoft365;
@@ -28,6 +31,13 @@ public sealed class Microsoft365DocumentWorkFactoryTests
         Assert.Equal(Microsoft365DocumentWorkType.ProcessDocument, firstWork.WorkType);
         Assert.Equal(firstWork.DeduplicationKey, replayedWork.DeduplicationKey);
         Assert.Equal(64, firstWork.DeduplicationKey.Length);
+        Assert.Equal(
+            CreateExpectedDeduplicationKey(
+                organizationId,
+                sourceId,
+                itemId,
+                Microsoft365DocumentIndexVersion.Create(eTag)),
+            firstWork.DeduplicationKey);
         Assert.Equal("report.pdf", firstWork.Name);
         Assert.Equal(eTag, firstWork.ETag);
     }
@@ -128,4 +138,21 @@ public sealed class Microsoft365DocumentWorkFactoryTests
             isDeleted,
             IsFolder: false,
             IsFile: !isDeleted);
+
+    private static string CreateExpectedDeduplicationKey(
+        Guid organizationId,
+        Guid sourceId,
+        string itemId,
+        string version)
+    {
+        var identity = JsonSerializer.Serialize(new[]
+        {
+            organizationId.ToString("N"),
+            sourceId.ToString("N"),
+            itemId,
+            version
+        });
+
+        return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(identity)));
+    }
 }

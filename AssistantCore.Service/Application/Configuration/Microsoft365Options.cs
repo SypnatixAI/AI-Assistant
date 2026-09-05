@@ -12,6 +12,14 @@ public sealed class Microsoft365Options
 
     public string ClientSecret { get; init; } = string.Empty;
 
+    public string SharePointCertificatePath { get; init; } = string.Empty;
+
+    public string SharePointCertificateBase64 { get; init; } = string.Empty;
+
+    public string SharePointCertificatePassword { get; init; } = string.Empty;
+
+    public int SharePointGroupCacheMinutes { get; init; } = 5;
+
     public string ConsentCallbackUrl { get; init; } = string.Empty;
 
     public string ConsentSuccessRedirectUrl { get; init; } = string.Empty;
@@ -41,6 +49,10 @@ public sealed class Microsoft365Options
     public long MaximumExtractionExpandedSizeBytes { get; init; } = 100 * 1024 * 1024;
 
     public int MaximumExtractedCharacters { get; init; } = 2_000_000;
+
+    public int MaximumExcelSheets { get; init; } = 100;
+
+    public int MaximumExcelCells { get; init; } = 100_000;
 
     public int ChunkMaximumTokens { get; init; } = 800;
 

@@ -80,7 +80,7 @@ public sealed class Microsoft365SearchRepositoryAdapter(
             "organization");
         var userId = NormalizeIdentifier(securityContext.EntraUserId, "Microsoft Entra user");
         var groupIds = securityContext.EntraGroupIds
-            .Select(groupId => NormalizeIdentifier(groupId, "Microsoft Entra group"))
+            .Select(NormalizeMicrosoftEntraGroupSecurityIdentifier)
             .Distinct(StringComparer.Ordinal)
             .OrderBy(groupId => groupId, StringComparer.Ordinal)
             .ToArray();
@@ -93,6 +93,17 @@ public sealed class Microsoft365SearchRepositoryAdapter(
         {
             accessClauses.Add(
                 $"allowedGroupIds/any(id: search.in(id, '{string.Join(',', groupIds)}', ','))");
+        }
+
+        var sharePointGroupIds = securityContext.SharePointGroupIds
+            .Select(groupId => NormalizeSharePointGroupIdentifier(groupId))
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(groupId => groupId, StringComparer.Ordinal)
+            .ToArray();
+        if (sharePointGroupIds.Length > 0)
+        {
+            accessClauses.Add(
+                $"allowedSharePointGroupIds/any(id: search.in(id, '{string.Join('|', sharePointGroupIds)}', '|'))");
         }
 
         return $"organizationId eq '{organizationId}' and isAvailable eq true and ({string.Join(" or ", accessClauses)})";
@@ -131,6 +142,7 @@ public sealed class Microsoft365SearchRepositoryAdapter(
         ArgumentException.ThrowIfNullOrWhiteSpace(parameters.Query);
         ArgumentNullException.ThrowIfNull(parameters.SecurityContext);
         ArgumentNullException.ThrowIfNull(parameters.SecurityContext.EntraGroupIds);
+        ArgumentNullException.ThrowIfNull(parameters.SecurityContext.SharePointGroupIds);
         if (parameters.MaximumResults <= 0)
         {
             throw new ArgumentOutOfRangeException(nameof(parameters));
@@ -155,6 +167,42 @@ public sealed class Microsoft365SearchRepositoryAdapter(
         }
 
         return identifier.ToString("D");
+    }
+
+    private static string NormalizeSharePointGroupIdentifier(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value)
+            || !value.StartsWith("spg:", StringComparison.Ordinal)
+            || value.Contains('\'')
+            || value.Contains('|'))
+        {
+            throw new ArgumentException(
+                "A valid Microsoft SharePoint group identifier is required.",
+                nameof(value));
+        }
+
+        return value;
+    }
+
+    private static string NormalizeMicrosoftEntraGroupSecurityIdentifier(string value)
+    {
+        if (Guid.TryParse(value, out var groupId) && groupId != Guid.Empty)
+        {
+            return groupId.ToString("D");
+        }
+
+        if (value.StartsWith(
+                Microsoft365SecurityIdentityNormalizer.EntraGroupOwnerPrefix,
+                StringComparison.Ordinal)
+            && Guid.TryParse(
+                value[Microsoft365SecurityIdentityNormalizer.EntraGroupOwnerPrefix.Length..],
+                out var ownerGroupId)
+            && ownerGroupId != Guid.Empty)
+        {
+            return $"{Microsoft365SecurityIdentityNormalizer.EntraGroupOwnerPrefix}{ownerGroupId:D}";
+        }
+
+        throw new ArgumentException("A valid Microsoft Entra group security identifier is required.");
     }
 
     private static string FormatDate(DateOnly date) =>

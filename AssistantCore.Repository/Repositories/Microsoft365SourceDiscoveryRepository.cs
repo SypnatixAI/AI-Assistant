@@ -17,6 +17,30 @@ public sealed class Microsoft365SourceDiscoveryRepository(AssistantCoreDbContext
             .Select(site => site.SiteId)
             .ToArrayAsync(cancellationToken);
 
+    public async Task<IReadOnlyCollection<Microsoft365SharePointSiteData>> GetIndexedSitesAsync(
+        Guid organizationId,
+        CancellationToken cancellationToken = default) =>
+        await dbContext.Microsoft365Sites
+            .AsNoTracking()
+            .Where(site =>
+                site.OrganizationId == organizationId
+                && site.WebUrl != null
+                && (dbContext.Microsoft365Drives.Any(drive =>
+                        drive.OrganizationId == organizationId
+                        && drive.SiteId == site.SiteId
+                        && drive.IsIndexed
+                        && (drive.Status == Microsoft365SourceStatus.Enabled
+                            || drive.Status == Microsoft365SourceStatus.FullResyncRequired))
+                    || dbContext.Microsoft365Lists.Any(list =>
+                        list.OrganizationId == organizationId
+                        && list.SiteId == site.SiteId
+                        && list.IsIndexed
+                        && (list.Status == Microsoft365SourceStatus.Enabled
+                            || list.Status == Microsoft365SourceStatus.FullResyncRequired))))
+            .OrderBy(site => site.SiteId)
+            .Select(site => new Microsoft365SharePointSiteData(site.SiteId, site.WebUrl!))
+            .ToArrayAsync(cancellationToken);
+
     public Task<bool> HasIndexedSourceAsync(
         Guid organizationId,
         CancellationToken cancellationToken = default) =>

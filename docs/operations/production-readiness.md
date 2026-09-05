@@ -246,8 +246,9 @@ DEV conserve dans son coffre la chaîne Azure SQL et la clé de signature du JWT
 de développement. Les valeurs factices utilisées avec WireMock ne sont jamais
 utilisables dans CERTIF.
 
-CERTIF conserve les véritables secrets Microsoft 365, OpenAI, Azure AI Search
-et Azure SQL.
+CERTIF conserve les véritables secrets Microsoft 365, le certificat PFX
+SharePoint App-Only encodé en Base64 et son mot de passe, ainsi que les secrets
+OpenAI, Azure AI Search et Azure SQL.
 
 Les Container Apps accèdent uniquement au coffre de leur environnement avec
 une identité managée et le rôle minimal nécessaire pour lire les secrets. Aucun

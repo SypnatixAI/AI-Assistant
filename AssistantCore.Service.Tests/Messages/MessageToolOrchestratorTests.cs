@@ -5,7 +5,9 @@ using AssistantCore.Service.Application.Models.Messages.Connectors;
 using AssistantCore.Service.Application.Models.Messages.Lifecycle;
 using AssistantCore.Service.Application.Models.Messages.Orchestration;
 using AssistantCore.Service.Application.Models.Messages.Tools;
+using AssistantCore.Service.Application.Services.Messages.Evidence;
 using AssistantCore.Service.Application.Services.Messages.Orchestration;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 
 namespace AssistantCore.Service.Tests.Messages;
@@ -82,6 +84,93 @@ public sealed class MessageToolOrchestratorTests
         // Then
         Assert.Same(expectedResult, result);
         Assert.Equal(["ModelTurn", "ModelTurn", "BuildResult"], operations);
+    }
+
+    [Theory, AutoDomainData]
+    public async Task Given_FinalAnswerWithUnknownCitation_When_OrchestrateAsync_Then_RequestsCitationRepairResponse(
+        StartedMessageProcessing processing,
+        SelectedAiModel selectedModel,
+        DateTimeOffset now)
+    {
+        // Given
+        var operations = new List<string>();
+        var modelTurnService = new StubModelTurnService(
+            operations,
+            new Queue<AiModelResponse>(
+            [
+                CreateResponse(
+                    AiModelDecisionType.Answer,
+                    citedEvidenceIds: ["unknown-evidence"]),
+                CreateResponse(
+                    AiModelDecisionType.Answer,
+                    answer: "Corrected answer.")
+            ]));
+        var orchestrator = new MessageToolOrchestrator(
+            modelTurnService,
+            new StubContinuationPolicy(),
+            new StubToolCallBatchExecutor(operations),
+            new RecordingOrchestrationResultBuilder(operations),
+            Options.Create(CreateOptions()),
+            new StubTimeProvider(now));
+
+        // When
+        var result = await orchestrator.OrchestrateAsync(
+            processing,
+            selectedModel,
+            [],
+            [],
+            CancellationToken.None);
+
+        // Then
+        Assert.Equal("Corrected answer.", result.Answer);
+        Assert.Equal(
+            ["ModelTurn", "BuildResult", "ModelTurn", "BuildResult"],
+            operations);
+        Assert.Equal(
+            [false, true],
+            modelTurnService.CitationRepairResponseRequiredValues);
+    }
+
+    [Theory, AutoDomainData]
+    public async Task Given_RepairedAnswerStillHasUnknownCitation_When_OrchestrateAsync_Then_RejectsTheProviderResponse(
+        StartedMessageProcessing processing,
+        SelectedAiModel selectedModel,
+        DateTimeOffset now)
+    {
+        // Given
+        var operations = new List<string>();
+        var orchestrator = new MessageToolOrchestrator(
+            new StubModelTurnService(
+                operations,
+                new Queue<AiModelResponse>(
+                [
+                    CreateResponse(
+                        AiModelDecisionType.Answer,
+                        citedEvidenceIds: ["first-unknown-evidence"]),
+                    CreateResponse(
+                        AiModelDecisionType.Answer,
+                        citedEvidenceIds: ["second-unknown-evidence"])
+                ])),
+            new StubContinuationPolicy(),
+            new StubToolCallBatchExecutor(operations),
+            new RecordingOrchestrationResultBuilder(operations),
+            Options.Create(CreateOptions()),
+            new StubTimeProvider(now));
+
+        // When
+        var exception = await Record.ExceptionAsync(() =>
+            orchestrator.OrchestrateAsync(
+                processing,
+                selectedModel,
+                [],
+                [],
+                CancellationToken.None));
+
+        // Then
+        Assert.IsType<AiProviderInvalidCitationResponseException>(exception);
+        Assert.Equal(
+            ["ModelTurn", "BuildResult", "ModelTurn", "BuildResult"],
+            operations);
     }
 
     [Theory, AutoDomainData]
@@ -254,7 +343,9 @@ public sealed class MessageToolOrchestratorTests
 
     private static AiModelResponse CreateResponse(
         AiModelDecisionType decisionType,
-        string? progressMessage = null) =>
+        string? progressMessage = null,
+        string? answer = null,
+        IReadOnlyCollection<string>? citedEvidenceIds = null) =>
         new(
             new AiModelDecision(
                 decisionType,
@@ -262,8 +353,8 @@ public sealed class MessageToolOrchestratorTests
                 decisionType == AiModelDecisionType.UseTools
                     ? [new AiRequestedToolCall("call-1", "tool", default)]
                     : [],
-                decisionType == AiModelDecisionType.Answer ? "Answer" : null,
-                [],
+                decisionType == AiModelDecisionType.Answer ? answer ?? "Answer" : null,
+                citedEvidenceIds ?? [],
                 progressMessage),
             new AiModelUsage(1, 1, 1, 0, 0.01m));
 
@@ -273,10 +364,13 @@ public sealed class MessageToolOrchestratorTests
         IReadOnlyCollection<string>? streamingDeltas = null,
         Queue<IReadOnlyCollection<string>>? streamingDeltasByTurn = null) : IAiModelTurnService
     {
+        public List<bool> CitationRepairResponseRequiredValues { get; } = [];
+
         public Task<AiModelResponse> RequestNextActionAsync(
             MessageOrchestrationState state,
             CancellationToken cancellationToken)
         {
+            CitationRepairResponseRequiredValues.Add(state.CitationRepairResponseRequired);
             operations.Add("ModelTurn");
             return Task.FromResult(responses.Dequeue());
         }
@@ -292,6 +386,7 @@ public sealed class MessageToolOrchestratorTests
             Func<string, CancellationToken, ValueTask> onAnswerDelta,
             CancellationToken cancellationToken)
         {
+            CitationRepairResponseRequiredValues.Add(state.CitationRepairResponseRequired);
             operations.Add("StreamingModelTurn");
             var currentDeltas = streamingDeltasByTurn?.Dequeue() ?? streamingDeltas ?? [];
             foreach (var delta in currentDeltas)
@@ -349,6 +444,22 @@ public sealed class MessageToolOrchestratorTests
         {
             operations.Add("BuildResult");
             return result ?? throw new InvalidOperationException("No result configured.");
+        }
+    }
+
+    private sealed class RecordingOrchestrationResultBuilder(List<string> operations)
+        : IOrchestrationResultBuilder
+    {
+        private readonly OrchestrationResultBuilder _inner = new(
+            new EvidenceCitationResolver(),
+            NullLogger<OrchestrationResultBuilder>.Instance);
+
+        public MessageOrchestrationResult Build(
+            MessageOrchestrationState state,
+            AiModelResponse finalResponse)
+        {
+            operations.Add("BuildResult");
+            return _inner.Build(state, finalResponse);
         }
     }
 
