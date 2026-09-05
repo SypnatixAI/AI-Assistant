@@ -12,6 +12,7 @@ using AssistantCore.Service.Application.Models.Messages.Tools;
 using AssistantCore.Service.Application.Services.Messages.AiModels;
 using AssistantCore.Service.Application.Services.Messages.Evidence;
 using AssistantCore.Service.Application.Services.Messages.Orchestration;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 
 namespace AssistantCore.RagEvaluation.Targets;
@@ -51,7 +52,9 @@ internal sealed class OrchestrationEvaluationTarget(
             recordingTurnService,
             new OrchestrationContinuationPolicy(new ToolCallFingerprintGenerator(), timeProvider),
             toolExecutor,
-            new OrchestrationResultBuilder(new EvidenceCitationResolver()),
+            new OrchestrationResultBuilder(
+                new EvidenceCitationResolver(),
+                NullLogger<OrchestrationResultBuilder>.Instance),
             Options.Create(CreateOptions()),
             timeProvider);
 

@@ -5,11 +5,13 @@ using AssistantCore.Service.Application.Models.Messages.AiModels;
 using AssistantCore.Service.Application.Models.Messages.Orchestration;
 using AssistantCore.Service.Application.Models.Messages.Tools;
 using AssistantCore.Service.Application.Services.Messages.Evidence;
+using Microsoft.Extensions.Logging;
 
 namespace AssistantCore.Service.Application.Services.Messages.Orchestration;
 
 public sealed partial class OrchestrationResultBuilder(
-    IEvidenceCitationResolver citationResolver) : IOrchestrationResultBuilder
+    IEvidenceCitationResolver citationResolver,
+    ILogger<OrchestrationResultBuilder> logger) : IOrchestrationResultBuilder
 {
     public MessageOrchestrationResult Build(
         MessageOrchestrationState state,
@@ -64,20 +66,34 @@ public sealed partial class OrchestrationResultBuilder(
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex EvidenceIdentifierPattern();
 
-    private static void ThrowWhenAnyCitationIsUnknown(
+    private void ThrowWhenAnyCitationIsUnknown(
         MessageOrchestrationState state,
         AiModelDecision decision,
         IReadOnlyCollection<RetrievedEvidence> citedEvidence)
     {
-        var requestedEvidenceIds = decision.CitedEvidenceIds
+        var requestedEvidenceIds = decision.CitedEvidenceIds.ToArray();
+        var distinctRequestedEvidenceIds = requestedEvidenceIds
             .Where(evidenceId => !string.IsNullOrWhiteSpace(evidenceId))
             .Distinct(StringComparer.Ordinal)
             .ToArray();
 
-        if (requestedEvidenceIds.Length != decision.CitedEvidenceIds.Count
-            || citedEvidence.Count != requestedEvidenceIds.Length)
+        if (distinctRequestedEvidenceIds.Length != requestedEvidenceIds.Length
+            || citedEvidence.Count != distinctRequestedEvidenceIds.Length)
         {
-            throw new AiProviderInvalidResponseException(state.SelectedModel.Provider);
+            var availableEvidenceIds = state.CollectedEvidence
+                .Select(evidence => evidence.EvidenceId)
+                .ToArray();
+            logger.LogWarning(
+                "AI provider returned invalid evidence citations. Requested evidenceIds: {RequestedEvidenceIds}. Available evidenceIds: {AvailableEvidenceIds}.",
+                requestedEvidenceIds,
+                availableEvidenceIds);
+
+            if (state.CitationRepairResponseRequired && citedEvidence.Count > 0)
+            {
+                return;
+            }
+
+            throw new AiProviderInvalidCitationResponseException(state.SelectedModel.Provider);
         }
     }
 

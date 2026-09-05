@@ -12,6 +12,7 @@ namespace AssistantCore.Service.Infrastructure.Connectors.Microsoft365;
 
 public sealed class Microsoft365Connector(
     IMicrosoft365UserGroupResolver groupResolver,
+    IMicrosoft365SharePointGroupResolver sharePointGroupResolver,
     IMicrosoft365SearchRepository searchRepository,
     IMicrosoft365SearchAccessVerifier accessVerifier,
     Microsoft365ConnectorOptions options,
@@ -30,7 +31,8 @@ public sealed class Microsoft365Connector(
             || context.IdentityProvider != IdentityProvider.MicrosoftEntraId
             || string.IsNullOrWhiteSpace(context.ExternalTenantId)
             || context.EntraUserId is null
-            || context.EntraUserId == Guid.Empty)
+            || context.EntraUserId == Guid.Empty
+            || string.IsNullOrWhiteSpace(context.UserEmail))
         {
             throw new InvalidOperationException(
                 "The authenticated member cannot be resolved to a Microsoft Entra identity.");
@@ -41,6 +43,11 @@ public sealed class Microsoft365Connector(
             context.ExternalTenantId!,
             normalizedUserId,
             cancellationToken);
+        var sharePointGroupIds = await sharePointGroupResolver.ResolveGroupIdsAsync(
+            context.OrganizationId,
+            context.ExternalTenantId!,
+            context.UserEmail!,
+            cancellationToken);
         var searchParameters = new Microsoft365SearchParameters(
             request.Query,
             request.SourceTypes,
@@ -49,7 +56,8 @@ public sealed class Microsoft365Connector(
             new Microsoft365SearchSecurityContext(
                 context.OrganizationId,
                 normalizedUserId,
-                groupIds),
+                groupIds,
+                sharePointGroupIds),
             Math.Min(options.MaximumResults, context.RetrievalCandidateLimit));
         var records = await searchRepository.SearchAsync(searchParameters, cancellationToken);
         var authorizedRecords = await accessVerifier.KeepAuthorizedAsync(
@@ -57,6 +65,7 @@ public sealed class Microsoft365Connector(
             context.ExternalTenantId!,
             normalizedUserId,
             groupIds,
+            sharePointGroupIds,
             records,
             cancellationToken);
         var evidence = evidenceNormalizer.Normalize(

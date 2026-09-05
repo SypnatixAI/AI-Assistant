@@ -35,7 +35,8 @@ public sealed class MessageOrchestrationStateTests
             memberId,
             "tenant-id",
             Guid.NewGuid(),
-            IdentityProvider.MicrosoftEntraId);
+            IdentityProvider.MicrosoftEntraId,
+            UserEmail: "user@contoso.com");
         var conversationHistory = new[]
         {
             new AiConversationMessage(AiConversationRole.User, "Previous question"),
@@ -80,6 +81,7 @@ public sealed class MessageOrchestrationStateTests
         Assert.Equal(executionContext.ExternalTenantId, state.ToolExecutionContext.ExternalTenantId);
         Assert.Equal(executionContext.EntraUserId, state.ToolExecutionContext.EntraUserId);
         Assert.Equal(executionContext.IdentityProvider, state.ToolExecutionContext.IdentityProvider);
+        Assert.Equal(executionContext.UserEmail, state.ToolExecutionContext.UserEmail);
         Assert.Equal(limits.RetrievalCandidateLimit, state.ToolExecutionContext.RetrievalCandidateLimit);
         Assert.Same(limits, state.Budget.Limits);
         Assert.Equal(startedAtUtc, state.Budget.StartedAtUtc);

@@ -81,6 +81,7 @@ public sealed class AiModelTurnServiceTests
             StringComparison.Ordinal);
         Assert.Contains("language of the user's current message", normalizedInstructions, StringComparison.Ordinal);
         Assert.Contains("Interpret the current message in its conversation context", normalizedInstructions, StringComparison.Ordinal);
+        Assert.Contains("reconstruct the complete request", normalizedInstructions, StringComparison.Ordinal);
         Assert.Contains("fulfill that offer directly", normalizedInstructions, StringComparison.Ordinal);
     }
 
@@ -134,6 +135,18 @@ public sealed class AiModelTurnServiceTests
             StringComparison.Ordinal);
         Assert.Contains(
             "Treat them as distinct unless the available evidence explicitly establishes a relationship",
+            normalizedInstructions,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "Distinguish dates that describe the requested business period",
+            normalizedInstructions,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "For requests requiring an aggregation, ratio, comparison, or other derived result",
+            normalizedInstructions,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "Do not assume missing values or invent a calculation rule",
             normalizedInstructions,
             StringComparison.Ordinal);
     }

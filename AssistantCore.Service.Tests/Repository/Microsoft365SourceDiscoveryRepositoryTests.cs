@@ -34,6 +34,36 @@ public sealed class Microsoft365SourceDiscoveryRepositoryTests
     }
 
     [Theory, AutoDomainData]
+    public async Task Given_AnIndexedDrive_When_GetIndexedSitesAsync_Then_ReturnsItsSharePointSite(
+        Guid databaseId,
+        Guid foreignOrganizationId)
+    {
+        // Given
+        await using var dbContext = CreateDbContext(databaseId);
+        var site = await SeedSiteAsync(dbContext);
+        site.WebUrl = "https://contoso.sharepoint.com/sites/finance";
+        var drive = CreateDrive(site, "drive-id", "Documents");
+        drive.EnableIndexing(DateTimeOffset.UtcNow);
+        dbContext.Add(drive);
+        await dbContext.SaveChangesAsync();
+        var repository = new Microsoft365SourceDiscoveryRepository(dbContext);
+
+        // When
+        var sites = await repository.GetIndexedSitesAsync(
+            site.OrganizationId,
+            CancellationToken.None);
+        var foreignSites = await repository.GetIndexedSitesAsync(
+            foreignOrganizationId,
+            CancellationToken.None);
+
+        // Then
+        var result = Assert.Single(sites);
+        Assert.Equal(site.SiteId, result.SiteId);
+        Assert.Equal(site.WebUrl, result.WebUrl);
+        Assert.Empty(foreignSites);
+    }
+
+    [Theory, AutoDomainData]
     public async Task Given_ListsFromMultipleSites_When_GetListsAsync_Then_ReturnsOnlyRequestedOrganizationSiteLists(
         Guid databaseId,
         Guid foreignOrganizationId)

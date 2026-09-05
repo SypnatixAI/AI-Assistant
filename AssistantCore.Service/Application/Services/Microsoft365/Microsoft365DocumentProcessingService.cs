@@ -92,8 +92,12 @@ public sealed class Microsoft365DocumentProcessingService(
             source.Id,
             work.DriveItemId,
             cancellationToken);
+        var documentIndexVersion = Microsoft365DocumentIndexVersion.Create(work.ETag);
         if (existing is { IsAvailable: true }
-            && string.Equals(existing.DocumentVersion, work.ETag, StringComparison.Ordinal))
+            && string.Equals(
+                existing.DocumentVersion,
+                documentIndexVersion,
+                StringComparison.Ordinal))
         {
             return;
         }
@@ -141,7 +145,7 @@ public sealed class Microsoft365DocumentProcessingService(
             work.SiteId,
             work.DriveId,
             work.DriveItemId,
-            work.ETag,
+            documentIndexVersion,
             Path.GetFileNameWithoutExtension(work.Name),
             work.WebUrl,
             work.LastModifiedDateTime,
@@ -194,7 +198,7 @@ public sealed class Microsoft365DocumentProcessingService(
             source.Id,
             work.DriveItemId,
             cancellationToken) ?? throw new InvalidOperationException("Indexed content was not registered.");
-        indexed.DocumentVersion = work.ETag;
+        indexed.DocumentVersion = documentIndexVersion;
         indexed.Title = Path.GetFileNameWithoutExtension(work.Name);
         indexed.WebUrl = work.WebUrl;
         indexed.LastModifiedAt = work.LastModifiedDateTime;

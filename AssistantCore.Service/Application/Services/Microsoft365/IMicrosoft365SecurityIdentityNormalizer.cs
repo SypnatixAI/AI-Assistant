@@ -6,6 +6,8 @@ public interface IMicrosoft365SecurityIdentityNormalizer
 
     string NormalizeEntraGroupId(string objectId);
 
+    string NormalizeEntraGroupOwnerId(string objectId);
+
     string NormalizeSharePointGroupId(
         string siteId,
         string sharePointGroupId);
