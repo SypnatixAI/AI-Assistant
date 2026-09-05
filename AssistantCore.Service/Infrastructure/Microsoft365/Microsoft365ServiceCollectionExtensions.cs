@@ -25,6 +25,7 @@ public static class Microsoft365ServiceCollectionExtensions
                     && Guid.TryParse(options.ClientId, out var clientId)
                     && clientId != Guid.Empty
                     && !string.IsNullOrWhiteSpace(options.ClientSecret)
+                    && options.ClientStateHmacKey.Length >= 32
                     && IsHttpsUrl(options.ConsentCallbackUrl)
                     && IsSecureOrLoopbackUrl(options.ConsentSuccessRedirectUrl)
                     && IsSecureOrLoopbackUrl(options.ConsentErrorRedirectUrl)
@@ -52,7 +53,7 @@ public static class Microsoft365ServiceCollectionExtensions
                     && options.DocumentWorkLeaseMinutes > 0
                     && options.DocumentWorkRetryMinutes > 0
                     && options.DocumentWorkMaximumAttempts > 0,
-                "Microsoft365 requires HTTPS URLs, credentials, valid lifetimes, and valid subscription renewal settings.")
+                "Microsoft365 requires HTTPS URLs, credentials, a client-state HMAC key of at least 32 characters, valid lifetimes, and valid subscription renewal settings.")
             .ValidateOnStart();
 
         services.AddOptions<ServiceBusOptions>()

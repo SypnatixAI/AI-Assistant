@@ -19,6 +19,7 @@ public sealed class Microsoft365SubscriptionMaintenanceService(
 {
     private const string ReconciliationRequiredErrorCode = "ReconciliationRequired";
     private const string OperationFailedErrorCode = "MicrosoftGraphSubscriptionOperationFailed";
+    private const string ClientStateMigrationRequiredErrorCode = "ClientStateMigrationRequired";
 
     public async Task RunMaintenanceAsync(CancellationToken cancellationToken = default)
     {
@@ -71,6 +72,13 @@ public sealed class Microsoft365SubscriptionMaintenanceService(
         }
 
         EnsureSourceCanBeSubscribed(subscription);
+
+        if (subscription.LastErrorCode == ClientStateMigrationRequiredErrorCode)
+        {
+            await MigrateClientStateAsync(subscription, now, configuration, cancellationToken);
+            return;
+        }
+
         if (subscription.Status == Microsoft365SubscriptionStatus.Pending
             || string.IsNullOrWhiteSpace(subscription.MicrosoftSubscriptionId))
         {
@@ -79,6 +87,38 @@ public sealed class Microsoft365SubscriptionMaintenanceService(
         }
 
         await RenewAsync(subscription, now, configuration, cancellationToken);
+    }
+
+    /// <summary>
+    /// Un clientState protege par un algorithme desormais obsolete ne peut pas
+    /// etre transforme vers le nouveau format (il est irreversible par
+    /// construction). L'abonnement Microsoft Graph existant est donc supprime
+    /// proprement puis recree avec un nouveau clientState, et une reconciliation
+    /// complete est demandee pour couvrir toute notification manquee pendant la
+    /// bascule.
+    /// </summary>
+    private async Task MigrateClientStateAsync(
+        Microsoft365Subscription subscription,
+        DateTimeOffset now,
+        Microsoft365Options configuration,
+        CancellationToken cancellationToken)
+    {
+        if (!string.IsNullOrWhiteSpace(subscription.MicrosoftSubscriptionId))
+        {
+            await subscriptionClient.DeleteAsync(
+                GetTenantId(subscription),
+                subscription.MicrosoftSubscriptionId,
+                cancellationToken);
+        }
+
+        subscription.MicrosoftSubscriptionId = null;
+        subscription.ProtectedClientState = null;
+        subscription.ExpiresAt = null;
+        subscription.LastErrorCode = null;
+        subscription.UpdatedAt = now;
+        await subscriptionRepository.SaveChangesAsync(cancellationToken);
+
+        await CreateAsync(subscription, now, configuration, requestReconciliation: true, cancellationToken);
     }
 
     private async Task CreateAsync(

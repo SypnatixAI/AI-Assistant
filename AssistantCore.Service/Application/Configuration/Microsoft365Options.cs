@@ -12,6 +12,8 @@ public sealed class Microsoft365Options
 
     public string ClientSecret { get; init; } = string.Empty;
 
+    public string ClientStateHmacKey { get; init; } = string.Empty;
+
     public string ConsentCallbackUrl { get; init; } = string.Empty;
 
     public string ConsentSuccessRedirectUrl { get; init; } = string.Empty;
