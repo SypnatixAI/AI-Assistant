@@ -388,6 +388,27 @@ le flow `client_credentials`, appelle Microsoft Graph avec ce token et vérifie
 que Graph retourne le même tenant. Le service refuse aussi ce tenant s'il est
 déjà associé à une autre organisation.
 
+Un consentement accordé ne prouve pas à lui seul que les permissions requises
+par le connecteur sont réellement utilisables : elles peuvent avoir été
+retirées après coup, ou l'administrateur peut avoir accordé un consentement
+partiel. Avant d'activer la connexion, le service effectue donc un appel Graph
+représentatif (`GET /v1.0/sites?search=*&$top=1`) avec le token applicatif
+obtenu. Cet appel ne lit aucune donnée utile : il sert uniquement à vérifier
+que `Sites.Read.All` est effectivement utilisable. Un refus `403` de Microsoft
+Graph interrompt l'activation; tout autre échec technique est traité comme une
+validation impossible.
+
+Chacun de ces refus est exposé à l'appelant via un code d'erreur métier stable
+plutôt qu'un simple message :
+
+| Code | Situation |
+| --- | --- |
+| `admin_consent_incomplete` | `state` absent, invalide, expiré ou déjà utilisé |
+| `admin_consent_refused` | Microsoft indique une erreur ou `admin_consent=False` |
+| `wrong_tenant` | le tenant validé est déjà connecté à une autre organisation |
+| `admin_consent_validation_failed` | l'acquisition du token applicatif ou l'appel Graph de vérification échoue techniquement |
+| `missing_required_permissions` | l'appel Graph représentatif est refusé (`403`) : permissions absentes ou retirées |
+
 Après un retour valide, la connexion devient :
 
 ```text

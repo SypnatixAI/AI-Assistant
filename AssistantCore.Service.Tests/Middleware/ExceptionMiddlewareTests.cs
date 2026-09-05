@@ -62,6 +62,50 @@ public sealed class ExceptionMiddlewareTests
     }
 
     [Fact]
+    public async Task Given_AMicrosoft365ConsentException_When_InvokingMiddleware_Then_ReturnsBadRequestWithCode()
+    {
+        // Given
+        const string message = "Microsoft 365 required permissions are missing.";
+        var exception = new Microsoft365ConsentException(
+            message,
+            Microsoft365ConsentException.MissingRequiredPermissions);
+        var context = CreateHttpContext();
+        var middleware = CreateMiddleware(
+            _ => Task.FromException(exception),
+            Environments.Development);
+
+        // When
+        await middleware.InvokeAsync(context);
+
+        // Then
+        using var response = await ReadResponse(context);
+        Assert.Equal(StatusCodes.Status400BadRequest, context.Response.StatusCode);
+        Assert.Equal(message, response.RootElement.GetProperty("Message").GetString());
+        Assert.Equal(
+            Microsoft365ConsentException.MissingRequiredPermissions,
+            response.RootElement.GetProperty("Code").GetString());
+    }
+
+    [Fact]
+    public async Task Given_APlainBadRequestException_When_InvokingMiddleware_Then_ReturnsNullCode()
+    {
+        // Given
+        var exception = new BadRequestException("Invalid request.");
+        var context = CreateHttpContext();
+        var middleware = CreateMiddleware(
+            _ => Task.FromException(exception),
+            Environments.Development);
+
+        // When
+        await middleware.InvokeAsync(context);
+
+        // Then
+        using var response = await ReadResponse(context);
+        Assert.Equal(StatusCodes.Status400BadRequest, context.Response.StatusCode);
+        Assert.Equal(JsonValueKind.Null, response.RootElement.GetProperty("Code").ValueKind);
+    }
+
+    [Fact]
     public async Task Given_APlainForbiddenException_When_InvokingMiddleware_Then_ReturnsNullCode()
     {
         // Given
