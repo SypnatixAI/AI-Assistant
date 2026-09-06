@@ -13,7 +13,9 @@
 
 ## Architecture
 
-* Respecter les principes SOLID.
+* Respecter les principes SOLID notamment le SRP. 
+* Chaque classe doit avoir une responsabilite unique, ne fais pas de long code dans une classe. Donne lui une responsabilite facile a comprendre
+* faut que le code soit bien decouplee
 * Respecter Clean Architecture.
 * Séparer clairement :
 

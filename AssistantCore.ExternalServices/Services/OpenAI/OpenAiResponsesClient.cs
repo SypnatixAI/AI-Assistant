@@ -190,6 +190,43 @@ public sealed class OpenAiResponsesClient
         }
     }
 
+    public async Task<string> CreateStructuredResponseAsync(
+        OpenAiStructuredResponseRequest request,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var options = new CreateResponseOptions
+            {
+                Model = request.Model,
+                Instructions = request.Instructions,
+                StoredOutputEnabled = true,
+                TextOptions = new ResponseTextOptions
+                {
+                    TextFormat = ResponseTextFormat.CreateJsonSchemaFormat(
+                        request.SchemaName,
+                        BinaryData.FromString(request.SchemaJson),
+                        request.SchemaDescription,
+                        true)
+                }
+            };
+
+            options.InputItems.Add(ResponseItem.CreateUserMessageItem(request.UserMessage));
+
+            var result = await _client.CreateResponseAsync(options, cancellationToken);
+            if (result.Value.Error is not null)
+            {
+                throw new OpenAiExternalException(502);
+            }
+
+            return result.Value.GetOutputText();
+        }
+        catch (ClientResultException exception)
+        {
+            throw new OpenAiExternalException(exception.Status);
+        }
+    }
+
     private static CreateResponseOptions CreateOptions(
         OpenAiResponsesRequest request,
         bool streamingEnabled = false)

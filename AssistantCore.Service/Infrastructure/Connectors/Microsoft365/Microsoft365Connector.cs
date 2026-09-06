@@ -7,6 +7,7 @@ using AssistantCore.Service.Application.Models.Messages.Tools.Arguments;
 using AssistantCore.Service.Application.Services.Messages.Connectors;
 using AssistantCore.Service.Application.Services.Messages.Connectors.Microsoft365;
 using AssistantCore.Service.Application.Services.Messages.Evidence;
+using Microsoft.Extensions.Logging;
 
 namespace AssistantCore.Service.Infrastructure.Connectors.Microsoft365;
 
@@ -16,7 +17,10 @@ public sealed class Microsoft365Connector(
     IMicrosoft365SearchRepository searchRepository,
     IMicrosoft365SearchAccessVerifier accessVerifier,
     Microsoft365ConnectorOptions options,
-    IEvidenceNormalizer evidenceNormalizer) : IMicrosoft365Connector
+    IEvidenceNormalizer evidenceNormalizer,
+    IMicrosoft365QueryExpansionService? queryExpansionService = null,
+    IMicrosoft365SearchResultFusionService? searchResultFusionService = null,
+    ILogger<Microsoft365Connector>? logger = null) : IMicrosoft365Connector
 {
     public async Task<ConnectorResult> SearchAsync(
         SearchMicrosoft365ToolArguments request,
@@ -59,7 +63,7 @@ public sealed class Microsoft365Connector(
                 groupIds,
                 sharePointGroupIds),
             Math.Min(options.MaximumResults, context.RetrievalCandidateLimit));
-        var records = await searchRepository.SearchAsync(searchParameters, cancellationToken);
+        var records = await SearchAcrossQueriesAsync(searchParameters, cancellationToken);
         var authorizedRecords = await accessVerifier.KeepAuthorizedAsync(
             context.OrganizationId,
             context.ExternalTenantId!,
@@ -77,6 +81,91 @@ public sealed class Microsoft365Connector(
         return new ConnectorResult(evidence);
     }
 
+    private async Task<IReadOnlyCollection<Microsoft365SearchRecord>> SearchAcrossQueriesAsync(
+        Microsoft365SearchParameters searchParameters,
+        CancellationToken cancellationToken)
+    {
+        var startedAt = TimeProvider.System.GetTimestamp();
+        var queries = queryExpansionService is null
+            ? [searchParameters.Query]
+            : await queryExpansionService.ExpandAsync(searchParameters.Query, cancellationToken);
+
+        if (queries.Count == 1)
+        {
+            var records = await searchRepository.SearchAsync(searchParameters, cancellationToken);
+            LogRetrieval(1, records.Count, records.Count, startedAt);
+            return records;
+        }
+
+        var searchTasks = queries
+            .Select(query => SearchExpandedQueryAsync(
+                searchParameters with { Query = query },
+                cancellationToken))
+            .ToArray();
+        var searchResults = await Task.WhenAll(searchTasks);
+        var successfulResultSets = searchResults
+            .Where(result => result.Exception is null)
+            .Select(result => result.Records)
+            .ToArray();
+
+        if (successfulResultSets.Length == 0)
+        {
+            throw new InvalidOperationException(
+                "All Microsoft 365 expanded searches failed.",
+                searchResults.First(result => result.Exception is not null).Exception);
+        }
+
+        var recordsBeforeDeduplication = successfulResultSets.Sum(resultSet => resultSet.Count);
+        var fusedRecords = (searchResultFusionService ?? new Microsoft365SearchResultFusionService())
+            .Fuse(successfulResultSets, searchParameters.MaximumResults);
+
+        LogRetrieval(
+            queries.Count,
+            recordsBeforeDeduplication,
+            fusedRecords.Count,
+            startedAt);
+
+        return fusedRecords;
+    }
+
+    private async Task<ExpandedSearchResult> SearchExpandedQueryAsync(
+        Microsoft365SearchParameters searchParameters,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            return new ExpandedSearchResult(
+                await searchRepository.SearchAsync(searchParameters, cancellationToken),
+                null);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception exception)
+        {
+            logger?.LogWarning(
+                exception,
+                "A Microsoft 365 expanded search failed. Other query variants can still be used.");
+
+            return new ExpandedSearchResult([], exception);
+        }
+    }
+
+    private void LogRetrieval(
+        int searchesExecuted,
+        int recordsBeforeDeduplication,
+        int recordsAfterDeduplication,
+        long startedAt)
+    {
+        logger?.LogInformation(
+            "Microsoft365 retrieval completed with {SearchesExecuted} searches, {RecordsBeforeDeduplication} records before deduplication and {RecordsAfterDeduplication} records after deduplication in {ElapsedMilliseconds} ms.",
+            searchesExecuted,
+            recordsBeforeDeduplication,
+            recordsAfterDeduplication,
+            TimeProvider.System.GetElapsedTime(startedAt).TotalMilliseconds);
+    }
+
     private static EvidenceCandidate MapCandidate(Microsoft365SearchRecord record) => new(
         record.SourceType,
         record.Title,
@@ -85,4 +174,8 @@ public sealed class Microsoft365Connector(
         record.Url,
         record.ModifiedAt,
         record.RelevanceScore);
+
+    private sealed record ExpandedSearchResult(
+        IReadOnlyCollection<Microsoft365SearchRecord> Records,
+        Exception? Exception);
 }
