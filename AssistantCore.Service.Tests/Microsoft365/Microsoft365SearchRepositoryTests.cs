@@ -99,7 +99,12 @@ public sealed class Microsoft365SearchRepositoryTests
         Assert.Equal(
             "chunkId,title,content,siteId,driveId,driveItemId,url,modifiedAt",
             document.RootElement.GetProperty("select").GetString());
-        Assert.DoesNotContain("allowedUserIds", document.RootElement.GetProperty("select").GetString());
+        var selectedFields = document.RootElement.GetProperty("select").GetString();
+        Assert.DoesNotContain("organizationId", selectedFields, StringComparison.Ordinal);
+        Assert.DoesNotContain("allowedUserIds", selectedFields, StringComparison.Ordinal);
+        Assert.DoesNotContain("allowedGroupIds", selectedFields, StringComparison.Ordinal);
+        Assert.DoesNotContain("allowedSharePointGroupIds", selectedFields, StringComparison.Ordinal);
+        Assert.DoesNotContain("aclFingerprint", selectedFields, StringComparison.Ordinal);
         var vectorQuery = document.RootElement.GetProperty("vectorQueries")[0];
         Assert.Equal("contentVector", vectorQuery.GetProperty("fields").GetString());
         Assert.Equal(50, vectorQuery.GetProperty("k").GetInt32());
@@ -240,6 +245,50 @@ public sealed class Microsoft365SearchRepositoryTests
         var result = Assert.Single(results);
         Assert.Equal(strongChunkId, result.Reference);
         Assert.Equal(1.5, result.RelevanceScore);
+    }
+
+    [Theory, AutoDomainData]
+    public async Task Given_InvalidSecurityIdentifier_When_SearchAsync_Then_DoesNotCallAzure(
+        Guid organizationId,
+        string apiKey,
+        string query)
+    {
+        // Given
+        var requestCount = 0;
+        using var httpClient = new HttpClient(new StubHttpMessageHandler(_ =>
+        {
+            requestCount++;
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent("{\"value\":[]}")
+            };
+        }));
+        var repository = new Microsoft365SearchRepositoryAdapter(
+            new AzureAiSearchPassageSearchClient(httpClient),
+            Options.Create(new AzureAiSearchOptions
+            {
+                Endpoint = "https://search.example",
+                IndexName = "content-index",
+                ApiKey = apiKey
+            }));
+        var parameters = new Microsoft365SearchParameters(
+            query,
+            null,
+            null,
+            null,
+            new Microsoft365SearchSecurityContext(
+                organizationId,
+                "not-a-guid",
+                [],
+                []),
+            10);
+
+        // When
+        var action = () => repository.SearchAsync(parameters, CancellationToken.None);
+
+        // Then
+        await Assert.ThrowsAsync<ArgumentException>(action);
+        Assert.Equal(0, requestCount);
     }
 
     private sealed class StubEmbeddingGenerator(IReadOnlyList<float> vector)
