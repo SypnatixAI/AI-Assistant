@@ -17,6 +17,7 @@ public sealed class Microsoft365SearchRepositoryTests
         Guid userId,
         Guid firstGroupId,
         Guid secondGroupId,
+        Guid ownedGroupId,
         string apiKey,
         string query,
         string chunkId,
@@ -58,6 +59,7 @@ public sealed class Microsoft365SearchRepositoryTests
             new StubEmbeddingGenerator(queryVector));
         var dateFrom = new DateOnly(2026, 1, 2);
         var dateTo = new DateOnly(2026, 2, 3);
+        var sharePointGroupId = "spg:contoso.sharepoint.com,site-collection-id,web-id:5";
         var parameters = new Microsoft365SearchParameters(
             query,
             ["sharepoint"],
@@ -66,7 +68,12 @@ public sealed class Microsoft365SearchRepositoryTests
             new Microsoft365SearchSecurityContext(
                 organizationId,
                 userId.ToString("D"),
-                [firstGroupId.ToString("D"), secondGroupId.ToString("D")]),
+                [
+                    firstGroupId.ToString("D"),
+                    secondGroupId.ToString("D"),
+                    $"m365go:{ownedGroupId:D}"
+                ],
+                [sharePointGroupId]),
             10);
 
         // When
@@ -81,11 +88,16 @@ public sealed class Microsoft365SearchRepositoryTests
         Assert.Contains($"allowedUserIds/any(id: id eq '{userId:D}')", filter, StringComparison.Ordinal);
         Assert.Contains(firstGroupId.ToString("D"), filter, StringComparison.Ordinal);
         Assert.Contains(secondGroupId.ToString("D"), filter, StringComparison.Ordinal);
+        Assert.Contains($"m365go:{ownedGroupId:D}", filter, StringComparison.Ordinal);
+        Assert.Contains(
+            $"allowedSharePointGroupIds/any(id: search.in(id, '{sharePointGroupId}', '|'))",
+            filter,
+            StringComparison.Ordinal);
         Assert.Contains("sourceType eq 'sharepoint'", filter, StringComparison.Ordinal);
         Assert.Contains("modifiedAt ge 2026-01-02T00:00:00Z", filter, StringComparison.Ordinal);
         Assert.Contains("modifiedAt lt 2026-02-04T00:00:00Z", filter, StringComparison.Ordinal);
         Assert.Equal(
-            "chunkId,title,content,url,modifiedAt",
+            "chunkId,title,content,siteId,driveId,driveItemId,url,modifiedAt",
             document.RootElement.GetProperty("select").GetString());
         Assert.DoesNotContain("allowedUserIds", document.RootElement.GetProperty("select").GetString());
         var vectorQuery = document.RootElement.GetProperty("vectorQueries")[0];

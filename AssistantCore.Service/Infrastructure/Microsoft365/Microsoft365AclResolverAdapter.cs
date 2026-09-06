@@ -18,6 +18,9 @@ public sealed class Microsoft365AclResolverAdapter(
     IOptions<Microsoft365Options> options,
     ILogger<Microsoft365AclResolverAdapter> logger) : IMicrosoft365AclResolver
 {
+    private const string Microsoft365GroupClaimPrefix =
+        "c:0o.c|federateddirectoryclaimprovider|";
+
     public async Task<Microsoft365AclResolution> ResolveAsync(
         Organization organization,
         Microsoft365ContentReference contentReference,
@@ -114,8 +117,7 @@ public sealed class Microsoft365AclResolverAdapter(
             var roleEvaluation = roleEvaluator.EvaluateDriveItemRoles(permission.Roles);
             if (roleEvaluation == Microsoft365PermissionRoleEvaluation.Unresolved)
             {
-                return new Microsoft365AclResolution.Unresolved(
-                    Microsoft365AclResolutionFailureReason.UnsupportedPermission);
+                continue;
             }
 
             if (roleEvaluation == Microsoft365PermissionRoleEvaluation.NoReadAccess)
@@ -125,17 +127,33 @@ public sealed class Microsoft365AclResolverAdapter(
 
             if (permission.Link is not null)
             {
-                if (!string.Equals(
-                        permission.Link.Scope,
-                        "anonymous",
-                        StringComparison.OrdinalIgnoreCase))
+                if (string.Equals(
+                    permission.Link.Scope,
+                    "anonymous",
+                    StringComparison.OrdinalIgnoreCase))
                 {
-                    return new Microsoft365AclResolution.Unresolved(
-                        Microsoft365AclResolutionFailureReason.UnsupportedPermission);
+                    accumulator.HasAnonymousLink = true;
+                    accumulator.MarkRepresentable(permission.InheritedFrom is not null);
+                    continue;
                 }
 
-                accumulator.HasAnonymousLink = true;
-                continue;
+                if (string.Equals(
+                    permission.Link.Scope,
+                    "organization",
+                    StringComparison.OrdinalIgnoreCase))
+                {
+                    accumulator.HasOrganizationLink = true;
+                    accumulator.MarkRepresentable(permission.InheritedFrom is not null);
+                    continue;
+                }
+
+                if (!string.Equals(
+                    permission.Link.Scope,
+                    "users",
+                    StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
             }
 
             var identities = permission.GrantedToIdentitiesV2.ToList();
@@ -144,23 +162,31 @@ public sealed class Microsoft365AclResolverAdapter(
                 identities.Add(permission.GrantedToV2);
             }
 
-            if (identities.Count == 0
-                || identities.Any(identity => !TryAddDriveIdentity(
-                    contentReference.SiteId,
-                    identity,
-                    accumulator)))
+            var addedIdentity = false;
+            foreach (var identity in identities)
             {
-                return new Microsoft365AclResolution.Unresolved(
-                    Microsoft365AclResolutionFailureReason.UnknownPrincipal);
+                if (TryAddDriveIdentity(contentReference.SiteId, identity, accumulator))
+                {
+                    addedIdentity = true;
+                }
+                else
+                {
+                    accumulator.HasUnknownPrincipal = true;
+                }
             }
 
-            if (permission.InheritedFrom is null)
+            if (addedIdentity)
             {
-                accumulator.HasUniquePermissions = true;
+                accumulator.MarkRepresentable(permission.InheritedFrom is not null);
             }
         }
 
-        return accumulator.CreateResolution();
+        return accumulator.HasRepresentableGrant
+            ? accumulator.CreateResolution()
+            : new Microsoft365AclResolution.Unresolved(
+                accumulator.HasUnknownPrincipal
+                    ? Microsoft365AclResolutionFailureReason.UnknownPrincipal
+                    : Microsoft365AclResolutionFailureReason.UnsupportedPermission);
     }
 
     private async Task<Microsoft365AclResolution> ResolveListItemAsync(
@@ -257,6 +283,13 @@ public sealed class Microsoft365AclResolverAdapter(
 
         if (identity.Group is not null)
         {
+            if (IsMicrosoft365GroupOwnersClaim(identity))
+            {
+                return TryNormalize(
+                    () => identityNormalizer.NormalizeEntraGroupOwnerId(identity.Group.Id!),
+                    accumulator.EntraGroupIds);
+            }
+
             return TryNormalize(
                 () => identityNormalizer.NormalizeEntraGroupId(identity.Group.Id!),
                 accumulator.EntraGroupIds);
@@ -271,6 +304,16 @@ public sealed class Microsoft365AclResolverAdapter(
         }
 
         return false;
+    }
+
+    private static bool IsMicrosoft365GroupOwnersClaim(
+        MicrosoftDriveItemPermissionIdentitySet identity)
+    {
+        var loginName = identity.SiteUser?.LoginName ?? identity.Group?.LoginName;
+        return loginName?.StartsWith(
+                Microsoft365GroupClaimPrefix,
+                StringComparison.OrdinalIgnoreCase) == true
+            && loginName.EndsWith("_o", StringComparison.OrdinalIgnoreCase);
     }
 
     private bool TryAddSharePointPrincipal(
@@ -338,7 +381,22 @@ public sealed class Microsoft365AclResolverAdapter(
 
         public bool HasAnonymousLink { get; set; }
 
+        public bool HasOrganizationLink { get; set; }
+
         public bool HasUniquePermissions { get; set; }
+
+        public bool HasRepresentableGrant { get; private set; }
+
+        public bool HasUnknownPrincipal { get; set; }
+
+        public void MarkRepresentable(bool isInherited)
+        {
+            HasRepresentableGrant = true;
+            if (!isInherited)
+            {
+                HasUniquePermissions = true;
+            }
+        }
 
         public Microsoft365AclResolution CreateResolution() =>
             new Microsoft365AclResolution.ResolvedAcl(new Microsoft365Acl(
@@ -346,6 +404,7 @@ public sealed class Microsoft365AclResolverAdapter(
                 EntraGroupIds,
                 SharePointGroupIds,
                 HasAnonymousLink,
+                HasOrganizationLink,
                 HasUniquePermissions
                     ? Microsoft365AclInheritance.Unique
                     : Microsoft365AclInheritance.Inherited));

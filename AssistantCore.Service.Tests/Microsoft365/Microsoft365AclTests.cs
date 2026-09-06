@@ -18,11 +18,13 @@ public sealed class Microsoft365AclTests
             [groupId, groupId],
             [sharePointGroupId, sharePointGroupId],
             false,
+            false,
             inheritance);
         var equivalentAcl = new Microsoft365Acl(
             [firstUserId, secondUserId],
             [groupId],
             [sharePointGroupId],
+            false,
             false,
             inheritance);
 
@@ -51,17 +53,48 @@ public sealed class Microsoft365AclTests
             [],
             [],
             false,
+            false,
             inheritance);
         var changed = new Microsoft365Acl(
             [secondUserId],
             [],
             [],
             false,
+            false,
             inheritance);
 
         // When
         var originalFingerprint = original.Fingerprint;
         var changedFingerprint = changed.Fingerprint;
+
+        // Then
+        Assert.NotEqual(originalFingerprint, changedFingerprint);
+    }
+
+    [Theory, AutoDomainData]
+    public void Given_AChangedOrganizationLink_When_Microsoft365Acl_Then_ChangesFingerprint(
+        string userId,
+        Microsoft365AclInheritance inheritance)
+    {
+        // Given
+        var withoutOrganizationLink = new Microsoft365Acl(
+            [userId],
+            [],
+            [],
+            false,
+            false,
+            inheritance);
+        var withOrganizationLink = new Microsoft365Acl(
+            [userId],
+            [],
+            [],
+            false,
+            true,
+            inheritance);
+
+        // When
+        var originalFingerprint = withoutOrganizationLink.Fingerprint;
+        var changedFingerprint = withOrganizationLink.Fingerprint;
 
         // Then
         Assert.NotEqual(originalFingerprint, changedFingerprint);

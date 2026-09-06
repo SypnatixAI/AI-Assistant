@@ -12,9 +12,11 @@ public sealed class MicrosoftGraphDriveItemDeltaClientTests
         // Given
         const string deltaLink = "https://graph.microsoft.com/v1.0/drives/drive/root/delta?token=opaque%2Bvalue%3D%3D";
         var requestUris = new List<Uri>();
+        var preferHeaders = new List<string>();
         using var httpClient = new HttpClient(new StubHttpMessageHandler(request =>
         {
             requestUris.Add(request.RequestUri!);
+            preferHeaders.Add(string.Join(",", request.Headers.GetValues("Prefer")));
             return requestUris.Count == 1
                 ? CreateResponse("{\"value\":[{\"id\":\"file-1\",\"name\":\"report.pdf\",\"eTag\":\"etag-1\",\"size\":42,\"file\":{\"mimeType\":\"application/pdf\"}}],\"@odata.nextLink\":\"https://graph.microsoft.com/v1.0/drives/drive/root/delta?$skiptoken=page-2\"}")
                 : CreateResponse($"{{\"value\":[{{\"id\":\"folder-1\",\"folder\":{{}},\"deleted\":{{\"state\":\"deleted\"}}}}],\"@odata.deltaLink\":\"{deltaLink}\"}}");
@@ -46,6 +48,13 @@ public sealed class MicrosoftGraphDriveItemDeltaClientTests
         Assert.True(deletedFolder.IsFolder);
         Assert.Equal(deltaLink, deletedPage.DeltaLink);
         Assert.Equal("/v1.0/drives/drive%2Fid/root/delta", requestUris[0].AbsolutePath);
+        Assert.All(preferHeaders, header =>
+        {
+            Assert.Contains("hierarchicalsharing", header, StringComparison.Ordinal);
+            Assert.Contains("deltashowremovedasdeleted", header, StringComparison.Ordinal);
+            Assert.Contains("deltatraversepermissiongaps", header, StringComparison.Ordinal);
+            Assert.Contains("deltashowsharingchanges", header, StringComparison.Ordinal);
+        });
     }
 
     [Theory, AutoDomainData]

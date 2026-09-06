@@ -138,7 +138,8 @@ public sealed class ConversationRepository(AssistantCoreDbContext dbContext)
                 && message.Conversation.OrganizationId == organizationId
                 && message.Conversation.OwnerMemberId == ownerMemberId
                 && message.Conversation.DeletedAt == null
-                && message.ProcessingStatus == MessageProcessingStatus.Completed)
+                && message.ProcessingStatus == MessageProcessingStatus.Completed
+                && !message.Sources.Any(source => source.SourceType == "Microsoft365"))
             .OrderBy(message => message.CreatedAt)
             .ThenBy(message => message.Id)
             .Select(message => new ConversationMessageItem(

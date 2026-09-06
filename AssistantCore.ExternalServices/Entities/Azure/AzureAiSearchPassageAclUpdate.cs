@@ -6,4 +6,5 @@ public sealed record AzureAiSearchPassageAclUpdate(
     IReadOnlyCollection<string> AllowedGroupIds,
     IReadOnlyCollection<string> AllowedSharePointGroupIds,
     bool HasAnonymousLink,
+    bool HasOrganizationLink,
     string AclFingerprint);

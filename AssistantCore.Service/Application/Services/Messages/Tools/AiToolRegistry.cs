@@ -87,8 +87,10 @@ public sealed class AiToolRegistry(
                         items = new { type = "string", @enum = allowedSourceTypes },
                         description = "Sources a limiter, ou null pour toutes les sources autorisees."
                     }),
-                    ["dateFrom"] = NullableDateProperty("Date minimale des contenus."),
-                    ["dateTo"] = NullableDateProperty("Date maximale des contenus.")
+                    ["dateFrom"] = NullableDateProperty(
+                        "Date minimale de modification des fichiers. Ne filtre pas les dates mentionnees dans leur contenu."),
+                    ["dateTo"] = NullableDateProperty(
+                        "Date maximale de modification des fichiers. Ne filtre pas les dates mentionnees dans leur contenu.")
                 }));
     }
 

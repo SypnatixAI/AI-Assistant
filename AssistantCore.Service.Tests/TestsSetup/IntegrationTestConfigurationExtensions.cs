@@ -10,6 +10,7 @@ internal static class IntegrationTestConfigurationExtensions
         {
             ["AiModels:Providers:OpenAI:ApiKey"] = "integration-test-secret",
             ["Microsoft365:ClientSecret"] = "integration-test-secret",
+            ["Microsoft365:ClientStateHmacKey"] = "integration-test-client-state-hmac-key",
             ["Microsoft365:ConsentCallbackUrl"] =
                 "https://localhost:7292/api/microsoft365/consent/callback",
             ["Microsoft365:ConsentSuccessRedirectUrl"] =

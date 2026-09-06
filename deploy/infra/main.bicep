@@ -196,6 +196,21 @@ var apiSecrets = isDev
         identity: workloadIdentity.id
       }
       {
+        name: 'microsoft365-clientstate-hmac-key'
+        keyVaultUrl: '${keyVaultBaseUrl}/microsoft365-clientstate-hmac-key'
+        identity: workloadIdentity.id
+      }
+      {
+        name: 'microsoft365-sharepoint-certificate-pfx'
+        keyVaultUrl: '${keyVaultBaseUrl}/microsoft365-sharepoint-certificate-pfx'
+        identity: workloadIdentity.id
+      }
+      {
+        name: 'microsoft365-sharepoint-certificate-password'
+        keyVaultUrl: '${keyVaultBaseUrl}/microsoft365-sharepoint-certificate-password'
+        identity: workloadIdentity.id
+      }
+      {
         name: 'openai-api-key'
         keyVaultUrl: '${keyVaultBaseUrl}/openai-api-key'
         identity: workloadIdentity.id
@@ -285,6 +300,18 @@ var certifApiEnvironmentVariables = [
   {
     name: 'Microsoft365__ClientSecret'
     secretRef: 'microsoft365-client-secret'
+  }
+  {
+    name: 'Microsoft365__ClientStateHmacKey'
+    secretRef: 'microsoft365-clientstate-hmac-key'
+  }
+  {
+    name: 'Microsoft365__SharePointCertificateBase64'
+    secretRef: 'microsoft365-sharepoint-certificate-pfx'
+  }
+  {
+    name: 'Microsoft365__SharePointCertificatePassword'
+    secretRef: 'microsoft365-sharepoint-certificate-password'
   }
   {
     name: 'Microsoft365__EmbeddingApiKey'
@@ -395,6 +422,11 @@ var workerSecrets = isDev
         identity: workloadIdentity.id
       }
       {
+        name: 'microsoft365-clientstate-hmac-key'
+        keyVaultUrl: '${keyVaultBaseUrl}/microsoft365-clientstate-hmac-key'
+        identity: workloadIdentity.id
+      }
+      {
         name: 'openai-api-key'
         keyVaultUrl: '${keyVaultBaseUrl}/openai-api-key'
         identity: workloadIdentity.id
@@ -462,6 +494,10 @@ var certifWorkerEnvironmentVariables = [
     secretRef: 'microsoft365-client-secret'
   }
   {
+    name: 'Microsoft365__ClientStateHmacKey'
+    secretRef: 'microsoft365-clientstate-hmac-key'
+  }
+  {
     name: 'Microsoft365__EmbeddingApiKey'
     secretRef: 'openai-api-key'
   }
@@ -507,9 +543,9 @@ resource worker 'Microsoft.App/containerApps@2024-03-01' = {
         }
       ]
       scale: {
-        // The DEV deployment starts the worker temporarily.
-        // CERTIF remains controlled by the explicit start/stop workflow.
-        minReplicas: 0
+        // DEV remains explicitly controlled. CERTIF must continuously reconcile
+        // Microsoft 365 content and permissions.
+        minReplicas: isDev ? 0 : 1
         maxReplicas: 1
       }
     }

@@ -27,6 +27,7 @@ public sealed class AiToolArgumentSecurityValidator : IAiToolArgumentSecurityVal
             "allowedGroupIds",
             "allowedSharePointGroupIds",
             "hasAnonymousLink",
+            "hasOrganizationLink",
             "aclFingerprint"
         ],
         StringComparer.OrdinalIgnoreCase);

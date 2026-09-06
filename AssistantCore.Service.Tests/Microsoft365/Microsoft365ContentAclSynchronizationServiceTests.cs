@@ -168,7 +168,7 @@ public sealed class Microsoft365ContentAclSynchronizationServiceTests
             TimeProvider.System);
 
     private static Microsoft365Acl CreateAcl(string userId) =>
-        new([userId], [], [], false, Microsoft365AclInheritance.Unique);
+        new([userId], [], [], false, false, Microsoft365AclInheritance.Unique);
 
     private static Microsoft365IndexedContent CreateContent(
         Guid organizationId,

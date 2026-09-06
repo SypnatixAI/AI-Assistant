@@ -15,5 +15,6 @@ public sealed record MessageUserContext(
             Guid.TryParse(Member.ExternalUserId, out var entraUserId)
                 ? entraUserId
                 : null,
-            Member.IdentityProvider);
+            Member.IdentityProvider,
+            UserEmail: Member.Email);
 }

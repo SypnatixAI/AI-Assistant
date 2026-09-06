@@ -25,6 +25,8 @@ public static class Microsoft365ServiceCollectionExtensions
                     && Guid.TryParse(options.ClientId, out var clientId)
                     && clientId != Guid.Empty
                     && !string.IsNullOrWhiteSpace(options.ClientSecret)
+                    && options.ClientStateHmacKey.Length >= 32
+                    && HasValidSharePointCertificateConfiguration(options)
                     && IsHttpsUrl(options.ConsentCallbackUrl)
                     && IsSecureOrLoopbackUrl(options.ConsentSuccessRedirectUrl)
                     && IsSecureOrLoopbackUrl(options.ConsentErrorRedirectUrl)
@@ -41,6 +43,9 @@ public static class Microsoft365ServiceCollectionExtensions
                     && options.MaximumExtractionFileSizeBytes > 0
                     && options.MaximumExtractionExpandedSizeBytes >= options.MaximumExtractionFileSizeBytes
                     && options.MaximumExtractedCharacters > 0
+                    && options.MaximumExcelSheets > 0
+                    && options.MaximumExcelCells > 0
+                    && options.SharePointGroupCacheMinutes > 0
                     && options.ChunkMaximumTokens > 0
                     && options.ChunkOverlapTokens >= 0
                     && options.ChunkOverlapTokens < options.ChunkMaximumTokens
@@ -52,7 +57,7 @@ public static class Microsoft365ServiceCollectionExtensions
                     && options.DocumentWorkLeaseMinutes > 0
                     && options.DocumentWorkRetryMinutes > 0
                     && options.DocumentWorkMaximumAttempts > 0,
-                "Microsoft365 requires HTTPS URLs, credentials, valid lifetimes, and valid subscription renewal settings.")
+                "Microsoft365 requires HTTPS URLs, credentials, a client-state HMAC key of at least 32 characters, paired SharePoint certificate settings, valid lifetimes, and valid limits.")
             .ValidateOnStart();
 
         services.AddOptions<ServiceBusOptions>()
@@ -88,6 +93,9 @@ public static class Microsoft365ServiceCollectionExtensions
         AddProtectedHttpClient<MicrosoftGraphDriveItemPermissionClient>(services);
         AddProtectedHttpClient<MicrosoftSharePointListItemPermissionClient>(services);
         services.AddSingleton<MicrosoftWordContentExtractorClient>();
+        services.AddSingleton<MicrosoftExcelContentExtractorClient>();
+        services.AddSingleton<MicrosoftCertificateIdentityClient>();
+        AddProtectedHttpClient<MicrosoftSharePointUserGroupClient>(services);
         services.AddHttpClient<AzureAiSearchPassageAclClient>()
             .RedactLoggedHeaders(["api-key", "Authorization"]);
         services.AddHttpClient<AzureAiSearchPassageSearchClient>()
@@ -107,9 +115,11 @@ public static class Microsoft365ServiceCollectionExtensions
         services.AddScoped<IMicrosoft365SubscriptionClient, Microsoft365SubscriptionClientAdapter>();
         services.AddScoped<IMicrosoft365AclResolver, Microsoft365AclResolverAdapter>();
         services.AddScoped<IMicrosoft365UserGroupResolver, Microsoft365UserGroupResolverAdapter>();
+        services.AddScoped<IMicrosoft365SharePointGroupResolver, Microsoft365SharePointGroupResolverAdapter>();
         services.AddScoped<IMicrosoft365PassageAclWriter, Microsoft365PassageAclWriterAdapter>();
         services.AddScoped<IMicrosoft365PassageIndexWriter, Microsoft365PassageIndexWriterAdapter>();
         services.AddScoped<IMicrosoft365ContentExtractor, Microsoft365WordContentExtractorAdapter>();
+        services.AddScoped<IMicrosoft365ContentExtractor, Microsoft365ExcelContentExtractorAdapter>();
         services.AddScoped<IMicrosoft365EmbeddingGenerator, Microsoft365EmbeddingGeneratorAdapter>();
         services.AddScoped<IMicrosoft365SearchIndexInitializer, Microsoft365SearchIndexInitializerAdapter>();
         services.AddSingleton<IMicrosoft365ClientStateProtector, Microsoft365ClientStateProtectorAdapter>();
@@ -148,6 +158,16 @@ public static class Microsoft365ServiceCollectionExtensions
     private static bool IsServiceBusNamespace(string value) =>
         Uri.CheckHostName(value) == UriHostNameType.Dns
         && !value.Contains("://", StringComparison.Ordinal);
+
+    private static bool HasValidSharePointCertificateConfiguration(Microsoft365Options options)
+    {
+        var hasCertificatePath = !string.IsNullOrWhiteSpace(options.SharePointCertificatePath);
+        var hasCertificateBase64 = !string.IsNullOrWhiteSpace(options.SharePointCertificateBase64);
+        var hasCertificatePassword = !string.IsNullOrWhiteSpace(options.SharePointCertificatePassword);
+
+        return !(hasCertificatePath && hasCertificateBase64)
+            && ((hasCertificatePath || hasCertificateBase64) == hasCertificatePassword);
+    }
 
     private static void AddProtectedHttpClient<TClient>(IServiceCollection services)
         where TClient : class =>

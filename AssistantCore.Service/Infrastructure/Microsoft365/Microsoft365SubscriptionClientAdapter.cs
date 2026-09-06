@@ -46,6 +46,7 @@ public sealed class Microsoft365SubscriptionClientAdapter(
     public async Task<Microsoft365SubscriptionRenewalResult> RenewAsync(
         string tenantId,
         string subscriptionId,
+        string notificationUrl,
         DateTimeOffset expiresAt,
         CancellationToken cancellationToken = default)
     {
@@ -57,6 +58,7 @@ public sealed class Microsoft365SubscriptionClientAdapter(
                 configuration.GraphBaseUrl,
                 accessToken,
                 subscriptionId,
+                notificationUrl,
                 expiresAt,
                 cancellationToken);
             return new Microsoft365SubscriptionRenewalResult(
@@ -64,6 +66,15 @@ public sealed class Microsoft365SubscriptionClientAdapter(
                 new Microsoft365SubscriptionResult(result.Id, result.Resource, result.ExpiresAt));
         }
         catch (MicrosoftExternalException exception) when (exception.StatusCode == HttpStatusCode.NotFound)
+        {
+            return Microsoft365SubscriptionRenewalResult.NotFound;
+        }
+        catch (MicrosoftExternalException exception) when (
+            exception.StatusCode == HttpStatusCode.BadRequest
+            && string.Equals(exception.ErrorCode, "ValidationError", StringComparison.OrdinalIgnoreCase)
+            && exception.Message.Contains(
+                "Subscription validation request failed",
+                StringComparison.OrdinalIgnoreCase))
         {
             return Microsoft365SubscriptionRenewalResult.NotFound;
         }

@@ -8,6 +8,7 @@ using AssistantCore.Service.Application.Models.Messages.Orchestration;
 using AssistantCore.Service.Application.Models.Messages.Tools;
 using AssistantCore.Service.Application.Services.Messages.Evidence;
 using AssistantCore.Service.Application.Services.Messages.Orchestration;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace AssistantCore.Service.Tests.Messages;
 
@@ -36,7 +37,7 @@ public sealed class OrchestrationResultBuilderTests
             AiModelDecisionType.Answer,
             "  Supported answer.  ",
             [evidence.EvidenceId]);
-        var builder = new OrchestrationResultBuilder(new EvidenceCitationResolver());
+        var builder = CreateBuilder();
 
         // When
         var result = builder.Build(state, response);
@@ -68,7 +69,7 @@ public sealed class OrchestrationResultBuilderTests
             AiModelDecisionType.InsufficientInformation,
             Answer: "The sources are temporarily unavailable.",
             CitedEvidenceIds: []);
-        var builder = new OrchestrationResultBuilder(new EvidenceCitationResolver());
+        var builder = CreateBuilder();
 
         // When
         var exception = Record.Exception(() => builder.Build(state, response));
@@ -88,13 +89,13 @@ public sealed class OrchestrationResultBuilderTests
             AiModelDecisionType.Answer,
             "   ",
             []);
-        var builder = new OrchestrationResultBuilder(new EvidenceCitationResolver());
+        var builder = CreateBuilder();
 
         // When
         var exception = Record.Exception(() => builder.Build(state, response));
 
         // Then
-        Assert.IsType<AiProviderInvalidResponseException>(exception);
+        Assert.IsAssignableFrom<AiProviderInvalidResponseException>(exception);
     }
 
     [Theory, AutoDomainData]
@@ -109,7 +110,7 @@ public sealed class OrchestrationResultBuilderTests
             AiModelDecisionType.Answer,
             expectedAnswer,
             CitedEvidenceIds: []);
-        var builder = new OrchestrationResultBuilder(new EvidenceCitationResolver());
+        var builder = CreateBuilder();
 
         // When
         var result = builder.Build(state, response);
@@ -131,7 +132,7 @@ public sealed class OrchestrationResultBuilderTests
             AiModelDecisionType.InsufficientInformation,
             expectedAnswer,
             CitedEvidenceIds: []);
-        var builder = new OrchestrationResultBuilder(new EvidenceCitationResolver());
+        var builder = CreateBuilder();
 
         // When
         var result = builder.Build(state, response);
@@ -157,7 +158,7 @@ public sealed class OrchestrationResultBuilderTests
             AiModelDecisionType.Answer,
             $"Supported answer. [{evidence.EvidenceId}]",
             [evidence.EvidenceId]);
-        var builder = new OrchestrationResultBuilder(new EvidenceCitationResolver());
+        var builder = CreateBuilder();
 
         // When
         var result = builder.Build(state, response);
@@ -179,13 +180,65 @@ public sealed class OrchestrationResultBuilderTests
             AiModelDecisionType.Answer,
             "Supported answer.",
             [unknownEvidenceId]);
-        var builder = new OrchestrationResultBuilder(new EvidenceCitationResolver());
+        var builder = CreateBuilder();
 
         // When
         var exception = Record.Exception(() => builder.Build(state, response));
 
         // Then
-        Assert.IsType<AiProviderInvalidResponseException>(exception);
+        Assert.IsAssignableFrom<AiProviderInvalidResponseException>(exception);
+    }
+
+    [Theory, AutoDomainData]
+    public void Given_KnownAndUnknownEvidenceIdentifiersBeforeRepair_When_Build_Then_RejectsTheProviderResponse(
+        StartedMessageProcessing processing,
+        DateTimeOffset startedAtUtc)
+    {
+        // Given
+        var state = CreateState(processing, startedAtUtc);
+        var evidence = CreateEvidence("evidence-known");
+        state.RecordToolResults(
+        [
+            ToolExecutionResult.Succeeded("call-1", [evidence])
+        ]);
+        var response = CreateResponse(
+            AiModelDecisionType.Answer,
+            "Supported answer.",
+            [evidence.EvidenceId, "unknown-evidence"]);
+        var builder = CreateBuilder();
+
+        // When
+        var exception = Record.Exception(() => builder.Build(state, response));
+
+        // Then
+        Assert.IsType<AiProviderInvalidCitationResponseException>(exception);
+    }
+
+    [Theory, AutoDomainData]
+    public void Given_KnownAndUnknownEvidenceIdentifiersDuringRepair_When_Build_Then_ReturnsOnlyKnownCitations(
+        StartedMessageProcessing processing,
+        DateTimeOffset startedAtUtc)
+    {
+        // Given
+        var state = CreateState(processing, startedAtUtc);
+        var evidence = CreateEvidence("evidence-known");
+        state.RecordToolResults(
+        [
+            ToolExecutionResult.Succeeded("call-1", [evidence])
+        ]);
+        state.RequireCitationRepairResponse();
+        var response = CreateResponse(
+            AiModelDecisionType.Answer,
+            "Supported answer.",
+            [evidence.EvidenceId, "unknown-evidence"]);
+        var builder = CreateBuilder();
+
+        // When
+        var result = builder.Build(state, response);
+
+        // Then
+        Assert.Equal("Supported answer.", result.Answer);
+        Assert.Equal([evidence], result.CitedEvidence);
     }
 
     [Theory, AutoDomainData]
@@ -203,7 +256,7 @@ public sealed class OrchestrationResultBuilderTests
             AiModelDecisionType.Answer,
             "Uncited answer.",
             CitedEvidenceIds: []);
-        var builder = new OrchestrationResultBuilder(new EvidenceCitationResolver());
+        var builder = CreateBuilder();
 
         // When
         var exception = Record.Exception(() => builder.Build(state, response));
@@ -248,6 +301,11 @@ public sealed class OrchestrationResultBuilderTests
                 Answer,
                 CitedEvidenceIds),
             new AiModelUsage(0, 0, 0, 0, EstimatedCost: null));
+
+    private static OrchestrationResultBuilder CreateBuilder() =>
+        new(
+            new EvidenceCitationResolver(),
+            NullLogger<OrchestrationResultBuilder>.Instance);
 
     private static IReadOnlyCollection<AiRequestedToolCall> CreateToolCalls(int count) =>
         Enumerable.Range(1, count)

@@ -4,5 +4,7 @@ public enum Microsoft365ContentExtractionWarning
 {
     MacroIgnored,
     ExternalLinkIgnored,
-    EmbeddedObjectIgnored
+    EmbeddedObjectIgnored,
+    HiddenSheetIgnored,
+    FormulaValueUnavailable
 }
