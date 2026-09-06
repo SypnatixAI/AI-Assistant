@@ -9,6 +9,7 @@ partagent le même magasin local `user-secrets` :
 
 ```bash
 dotnet user-secrets --project AssistantCore.Service set "Microsoft365:ClientSecret" "<secret>"
+dotnet user-secrets --project AssistantCore.Service set "Microsoft365:ClientStateHmacKey" "<32+ caracteres aleatoires>"
 dotnet user-secrets --project AssistantCore.Service set "Microsoft365:SharePointCertificatePath" "<absolute-pfx-path>"
 dotnet user-secrets --project AssistantCore.Service set "Microsoft365:SharePointCertificatePassword" "<pfx-password>"
 dotnet user-secrets --project AssistantCore.Service set "ConnectionStrings:AssistantCoreDatabase" "<connection-string>"
