@@ -9,6 +9,7 @@ public interface IMicrosoft365SearchAccessVerifier
         string externalTenantId,
         string entraUserId,
         IReadOnlyCollection<string> entraGroupIds,
+        IReadOnlyCollection<string> sharePointGroupIds,
         IReadOnlyCollection<Microsoft365SearchRecord> records,
         CancellationToken cancellationToken);
 }

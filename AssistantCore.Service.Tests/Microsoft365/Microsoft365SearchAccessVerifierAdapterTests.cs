@@ -9,6 +9,77 @@ namespace AssistantCore.Service.Tests.Microsoft365;
 public sealed class Microsoft365SearchAccessVerifierAdapterTests
 {
     [Theory, AutoDomainData]
+    public async Task Given_FreshAclGrantsCurrentGroupOwner_When_KeepAuthorizedAsync_Then_KeepsRecord(
+        Guid organizationId,
+        Guid userId,
+        Guid ownedGroupId,
+        string tenantId,
+        string title,
+        string content)
+    {
+        // Given
+        var record = CreateRecord(title, content);
+        var groupOwnerId = $"m365go:{ownedGroupId:D}";
+        var acl = new Microsoft365Acl(
+            [],
+            [groupOwnerId],
+            [],
+            false,
+            false,
+            Microsoft365AclInheritance.Unique);
+        var verifier = new Microsoft365SearchAccessVerifierAdapter(
+            new AclResolverFake(new Microsoft365AclResolution.ResolvedAcl(acl)));
+
+        // When
+        var results = await verifier.KeepAuthorizedAsync(
+            organizationId,
+            tenantId,
+            userId.ToString("D"),
+            [groupOwnerId],
+            [],
+            [record],
+            CancellationToken.None);
+
+        // Then
+        Assert.Equal([record], results);
+    }
+
+    [Theory, AutoDomainData]
+    public async Task Given_FreshAclGrantsCurrentSharePointGroup_When_KeepAuthorizedAsync_Then_KeepsRecord(
+        Guid organizationId,
+        Guid userId,
+        string allowedSharePointGroupId,
+        string tenantId,
+        string title,
+        string content)
+    {
+        // Given
+        var record = CreateRecord(title, content);
+        var acl = new Microsoft365Acl(
+            [],
+            [],
+            [allowedSharePointGroupId],
+            false,
+            false,
+            Microsoft365AclInheritance.Unique);
+        var verifier = new Microsoft365SearchAccessVerifierAdapter(
+            new AclResolverFake(new Microsoft365AclResolution.ResolvedAcl(acl)));
+
+        // When
+        var results = await verifier.KeepAuthorizedAsync(
+            organizationId,
+            tenantId,
+            userId.ToString("D"),
+            [],
+            [allowedSharePointGroupId],
+            [record],
+            CancellationToken.None);
+
+        // Then
+        Assert.Equal([record], results);
+    }
+
+    [Theory, AutoDomainData]
     public async Task Given_FreshAclGrantsCurrentGroup_When_KeepAuthorizedAsync_Then_KeepsRecord(
         Guid organizationId,
         Guid userId,
@@ -35,6 +106,7 @@ public sealed class Microsoft365SearchAccessVerifierAdapterTests
             tenantId,
             userId.ToString("D"),
             [allowedGroupId.ToString("D")],
+            [],
             [record],
             CancellationToken.None);
 
@@ -67,6 +139,7 @@ public sealed class Microsoft365SearchAccessVerifierAdapterTests
             organizationId,
             tenantId,
             userId.ToString("D"),
+            [],
             [],
             [CreateRecord(title, content)],
             CancellationToken.None);
@@ -104,6 +177,7 @@ public sealed class Microsoft365SearchAccessVerifierAdapterTests
             tenantId,
             userId.ToString("D"),
             [],
+            [],
             [CreateRecord(title, content)],
             CancellationToken.None);
 
@@ -129,6 +203,7 @@ public sealed class Microsoft365SearchAccessVerifierAdapterTests
             organizationId,
             tenantId,
             userId.ToString("D"),
+            [],
             [],
             [CreateRecord(title, content)],
             CancellationToken.None);

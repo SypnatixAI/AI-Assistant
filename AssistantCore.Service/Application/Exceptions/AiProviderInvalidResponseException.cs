@@ -1,6 +1,6 @@
 namespace AssistantCore.Service.Application.Exceptions;
 
-public sealed class AiProviderInvalidResponseException(string providerName)
+public class AiProviderInvalidResponseException(string providerName)
     : AiProviderException(
         providerName,
         "AI_PROVIDER_INVALID_RESPONSE",

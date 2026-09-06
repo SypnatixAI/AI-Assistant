@@ -285,7 +285,9 @@ public sealed class Microsoft365AclResolverAdapter(
         {
             if (IsMicrosoft365GroupOwnersClaim(identity))
             {
-                return false;
+                return TryNormalize(
+                    () => identityNormalizer.NormalizeEntraGroupOwnerId(identity.Group.Id!),
+                    accumulator.EntraGroupIds);
             }
 
             return TryNormalize(

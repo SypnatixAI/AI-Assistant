@@ -201,6 +201,16 @@ var apiSecrets = isDev
         identity: workloadIdentity.id
       }
       {
+        name: 'microsoft365-sharepoint-certificate-pfx'
+        keyVaultUrl: '${keyVaultBaseUrl}/microsoft365-sharepoint-certificate-pfx'
+        identity: workloadIdentity.id
+      }
+      {
+        name: 'microsoft365-sharepoint-certificate-password'
+        keyVaultUrl: '${keyVaultBaseUrl}/microsoft365-sharepoint-certificate-password'
+        identity: workloadIdentity.id
+      }
+      {
         name: 'openai-api-key'
         keyVaultUrl: '${keyVaultBaseUrl}/openai-api-key'
         identity: workloadIdentity.id
@@ -294,6 +304,14 @@ var certifApiEnvironmentVariables = [
   {
     name: 'Microsoft365__ClientStateHmacKey'
     secretRef: 'microsoft365-clientstate-hmac-key'
+  }
+  {
+    name: 'Microsoft365__SharePointCertificateBase64'
+    secretRef: 'microsoft365-sharepoint-certificate-pfx'
+  }
+  {
+    name: 'Microsoft365__SharePointCertificatePassword'
+    secretRef: 'microsoft365-sharepoint-certificate-password'
   }
   {
     name: 'Microsoft365__EmbeddingApiKey'

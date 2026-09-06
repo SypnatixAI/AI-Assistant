@@ -1739,10 +1739,9 @@ changements hérités qui pourraient ne pas produire une notification fiable.
 <a id="m365-sharepoint-local-groups"></a>
 ### Groupes SharePoint locaux
 
-Cette capacité est documentée pour une livraison ultérieure. Elle ne fait pas
-partie du périmètre actuel. Tant qu’elle n’est pas implémentée, un contenu dont
-le seul accès passe par un groupe SharePoint local reste invisible dans les
-résultats AssistantCore.
+Cette capacité permet à AssistantCore de retrouver un contenu dont l’accès
+passe par un groupe SharePoint local, après avoir confirmé que le membre
+authentifié appartient encore à ce groupe au moment de la recherche.
 
 Un groupe SharePoint local est créé dans un site SharePoint précis. Les groupes
 par défaut `Membres`, `Visiteurs` et `Propriétaires` du site sont des exemples
@@ -1817,7 +1816,8 @@ identifiants dans `allowedSharePointGroupIds` pour chaque passage concerné.
    applicatif`. Lorsque le modèle choisit l’outil Microsoft 365, le connecteur
    Infrastructure reçoit le contexte d’exécution déjà validé.
 3. Le connecteur récupère d’abord les groupes Microsoft Entra du membre avec
-   Microsoft Graph.
+   Microsoft Graph. Il récupère aussi les groupes Microsoft 365 dont ce membre
+   est propriétaire.
 4. Pour chaque site SharePoint autorisé dans l’organisation, un adapter
    Infrastructure demande un token limité à l’origine
    `https://<tenant>.sharepoint.com/.default`.
@@ -1844,6 +1844,12 @@ ET
 )
 ```
 
+Les claims SharePoint terminés par `_o` représentent uniquement les
+propriétaires d’un groupe Microsoft 365. Ils sont indexés sous la forme
+`m365go:<groupId>` et comparés aux groupes réellement possédés par le membre.
+Ils ne sont jamais remplacés par le simple identifiant Entra du groupe, car ce
+remplacement donnerait incorrectement l’accès à tous ses membres.
+
 #### Authentification SharePoint
 
 Microsoft Graph continue d’utiliser le secret client existant. L’API REST
@@ -1868,10 +1874,13 @@ l’accès.
 Les modifications de membres d’un groupe SharePoint doivent être détectées par
 une réconciliation planifiée et testées séparément.
 
-Un token refusé, un certificat absent ou expiré, une permission SharePoint
-manquante, une réponse partielle ou une indisponibilité de SharePoint fait
-échouer la recherche Microsoft 365 de manière contrôlée. Le backend ne retire
-jamais le filtre pour maintenir artificiellement la disponibilité.
+Sans certificat configuré, les contenus accessibles uniquement par un groupe
+SharePoint local restent invisibles, sans retirer les protections existantes
+pour les utilisateurs et groupes Entra. Lorsqu’un certificat est configuré,
+un token refusé, un certificat expiré, une permission SharePoint manquante, une
+réponse partielle ou une indisponibilité de SharePoint fait échouer la
+résolution. Le backend ne retire jamais le filtre pour maintenir
+artificiellement la disponibilité.
 
 ### Utilisateurs invités externes
 
@@ -2031,6 +2040,9 @@ Configuration non secrète attendue :
     "ClientId": "<application-multitenant>",
     "AuthorityBaseUrl": "https://login.microsoftonline.com",
     "GraphBaseUrl": "https://graph.microsoft.com",
+    "SharePointCertificatePath": "",
+    "SharePointCertificateBase64": "",
+    "SharePointGroupCacheMinutes": 5,
     "ConsentCallbackUrl": "https://<api>/api/microsoft365/consent/callback",
     "ConsentSuccessRedirectUrl": "https://<frontend>/microsoft365/consent/success",
     "ConsentErrorRedirectUrl": "https://<frontend>/microsoft365/consent/error",
@@ -2071,6 +2083,10 @@ Le démarrage refuse une URL non HTTPS, un `ClientId` vide, un secret absent ou
 une durée de `state` hors de la plage de 1 à 60 minutes. Le secret reste absent
 des fichiers versionnés et provient de `user-secrets` en local.
 
+`SharePointCertificatePath` et `SharePointCertificateBase64` sont mutuellement
+exclusifs. Le chemin est utilisé en local. CERTIF injecte le PFX encodé en
+Base64 et son mot de passe depuis Key Vault.
+
 La valeur `Dimensions` est un exemple et doit correspondre au modèle
 réellement choisi.
 
@@ -2081,6 +2097,8 @@ Le secret de l’App Registration Microsoft 365 est configuré sans être ajout�
 
 ```bash
 dotnet user-secrets --project AssistantCore.Service set "Microsoft365:ClientSecret" "<secret>"
+dotnet user-secrets --project AssistantCore.Service set "Microsoft365:SharePointCertificatePath" "<chemin-absolu-du-pfx>"
+dotnet user-secrets --project AssistantCore.Service set "Microsoft365:SharePointCertificatePassword" "<mot-de-passe-du-pfx>"
 dotnet user-secrets --project AssistantCore.Service set "AzureSearch:ApiKey" "<clé>"
 ```
 
@@ -2323,9 +2341,10 @@ Ne jamais utiliser de données réelles dans ce test.
 <a id="m365-sharepoint-local-groups-testing"></a>
 ### Test 20 — Guide détaillé des groupes SharePoint locaux
 
-Ce scénario sera exécuté lorsque la capacité sortira du backlog. Il exige un
-tenant de certification, deux utilisateurs de test, un site sans données
-sensibles, un index Azure AI Search dédié et un certificat App-Only valide.
+Ce scénario valide la résolution des appartenances aux groupes SharePoint
+locaux. Il exige un tenant de certification, deux utilisateurs de test, un site
+sans données sensibles, un index Azure AI Search dédié et un certificat
+App-Only valide.
 
 #### Préparer Entra ID et AssistantCore
 
@@ -2395,8 +2414,8 @@ sensibles, un index Azure AI Search dédié et un certificat App-Only valide.
 
 #### Vérifier les erreurs de sécurité
 
-1. retirer temporairement le chemin du certificat et vérifier que la recherche
-   échoue explicitement sans appeler Azure AI Search avec un filtre incomplet;
+1. retirer temporairement le chemin du certificat et vérifier que les contenus
+   accessibles uniquement par un groupe SharePoint local restent invisibles;
 2. utiliser un certificat expiré ou non enregistré et vérifier un échec
    contrôlé sans donnée sensible dans les logs;
 3. retirer le consentement `SharePoint -> Sites.Read.All` et vérifier que le

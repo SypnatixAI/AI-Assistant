@@ -14,6 +14,7 @@ public sealed class Microsoft365SearchAccessVerifierAdapter(
         string externalTenantId,
         string entraUserId,
         IReadOnlyCollection<string> entraGroupIds,
+        IReadOnlyCollection<string> sharePointGroupIds,
         IReadOnlyCollection<Microsoft365SearchRecord> records,
         CancellationToken cancellationToken)
     {
@@ -21,6 +22,7 @@ public sealed class Microsoft365SearchAccessVerifierAdapter(
         ArgumentException.ThrowIfNullOrWhiteSpace(externalTenantId);
         ArgumentException.ThrowIfNullOrWhiteSpace(entraUserId);
         ArgumentNullException.ThrowIfNull(entraGroupIds);
+        ArgumentNullException.ThrowIfNull(sharePointGroupIds);
         ArgumentNullException.ThrowIfNull(records);
 
         var organization = new Organization
@@ -29,10 +31,12 @@ public sealed class Microsoft365SearchAccessVerifierAdapter(
             ExternalTenantId = externalTenantId
         };
         var normalizedGroupIds = entraGroupIds.ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var normalizedSharePointGroupIds = sharePointGroupIds.ToHashSet(StringComparer.Ordinal);
         var decisions = await Task.WhenAll(records.Select(record => IsAuthorizedAsync(
             organization,
             entraUserId,
             normalizedGroupIds,
+            normalizedSharePointGroupIds,
             record,
             cancellationToken)));
 
@@ -47,6 +51,7 @@ public sealed class Microsoft365SearchAccessVerifierAdapter(
         Organization organization,
         string entraUserId,
         IReadOnlySet<string> entraGroupIds,
+        IReadOnlySet<string> sharePointGroupIds,
         Microsoft365SearchRecord record,
         CancellationToken cancellationToken)
     {
@@ -73,6 +78,7 @@ public sealed class Microsoft365SearchAccessVerifierAdapter(
 
         var acl = resolved.Acl;
         return acl.AllowedEntraUserIds.Contains(entraUserId, StringComparer.OrdinalIgnoreCase)
-            || acl.AllowedEntraGroupIds.Any(entraGroupIds.Contains);
+            || acl.AllowedEntraGroupIds.Any(entraGroupIds.Contains)
+            || acl.AllowedSharePointGroupIds.Any(sharePointGroupIds.Contains);
     }
 }

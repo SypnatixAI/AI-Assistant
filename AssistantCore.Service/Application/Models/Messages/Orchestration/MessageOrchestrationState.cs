@@ -73,6 +73,8 @@ public sealed class MessageOrchestrationState
 
     public OrchestrationBudgetType? FinalResponseBudget { get; private set; }
 
+    public bool CitationRepairResponseRequired { get; private set; }
+
     private static IReadOnlyCollection<AiConversationMessage> LimitConversationHistory(
         IReadOnlyCollection<AiConversationMessage> history,
         int maximumContextSize)
@@ -150,6 +152,11 @@ public sealed class MessageOrchestrationState
     {
         FinalResponseRequired = true;
         FinalResponseBudget = exceededBudget;
+    }
+
+    public void RequireCitationRepairResponse()
+    {
+        CitationRepairResponseRequired = true;
     }
 
     private void CollectNewEvidence(IReadOnlyCollection<RetrievedEvidence> evidence)

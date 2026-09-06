@@ -30,7 +30,7 @@ public sealed class Microsoft365DocumentWorkFactory : IMicrosoft365DocumentWorkF
         var version = item.IsDeleted
             ? "delete"
             : !string.IsNullOrWhiteSpace(item.ETag)
-                ? item.ETag
+                ? Microsoft365DocumentIndexVersion.Create(item.ETag)
                 : throw new InvalidOperationException(
                     "An active Microsoft 365 file requires an eTag.");
 
