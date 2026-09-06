@@ -175,6 +175,7 @@ partagent le même magasin `user-secrets` :
 ```bash
 dotnet user-secrets --project AssistantCore.Service set "Microsoft365:ClientId" "<client-id>"
 dotnet user-secrets --project AssistantCore.Service set "Microsoft365:ClientSecret" "<secret>"
+dotnet user-secrets --project AssistantCore.Service set "Microsoft365:ClientStateHmacKey" "<32+ caracteres aleatoires>"
 dotnet user-secrets --project AssistantCore.Service set "Microsoft365:SharePointCertificatePath" "<absolute-pfx-path>"
 dotnet user-secrets --project AssistantCore.Service set "Microsoft365:SharePointCertificatePassword" "<pfx-password>"
 dotnet user-secrets --project AssistantCore.Service set "Microsoft365:EmbeddingApiKey" "<openai-api-key>"
