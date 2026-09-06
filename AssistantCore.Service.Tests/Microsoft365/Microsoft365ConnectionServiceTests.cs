@@ -94,7 +94,8 @@ public sealed class Microsoft365ConnectionServiceTests
             cancellationToken);
 
         // Then
-        await Assert.ThrowsAsync<BadRequestException>(action);
+        var exception = await Assert.ThrowsAsync<Microsoft365ConsentException>(action);
+        Assert.Equal(Microsoft365ConsentException.AdminConsentRefused, exception.ErrorCode);
         Assert.Null(consentClient.ReceivedTenantId);
     }
 
@@ -125,7 +126,8 @@ public sealed class Microsoft365ConnectionServiceTests
             cancellationToken);
 
         // Then
-        await Assert.ThrowsAsync<BadRequestException>(action);
+        var exception = await Assert.ThrowsAsync<Microsoft365ConsentException>(action);
+        Assert.Equal(Microsoft365ConsentException.AdminConsentIncomplete, exception.ErrorCode);
     }
 
     [Theory, AutoDomainData]
@@ -156,7 +158,8 @@ public sealed class Microsoft365ConnectionServiceTests
             cancellationToken);
 
         // Then
-        await Assert.ThrowsAsync<BadRequestException>(action);
+        var exception = await Assert.ThrowsAsync<Microsoft365ConsentException>(action);
+        Assert.Equal(Microsoft365ConsentException.AdminConsentIncomplete, exception.ErrorCode);
     }
 
     [Theory, AutoDomainData]
@@ -184,7 +187,8 @@ public sealed class Microsoft365ConnectionServiceTests
             cancellationToken);
 
         // Then
-        await Assert.ThrowsAsync<BadRequestException>(action);
+        var exception = await Assert.ThrowsAsync<Microsoft365ConsentException>(action);
+        Assert.Equal(Microsoft365ConsentException.AdminConsentIncomplete, exception.ErrorCode);
     }
 
     [Theory, AutoDomainData]
@@ -226,7 +230,176 @@ public sealed class Microsoft365ConnectionServiceTests
             cancellationToken);
 
         // Then
-        await Assert.ThrowsAsync<BadRequestException>(action);
+        var exception = await Assert.ThrowsAsync<Microsoft365ConsentException>(action);
+        Assert.Equal(Microsoft365ConsentException.WrongTenant, exception.ErrorCode);
+        Assert.Equal(0, repository.CompleteConsentCallCount);
+    }
+
+    [Theory, AutoDomainData]
+    public async Task Given_TokenAcquisitionFails_When_CompleteConsentAsync_Then_ValidationFailedIsThrown(
+        Guid organizationId,
+        Guid tenantId,
+        CancellationToken cancellationToken)
+    {
+        // Given
+        var now = new DateTimeOffset(2026, 8, 18, 12, 0, 0, TimeSpan.Zero);
+        var repository = new StubConnectionRepository
+        {
+            Connection = CreatePendingConnection(Guid.NewGuid(), organizationId, now.AddMinutes(10))
+        };
+        var consentClient = new StubConsentClient
+        {
+            CompleteAdminConsentException = new Microsoft365ExternalException("Token acquisition failed.")
+        };
+        var service = CreateService(
+            repository,
+            consentClient,
+            new StubStateProtector
+            {
+                UnprotectedState = new Microsoft365ConsentState(organizationId, Guid.NewGuid(), now.AddMinutes(10))
+            },
+            new RecordingTokenStore(),
+            now);
+
+        // When
+        var action = () => service.CompleteConsentAsync(
+            tenantId.ToString("D"),
+            true,
+            "protected-state",
+            null,
+            cancellationToken);
+
+        // Then
+        var exception = await Assert.ThrowsAsync<Microsoft365ConsentException>(action);
+        Assert.Equal(Microsoft365ConsentException.AdminConsentValidationFailed, exception.ErrorCode);
+        Assert.Equal(0, repository.CompleteConsentCallCount);
+    }
+
+    [Theory, AutoDomainData]
+    public async Task Given_RequiredPermissionsAreMissing_When_CompleteConsentAsync_Then_MissingRequiredPermissionsIsThrown(
+        Guid organizationId,
+        Guid tenantId,
+        string accessToken,
+        CancellationToken cancellationToken)
+    {
+        // Given
+        var now = new DateTimeOffset(2026, 8, 18, 12, 0, 0, TimeSpan.Zero);
+        var repository = new StubConnectionRepository
+        {
+            Connection = CreatePendingConnection(Guid.NewGuid(), organizationId, now.AddMinutes(10))
+        };
+        var consentClient = new StubConsentClient
+        {
+            Exchange = new Microsoft365ConsentExchange(tenantId.ToString("D"), accessToken, now.AddHours(1)),
+            PermissionsVerified = false
+        };
+        var service = CreateService(
+            repository,
+            consentClient,
+            new StubStateProtector
+            {
+                UnprotectedState = new Microsoft365ConsentState(organizationId, Guid.NewGuid(), now.AddMinutes(10))
+            },
+            new RecordingTokenStore(),
+            now);
+
+        // When
+        var action = () => service.CompleteConsentAsync(
+            tenantId.ToString("D"),
+            true,
+            "protected-state",
+            null,
+            cancellationToken);
+
+        // Then
+        var exception = await Assert.ThrowsAsync<Microsoft365ConsentException>(action);
+        Assert.Equal(Microsoft365ConsentException.MissingRequiredPermissions, exception.ErrorCode);
+        Assert.Equal(1, consentClient.VerifyPermissionsCallCount);
+        Assert.Equal(accessToken, consentClient.ReceivedAccessToken);
+        Assert.Equal(0, repository.CompleteConsentCallCount);
+    }
+
+    [Theory, AutoDomainData]
+    public async Task Given_PermissionVerificationFailsTechnically_When_CompleteConsentAsync_Then_ValidationFailedIsThrown(
+        Guid organizationId,
+        Guid tenantId,
+        CancellationToken cancellationToken)
+    {
+        // Given
+        var now = new DateTimeOffset(2026, 8, 18, 12, 0, 0, TimeSpan.Zero);
+        var repository = new StubConnectionRepository
+        {
+            Connection = CreatePendingConnection(Guid.NewGuid(), organizationId, now.AddMinutes(10))
+        };
+        var consentClient = new StubConsentClient
+        {
+            Exchange = new Microsoft365ConsentExchange(tenantId.ToString("D"), "access-token", now.AddHours(1)),
+            VerifyPermissionsException = new Microsoft365ExternalException("Graph is unavailable.")
+        };
+        var service = CreateService(
+            repository,
+            consentClient,
+            new StubStateProtector
+            {
+                UnprotectedState = new Microsoft365ConsentState(organizationId, Guid.NewGuid(), now.AddMinutes(10))
+            },
+            new RecordingTokenStore(),
+            now);
+
+        // When
+        var action = () => service.CompleteConsentAsync(
+            tenantId.ToString("D"),
+            true,
+            "protected-state",
+            null,
+            cancellationToken);
+
+        // Then
+        var exception = await Assert.ThrowsAsync<Microsoft365ConsentException>(action);
+        Assert.Equal(Microsoft365ConsentException.AdminConsentValidationFailed, exception.ErrorCode);
+        Assert.Equal(0, repository.CompleteConsentCallCount);
+    }
+
+    [Theory, AutoDomainData]
+    public async Task Given_PermissionsWereRevokedAfterInstallation_When_CompleteConsentAsyncRunsAgain_Then_MissingRequiredPermissionsIsThrown(
+        Guid organizationId,
+        Guid tenantId,
+        string accessToken,
+        CancellationToken cancellationToken)
+    {
+        // Given: a connection that was already Active once, being re-consented
+        // because its Microsoft-side permissions were revoked after installation.
+        var now = new DateTimeOffset(2026, 8, 18, 12, 0, 0, TimeSpan.Zero);
+        var connection = CreatePendingConnection(Guid.NewGuid(), organizationId, now.AddMinutes(10));
+        connection.Status = Microsoft365ConnectionStatus.Active;
+        connection.TenantId = tenantId.ToString("D");
+        var repository = new StubConnectionRepository { Connection = connection };
+        var consentClient = new StubConsentClient
+        {
+            Exchange = new Microsoft365ConsentExchange(tenantId.ToString("D"), accessToken, now.AddHours(1)),
+            PermissionsVerified = false
+        };
+        var service = CreateService(
+            repository,
+            consentClient,
+            new StubStateProtector
+            {
+                UnprotectedState = new Microsoft365ConsentState(organizationId, Guid.NewGuid(), now.AddMinutes(10))
+            },
+            new RecordingTokenStore(),
+            now);
+
+        // When
+        var action = () => service.CompleteConsentAsync(
+            tenantId.ToString("D"),
+            true,
+            "protected-state",
+            null,
+            cancellationToken);
+
+        // Then
+        var exception = await Assert.ThrowsAsync<Microsoft365ConsentException>(action);
+        Assert.Equal(Microsoft365ConsentException.MissingRequiredPermissions, exception.ErrorCode);
         Assert.Equal(0, repository.CompleteConsentCallCount);
     }
 
@@ -390,7 +563,12 @@ public sealed class Microsoft365ConnectionServiceTests
     {
         public Microsoft365ConsentExchange Exchange { get; init; } =
             new(Guid.NewGuid().ToString("D"), "access-token", DateTimeOffset.UtcNow.AddHours(1));
+        public Exception? CompleteAdminConsentException { get; init; }
+        public bool PermissionsVerified { get; init; } = true;
+        public Exception? VerifyPermissionsException { get; init; }
         public string? ReceivedTenantId { get; private set; }
+        public string? ReceivedAccessToken { get; private set; }
+        public int VerifyPermissionsCallCount { get; private set; }
 
         public Uri CreateAdminConsentUri(string state) =>
             new("https://login.microsoftonline.com/organizations/v2.0/adminconsent");
@@ -400,7 +578,28 @@ public sealed class Microsoft365ConnectionServiceTests
             CancellationToken cancellationToken = default)
         {
             ReceivedTenantId = tenantId;
+
+            if (CompleteAdminConsentException is not null)
+            {
+                return Task.FromException<Microsoft365ConsentExchange>(CompleteAdminConsentException);
+            }
+
             return Task.FromResult(Exchange);
+        }
+
+        public Task<bool> VerifyRequiredPermissionsAsync(
+            string accessToken,
+            CancellationToken cancellationToken = default)
+        {
+            VerifyPermissionsCallCount++;
+            ReceivedAccessToken = accessToken;
+
+            if (VerifyPermissionsException is not null)
+            {
+                return Task.FromException<bool>(VerifyPermissionsException);
+            }
+
+            return Task.FromResult(PermissionsVerified);
         }
     }
 
