@@ -35,7 +35,8 @@ public sealed class ApplicationStartupTests
                         {
                             [$"Messages:Orchestration:{optionName}"] = "0",
                             ["AiModels:Providers:OpenAI:ApiKey"] = "integration-test-secret",
-                            ["Microsoft365:ClientSecret"] = "integration-test-secret"
+                            ["Microsoft365:ClientSecret"] = "integration-test-secret",
+                            ["Microsoft365:ClientStateHmacKey"] = "integration-test-client-state-hmac-key"
                         }));
             });
 
@@ -67,7 +68,8 @@ public sealed class ApplicationStartupTests
                         {
                             ["Messages:MaximumMessageLength"] = maximumMessageLength.ToString(),
                             ["AiModels:Providers:OpenAI:ApiKey"] = "integration-test-secret",
-                            ["Microsoft365:ClientSecret"] = "integration-test-secret"
+                            ["Microsoft365:ClientSecret"] = "integration-test-secret",
+                            ["Microsoft365:ClientStateHmacKey"] = "integration-test-client-state-hmac-key"
                         }));
             });
 
@@ -95,7 +97,8 @@ public sealed class ApplicationStartupTests
                         new Dictionary<string, string?>
                         {
                             ["AiModels:Providers:OpenAI:ApiKey"] = string.Empty,
-                            ["Microsoft365:ClientSecret"] = "integration-test-secret"
+                            ["Microsoft365:ClientSecret"] = "integration-test-secret",
+                            ["Microsoft365:ClientStateHmacKey"] = "integration-test-client-state-hmac-key"
                         }));
             });
 
@@ -124,7 +127,8 @@ public sealed class ApplicationStartupTests
                         new Dictionary<string, string?>
                         {
                             ["AiModels:Providers:OpenAI:ApiKey"] = openAiSecret,
-                            ["Microsoft365:ClientSecret"] = string.Empty
+                            ["Microsoft365:ClientSecret"] = string.Empty,
+                            ["Microsoft365:ClientStateHmacKey"] = "integration-test-client-state-hmac-key"
                         }));
             });
 
@@ -152,6 +156,7 @@ public sealed class ApplicationStartupTests
                         {
                             ["AiModels:Providers:OpenAI:ApiKey"] = openAiSecret,
                             ["Microsoft365:ClientSecret"] = "integration-test-secret",
+                            ["Microsoft365:ClientStateHmacKey"] = "integration-test-client-state-hmac-key",
                             ["Microsoft365:SynchronizationLeaseMinutes"] = synchronizationLeaseMinutes.ToString()
                         }));
             });
@@ -180,6 +185,7 @@ public sealed class ApplicationStartupTests
                         {
                             ["AiModels:Providers:OpenAI:ApiKey"] = openAiSecret,
                             ["Microsoft365:ClientSecret"] = "integration-test-secret",
+                            ["Microsoft365:ClientStateHmacKey"] = "integration-test-client-state-hmac-key",
                             ["Microsoft365:SynchronizationIntervalMinutes"] = synchronizationIntervalMinutes.ToString()
                         }));
             });
@@ -205,7 +211,8 @@ public sealed class ApplicationStartupTests
                         new Dictionary<string, string?>
                         {
                             ["AiModels:Providers:OpenAI:ApiKey"] = "integration-test-secret",
-                            ["Microsoft365:ClientSecret"] = "integration-test-secret"
+                            ["Microsoft365:ClientSecret"] = "integration-test-secret",
+                            ["Microsoft365:ClientStateHmacKey"] = "integration-test-client-state-hmac-key"
                         }));
             });
 
@@ -239,6 +246,7 @@ public sealed class ApplicationStartupTests
                         {
                             ["AiModels:Providers:OpenAI:ApiKey"] = "integration-test-secret",
                             ["Microsoft365:ClientSecret"] = "integration-test-secret",
+                            ["Microsoft365:ClientStateHmacKey"] = "integration-test-client-state-hmac-key",
                             ["ServiceBus:Enabled"] = "false"
                         }));
             });
@@ -266,6 +274,7 @@ public sealed class ApplicationStartupTests
                         {
                             ["AiModels:Providers:OpenAI:ApiKey"] = "integration-test-secret",
                             ["Microsoft365:ClientSecret"] = "integration-test-secret",
+                            ["Microsoft365:ClientStateHmacKey"] = "integration-test-client-state-hmac-key",
                             ["ServiceBus:Enabled"] = "true",
                             ["ServiceBus:FullyQualifiedNamespace"] = "assistant-test.servicebus.windows.net"
                         }));

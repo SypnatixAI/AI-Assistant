@@ -1000,6 +1000,27 @@ Pour chaque notification :
 Le webhook ne fait jamais confiance à un `organizationId` fourni dans la
 notification. Il retrouve l’organisation depuis la souscription enregistrée.
 
+### Protection du `clientState`
+
+Le `clientState` original n'est jamais stocké : Microsoft Graph ne l'exige
+jamais pour renouveler une souscription (seules l'expiration et l'URL de
+notification sont renvoyées lors d'un renouvellement), donc seule sa capacité
+à être vérifié est nécessaire. La base ne conserve qu'un HMAC-SHA256 du
+`clientState`, calculé avec une clé secrète qui n'est jamais stockée en SQL
+(comme `ClientSecret`, via la configuration/Key Vault). La comparaison à la
+réception d'une notification se fait en temps constant
+(`CryptographicOperations.FixedTimeEquals`) pour ne pas exposer d'information
+via le temps de réponse. Aucune valeur de `clientState` n'est jamais journalisée.
+
+Un `clientState` protégé est irréversible par construction : il ne peut donc
+pas être migré vers un nouvel algorithme ou une nouvelle clé sans connaître la
+valeur d'origine. Si l'algorithme ou la clé change, les souscriptions
+existantes sont marquées pour être recréées proprement (suppression de
+l'abonnement Microsoft Graph existant puis nouvelle souscription avec un
+nouveau `clientState`) par le traitement planifié de renouvellement, qui
+déclenche aussi une réconciliation complète pour couvrir toute notification
+manquée pendant la bascule.
+
 <a id="m365-sharepoint-webhook-renewal"></a>
 ## Renouvellement des webhooks
 

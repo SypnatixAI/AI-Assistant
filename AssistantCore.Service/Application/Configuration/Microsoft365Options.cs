@@ -12,6 +12,8 @@ public sealed class Microsoft365Options
 
     public string ClientSecret { get; init; } = string.Empty;
 
+    public string ClientStateHmacKey { get; init; } = string.Empty;
+
     public string SharePointCertificatePath { get; init; } = string.Empty;
 
     public string SharePointCertificateBase64 { get; init; } = string.Empty;
