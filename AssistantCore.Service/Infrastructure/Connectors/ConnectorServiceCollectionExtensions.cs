@@ -16,7 +16,9 @@ public static class ConnectorServiceCollectionExtensions
 {
     private const string InternalDataSectionName = "Connectors:InternalData";
     private const string Microsoft365SectionName = "Connectors:Microsoft365";
+    private const string Microsoft365QueryExpansionSectionName = "Connectors:Microsoft365:QueryExpansion";
     private const int MaximumAllowedResults = 100;
+    private const int MaximumAllowedGeneratedQueries = 4;
 
     public static IServiceCollection AddConnectorInfrastructure(
         this IServiceCollection services,
@@ -28,10 +30,17 @@ public static class ConnectorServiceCollectionExtensions
         services.AddSingleton(options);
         services.AddSingleton(microsoft365Options);
         services.AddSingleton<IEvidenceNormalizer, EvidenceNormalizer>();
+        services.AddSingleton(microsoft365Options.QueryExpansion);
+        services.AddSingleton<IMicrosoft365QueryExpansionBypassPolicy>(_ =>
+            new Microsoft365QueryExpansionBypassPolicy(
+                microsoft365Options.QueryExpansion.MinimumWordCountForExpansion));
+        services.AddScoped<IMicrosoft365QueryExpansionService, Microsoft365QueryExpansionService>();
+        services.AddScoped<IMicrosoft365SearchResultFusionService, Microsoft365SearchResultFusionService>();
         services.AddScoped<IToolExecutionRouter, ScopedToolExecutionRouter>();
         services.AddScoped<IInternalDataSearchRepository, InternalDataSearchRepository>();
         services.AddScoped<IInternalDataConnector, InternalDataConnector>();
         services.AddScoped<IAiToolExecutionHandler, InternalDataToolExecutionHandler>();
+        services.AddScoped<IMicrosoft365QueryExpansionClient, Microsoft365QueryExpansionClientAdapter>();
         services.AddScoped<IMicrosoft365SearchRepository, Microsoft365SearchRepositoryAdapter>();
         services.AddScoped<IMicrosoft365SearchAccessVerifier, Microsoft365SearchAccessVerifierAdapter>();
         services.AddScoped<IMicrosoft365Connector, Microsoft365Connector>();
@@ -48,6 +57,7 @@ public static class ConnectorServiceCollectionExtensions
             nameof(Microsoft365ConnectorOptions.MaximumResults)) ?? 10;
         var maximumContentLength = section.GetValue<int?>(
             nameof(Microsoft365ConnectorOptions.MaximumContentLength)) ?? 4000;
+        var queryExpansionOptions = CreateMicrosoft365QueryExpansionOptions(configuration);
 
         if (maximumResults is <= 0 or > MaximumAllowedResults)
         {
@@ -63,7 +73,51 @@ public static class ConnectorServiceCollectionExtensions
                 + $"{nameof(Microsoft365ConnectorOptions.MaximumContentLength)} must be greater than zero.");
         }
 
-        return new Microsoft365ConnectorOptions(maximumResults, maximumContentLength);
+        return new Microsoft365ConnectorOptions(
+            maximumResults,
+            maximumContentLength,
+            queryExpansionOptions);
+    }
+
+    private static Microsoft365QueryExpansionOptions CreateMicrosoft365QueryExpansionOptions(
+        IConfiguration configuration)
+    {
+        var section = configuration.GetSection(Microsoft365QueryExpansionSectionName);
+        var enabled = section.GetValue<bool?>(
+            nameof(Microsoft365QueryExpansionOptions.Enabled)) ?? false;
+        var maximumGeneratedQueries = section.GetValue<int?>(
+            nameof(Microsoft365QueryExpansionOptions.MaximumGeneratedQueries)) ?? 3;
+        var timeoutMilliseconds = section.GetValue<int?>(
+            nameof(Microsoft365QueryExpansionOptions.TimeoutMilliseconds)) ?? 1500;
+        var minimumWordCountForExpansion = section.GetValue<int?>(
+            nameof(Microsoft365QueryExpansionOptions.MinimumWordCountForExpansion)) ?? 5;
+
+        if (maximumGeneratedQueries is < 0 or > MaximumAllowedGeneratedQueries)
+        {
+            throw new InvalidOperationException(
+                $"Invalid configuration '{Microsoft365QueryExpansionSectionName}': "
+                + $"{nameof(Microsoft365QueryExpansionOptions.MaximumGeneratedQueries)} must be between 0 and {MaximumAllowedGeneratedQueries}.");
+        }
+
+        if (timeoutMilliseconds <= 0)
+        {
+            throw new InvalidOperationException(
+                $"Invalid configuration '{Microsoft365QueryExpansionSectionName}': "
+                + $"{nameof(Microsoft365QueryExpansionOptions.TimeoutMilliseconds)} must be greater than zero.");
+        }
+
+        if (minimumWordCountForExpansion <= 0)
+        {
+            throw new InvalidOperationException(
+                $"Invalid configuration '{Microsoft365QueryExpansionSectionName}': "
+                + $"{nameof(Microsoft365QueryExpansionOptions.MinimumWordCountForExpansion)} must be greater than zero.");
+        }
+
+        return new Microsoft365QueryExpansionOptions(
+            enabled,
+            maximumGeneratedQueries,
+            timeoutMilliseconds,
+            minimumWordCountForExpansion);
     }
 
     private static InternalDataConnectorOptions CreateInternalDataOptions(
