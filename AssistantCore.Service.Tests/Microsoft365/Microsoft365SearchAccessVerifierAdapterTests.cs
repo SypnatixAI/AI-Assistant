@@ -9,6 +9,40 @@ namespace AssistantCore.Service.Tests.Microsoft365;
 public sealed class Microsoft365SearchAccessVerifierAdapterTests
 {
     [Theory, AutoDomainData]
+    public async Task Given_FreshAclGrantsCurrentUser_When_KeepAuthorizedAsync_Then_KeepsRecord(
+        Guid organizationId,
+        Guid userId,
+        string tenantId,
+        string title,
+        string content)
+    {
+        // Given
+        var record = CreateRecord(title, content);
+        var acl = new Microsoft365Acl(
+            [userId.ToString("D")],
+            [Guid.NewGuid().ToString("D")],
+            [],
+            false,
+            false,
+            Microsoft365AclInheritance.Unique);
+        var verifier = new Microsoft365SearchAccessVerifierAdapter(
+            new AclResolverFake(new Microsoft365AclResolution.ResolvedAcl(acl)));
+
+        // When
+        var results = await verifier.KeepAuthorizedAsync(
+            organizationId,
+            tenantId,
+            userId.ToString("D"),
+            [],
+            [],
+            [record],
+            CancellationToken.None);
+
+        // Then
+        Assert.Equal([record], results);
+    }
+
+    [Theory, AutoDomainData]
     public async Task Given_FreshAclGrantsCurrentGroupOwner_When_KeepAuthorizedAsync_Then_KeepsRecord(
         Guid organizationId,
         Guid userId,

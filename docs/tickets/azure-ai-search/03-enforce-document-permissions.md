@@ -93,7 +93,9 @@ Executer une recherche avec le titre exact de chaque document. Un document inter
 
 Lorsqu'un utilisateur perd un droit dans SharePoint, l'index peut rester temporairement obsolete jusqu'a la prochaine synchronisation. Le pipeline doit donc synchroniser les ACL frequemment et mesurer ce delai.
 
-Avant une mise en production, l'equipe doit definir le delai maximal acceptable entre une modification de permission et son application dans la recherche.
+L'intervalle `Microsoft365:AclReconciliationIntervalMinutes` definit la frequence nominale de reconciliation. Sa valeur locale par defaut est de 1 440 minutes, soit 24 heures; elle doit etre reduite pour un environnement de production selon le niveau de risque accepte. Le delai reel a mesurer est le temps entre la modification Microsoft 365 et la premiere recherche qui n'expose plus le document.
+
+Avant une mise en production, l'equipe doit definir et mesurer un objectif de delai maximal. Le suivi doit distinguer au minimum le temps de resolution de l'ACL, le temps de publication dans Azure AI Search et le temps necessaire pour qu'une recherche applique la nouvelle ACL. Une erreur de reconciliation conserve le document indisponible et ne doit jamais publier une ACL partielle.
 
 ## Tests attendus
 
