@@ -2,11 +2,14 @@ namespace AssistantCore.Service.Application.Exceptions;
 
 public sealed class AiProviderUnavailableException(
     string providerName,
-    int? providerStatusCode = null)
+    int? providerStatusCode = null,
+    string? providerErrorMessage = null)
     : AiProviderException(
         providerName,
         "AI_PROVIDER_UNAVAILABLE",
         "The AI provider is currently unavailable.")
 {
     public int? ProviderStatusCode { get; } = providerStatusCode;
+
+    public string? ProviderErrorMessage { get; } = providerErrorMessage;
 }

@@ -7,6 +7,7 @@ using AssistantCore.Service.Application.Models.Messages.Orchestration;
 using AssistantCore.Service.Application.Models.Messages.Tools;
 using AssistantCore.Service.Application.Services.Messages.Evidence;
 using AssistantCore.Service.Application.Services.Messages.Orchestration;
+using AssistantCore.Service.Application.Services.Messages.Rag;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 
@@ -65,8 +66,9 @@ public sealed class MessageToolOrchestratorTests
             CreateResponse(AiModelDecisionType.UseTools),
             CreateResponse(AiModelDecisionType.Answer)
         ]);
+        var modelTurnService = new StubModelTurnService(operations, responses);
         var orchestrator = new MessageToolOrchestrator(
-            new StubModelTurnService(operations, responses),
+            modelTurnService,
             new StubBudgetExceededPolicy(),
             new StubToolCallBatchExecutor(operations),
             new StubResultBuilder(operations, expectedResult),
@@ -84,6 +86,11 @@ public sealed class MessageToolOrchestratorTests
         // Then
         Assert.Same(expectedResult, result);
         Assert.Equal(["ModelTurn", "ModelTurn", "BuildResult"], operations);
+        var finalTurnToolResult = Assert.Single(modelTurnService.ModelVisibleToolResultsByTurn[1]);
+        Assert.Equal("call-1", finalTurnToolResult.ToolCallId);
+        Assert.Equal(ToolExecutionStatus.Failed, finalTurnToolResult.Status);
+        Assert.Equal("TOOL_BUDGET_EXCEEDED", finalTurnToolResult.ErrorCode);
+        Assert.Empty(finalTurnToolResult.Warnings);
     }
 
     [Theory, AutoDomainData]
@@ -327,12 +334,204 @@ public sealed class MessageToolOrchestratorTests
             operations);
     }
 
-    private static MessageOrchestrationOptions CreateOptions() =>
+    [Theory, AutoDomainData]
+    public async Task Given_AnExceededBudget_When_OrchestrateStreamingAsync_Then_RecordsFailedToolResultsBeforeFinalResponse(
+        StartedMessageProcessing processing,
+        ConnectorExecutionContext executionContext,
+        SelectedAiModel selectedModel,
+        MessageOrchestrationResult expectedResult,
+        DateTimeOffset now)
+    {
+        // Given
+        var operations = new List<string>();
+        var responses = new Queue<AiModelResponse>(
+        [
+            CreateResponse(AiModelDecisionType.UseTools),
+            CreateResponse(AiModelDecisionType.Answer)
+        ]);
+        var modelTurnService = new StubModelTurnService(operations, responses);
+        var orchestrator = new MessageToolOrchestrator(
+            modelTurnService,
+            new StubBudgetExceededPolicy(),
+            new StubToolCallBatchExecutor(operations),
+            new StubResultBuilder(operations, expectedResult),
+            Options.Create(CreateOptions()),
+            new StubTimeProvider(now));
+
+        // When
+        var result = await orchestrator.OrchestrateStreamingAsync(
+            processing,
+            executionContext,
+            selectedModel,
+            [],
+            [],
+            (_, _) => ValueTask.CompletedTask,
+            (_, _) => ValueTask.CompletedTask,
+            CancellationToken.None);
+
+        // Then
+        Assert.Same(expectedResult, result);
+        Assert.Equal(["StreamingModelTurn", "StreamingModelTurn", "BuildResult"], operations);
+        var finalTurnToolResult = Assert.Single(modelTurnService.ModelVisibleToolResultsByTurn[1]);
+        Assert.Equal("call-1", finalTurnToolResult.ToolCallId);
+        Assert.Equal(ToolExecutionStatus.Failed, finalTurnToolResult.Status);
+        Assert.Equal("TOOL_BUDGET_EXCEEDED", finalTurnToolResult.ErrorCode);
+        Assert.Empty(finalTurnToolResult.Warnings);
+    }
+
+    [Theory, AutoDomainData]
+    public async Task Given_ExhaustedTokenBudgetAndThreeRejectedAnswers_When_OrchestrateAsync_Then_ReturnsTheThirdReformulation(
+        StartedMessageProcessing processing,
+        SelectedAiModel selectedModel,
+        MessageOrchestrationResult expectedResult,
+        DateTimeOffset now)
+    {
+        // Given
+        var operations = new List<string>();
+        var modelTurnService = new StubModelTurnService(
+            operations,
+            new Queue<AiModelResponse>(
+            [
+                CreateResponse(AiModelDecisionType.Answer),
+                CreateResponse(AiModelDecisionType.Answer),
+                CreateResponse(AiModelDecisionType.Answer),
+                CreateResponse(AiModelDecisionType.Answer)
+            ]));
+        var groundednessGuard = new StubGroundednessGuard(
+            operations,
+            new Queue<bool>([false, false, false, true]),
+            maximumReformulationAttempts: 3);
+        var orchestrator = new MessageToolOrchestrator(
+            modelTurnService,
+            new StubContinuationPolicy(),
+            new StubToolCallBatchExecutor(operations),
+            new StubResultBuilder(operations, expectedResult),
+            Options.Create(CreateOptions(maximumModelTokens: 1)),
+            new StubTimeProvider(now),
+            groundednessGuard);
+
+        // When
+        var result = await orchestrator.OrchestrateAsync(
+            processing,
+            selectedModel,
+            [],
+            [],
+            CancellationToken.None);
+
+        // Then
+        Assert.Same(expectedResult, result);
+        Assert.Equal(4, operations.Count(operation => operation == "ModelTurn"));
+        Assert.Equal(4, operations.Count(operation => operation == "ValidateGroundedness"));
+        Assert.Equal([false, true, true, true], modelTurnService.GroundednessReformulationRequiredValues);
+    }
+
+    [Theory, AutoDomainData]
+    public async Task Given_AllGroundednessReformulationsAreRejected_When_OrchestrateAsync_Then_ReturnsInsufficientEvidenceAfterThreeAttempts(
+        StartedMessageProcessing processing,
+        SelectedAiModel selectedModel,
+        MessageOrchestrationResult generatedResult,
+        DateTimeOffset now)
+    {
+        // Given
+        var operations = new List<string>();
+        var orchestrator = new MessageToolOrchestrator(
+            new StubModelTurnService(
+                operations,
+                new Queue<AiModelResponse>(
+                [
+                    CreateResponse(AiModelDecisionType.Answer),
+                    CreateResponse(AiModelDecisionType.Answer),
+                    CreateResponse(AiModelDecisionType.Answer),
+                    CreateResponse(AiModelDecisionType.Answer)
+                ])),
+            new StubContinuationPolicy(),
+            new StubToolCallBatchExecutor(operations),
+            new StubResultBuilder(operations, generatedResult),
+            Options.Create(CreateOptions()),
+            new StubTimeProvider(now),
+            new StubGroundednessGuard(
+                operations,
+                new Queue<bool>([false, false, false, false]),
+                maximumReformulationAttempts: 3));
+
+        // When
+        var result = await orchestrator.OrchestrateAsync(
+            processing,
+            selectedModel,
+            [],
+            [],
+            CancellationToken.None);
+
+        // Then
+        Assert.Equal(AnswerGroundednessGuard.InsufficientEvidenceAnswer, result.Answer);
+        Assert.Contains(IAnswerGroundednessGuard.ContentRejectedWarning, result.Warnings);
+        Assert.Equal(4, operations.Count(operation => operation == "ModelTurn"));
+        Assert.Equal(4, operations.Count(operation => operation == "ValidateGroundedness"));
+    }
+
+    [Theory, AutoDomainData]
+    public async Task Given_ARejectedStreamingAnswer_When_OrchestrateStreamingAsync_Then_StreamsOnlyTheGroundedReformulation(
+        StartedMessageProcessing processing,
+        ConnectorExecutionContext executionContext,
+        SelectedAiModel selectedModel,
+        MessageOrchestrationResult generatedResult,
+        DateTimeOffset now)
+    {
+        // Given
+        var operations = new List<string>();
+        var receivedDeltas = new List<string>();
+        var expectedResult = generatedResult with { Answer = "Le projet Atlas se termine le 1er septembre." };
+        var orchestrator = new MessageToolOrchestrator(
+            new StubModelTurnService(
+                operations,
+                new Queue<AiModelResponse>(
+                [
+                    CreateResponse(AiModelDecisionType.Answer),
+                    CreateResponse(AiModelDecisionType.Answer)
+                ]),
+                streamingDeltasByTurn: new Queue<IReadOnlyCollection<string>>(
+                [
+                    ["Le projet Atlas se termine le 1er septembre 2026."],
+                    ["Le projet Atlas se termine le 1er septembre."]
+                ])),
+            new StubContinuationPolicy(),
+            new StubToolCallBatchExecutor(operations),
+            new StubResultBuilder(operations, expectedResult),
+            Options.Create(CreateOptions()),
+            new StubTimeProvider(now),
+            new StubGroundednessGuard(
+                operations,
+                new Queue<bool>([false, true]),
+                maximumReformulationAttempts: 3));
+
+        // When
+        var result = await orchestrator.OrchestrateStreamingAsync(
+            processing,
+            executionContext,
+            selectedModel,
+            [],
+            [],
+            (_, _) => ValueTask.CompletedTask,
+            (delta, _) =>
+            {
+                receivedDeltas.Add(delta);
+                return ValueTask.CompletedTask;
+            },
+            CancellationToken.None);
+
+        // Then
+        Assert.Same(expectedResult, result);
+        Assert.Equal(["Le projet Atlas se termine le 1er septembre."], receivedDeltas);
+        Assert.Equal(2, operations.Count(operation => operation == "StreamingModelTurn"));
+    }
+
+    private static MessageOrchestrationOptions CreateOptions(
+        int maximumModelTokens = 12_000) =>
         new()
         {
             MaximumExecutionTimeSeconds = 120,
             MaximumToolCalls = 8,
-            MaximumModelTokens = 12_000,
+            MaximumModelTokens = maximumModelTokens,
             MaximumEstimatedCost = 1.25m,
             RetrievalCandidateLimit = 20,
             FinalEvidenceLimit = 8,
@@ -366,11 +565,17 @@ public sealed class MessageToolOrchestratorTests
     {
         public List<bool> CitationRepairResponseRequiredValues { get; } = [];
 
+        public List<bool> GroundednessReformulationRequiredValues { get; } = [];
+
+        public List<IReadOnlyCollection<ToolExecutionResult>> ModelVisibleToolResultsByTurn { get; } = [];
+
         public Task<AiModelResponse> RequestNextActionAsync(
             MessageOrchestrationState state,
             CancellationToken cancellationToken)
         {
             CitationRepairResponseRequiredValues.Add(state.CitationRepairResponseRequired);
+            GroundednessReformulationRequiredValues.Add(state.GroundednessReformulationRequired);
+            ModelVisibleToolResultsByTurn.Add(state.ModelVisibleToolResults);
             operations.Add("ModelTurn");
             return Task.FromResult(responses.Dequeue());
         }
@@ -387,6 +592,8 @@ public sealed class MessageToolOrchestratorTests
             CancellationToken cancellationToken)
         {
             CitationRepairResponseRequiredValues.Add(state.CitationRepairResponseRequired);
+            GroundednessReformulationRequiredValues.Add(state.GroundednessReformulationRequired);
+            ModelVisibleToolResultsByTurn.Add(state.ModelVisibleToolResults);
             operations.Add("StreamingModelTurn");
             var currentDeltas = streamingDeltasByTurn?.Dequeue() ?? streamingDeltas ?? [];
             foreach (var delta in currentDeltas)
@@ -460,6 +667,37 @@ public sealed class MessageToolOrchestratorTests
         {
             operations.Add("BuildResult");
             return _inner.Build(state, finalResponse);
+        }
+    }
+
+    private sealed class StubGroundednessGuard(
+        List<string> operations,
+        Queue<bool> validationResults,
+        int maximumReformulationAttempts) : IAnswerGroundednessGuard
+    {
+        public int MaximumReformulationAttempts => maximumReformulationAttempts;
+
+        public Task<MessageOrchestrationResult> ValidateAsync(
+            MessageOrchestrationState state,
+            MessageOrchestrationResult result,
+            CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            operations.Add("ValidateGroundedness");
+            if (validationResults.Dequeue())
+            {
+                return Task.FromResult(result);
+            }
+
+            return Task.FromResult(result with
+            {
+                Answer = AnswerGroundednessGuard.InsufficientEvidenceAnswer,
+                CitedEvidence = [],
+                Warnings = result.Warnings
+                    .Append(IAnswerGroundednessGuard.ContentRejectedWarning)
+                    .Distinct(StringComparer.Ordinal)
+                    .ToArray()
+            });
         }
     }
 

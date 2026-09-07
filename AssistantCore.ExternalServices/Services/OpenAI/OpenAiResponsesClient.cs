@@ -82,7 +82,7 @@ public sealed class OpenAiResponsesClient
         }
         catch (ClientResultException exception)
         {
-            throw new OpenAiExternalException(exception.Status);
+            throw new OpenAiExternalException(exception.Status, exception.Message);
         }
     }
 
@@ -144,7 +144,7 @@ public sealed class OpenAiResponsesClient
         }
         catch (ClientResultException exception)
         {
-            throw new OpenAiExternalException(exception.Status);
+            throw new OpenAiExternalException(exception.Status, exception.Message);
         }
     }
 
@@ -186,7 +186,7 @@ public sealed class OpenAiResponsesClient
         }
         catch (ClientResultException exception)
         {
-            throw new OpenAiExternalException(exception.Status);
+            throw new OpenAiExternalException(exception.Status, exception.Message);
         }
     }
 
@@ -223,7 +223,7 @@ public sealed class OpenAiResponsesClient
         }
         catch (ClientResultException exception)
         {
-            throw new OpenAiExternalException(exception.Status);
+            throw new OpenAiExternalException(exception.Status, exception.Message);
         }
     }
 

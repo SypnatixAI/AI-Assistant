@@ -30,11 +30,13 @@ public sealed class MessageOrchestrationState
             conversationHistory,
             limits.MaximumContextSize);
         AllowedTools = allowedTools.ToArray();
+        Budget = new OrchestrationBudgetTracker(limits, startedAtUtc);
         ToolExecutionContext = toolExecutionContext with
         {
-            RetrievalCandidateLimit = limits.RetrievalCandidateLimit
+            RetrievalCandidateLimit = limits.RetrievalCandidateLimit,
+            Budget = Budget,
+            RagStatus = new Rag.RagExecutionStatus()
         };
-        Budget = new OrchestrationBudgetTracker(limits, startedAtUtc);
     }
 
     public StartedMessageProcessing MessageProcessing { get; }
@@ -52,8 +54,8 @@ public sealed class MessageOrchestrationState
     public OrchestrationBudgetTracker Budget { get; }
 
     public IReadOnlyCollection<RetrievedEvidence> CollectedEvidence =>
-        EvidenceNormalizer.Limit(
-            _collectedEvidence,
+        EvidenceNormalizer.LimitAcrossRetrievals(
+            _toolResults.Select(result => result.Evidence).ToArray(),
             Budget.Limits.FinalEvidenceLimit);
 
     public IReadOnlyCollection<string> Warnings => _warnings.ToArray();
@@ -62,6 +64,23 @@ public sealed class MessageOrchestrationState
         _requestedToolCalls.ToArray();
 
     public IReadOnlyCollection<ToolExecutionResult> ToolResults => _toolResults.ToArray();
+
+    public IReadOnlyCollection<ToolExecutionResult> ModelVisibleToolResults
+    {
+        get
+        {
+            var retainedEvidenceIds = CollectedEvidence
+                .Select(evidence => evidence.EvidenceId)
+                .ToHashSet(StringComparer.Ordinal);
+
+            return _toolResults
+                .Select(result => result.WithEvidence(
+                    result.Evidence
+                        .Where(evidence => retainedEvidenceIds.Contains(evidence.EvidenceId))
+                        .ToArray()))
+                .ToArray();
+        }
+    }
 
     public AiModelContinuationContext? ContinuationContext { get; private set; }
 
@@ -74,6 +93,11 @@ public sealed class MessageOrchestrationState
     public OrchestrationBudgetType? FinalResponseBudget { get; private set; }
 
     public bool CitationRepairResponseRequired { get; private set; }
+
+    public bool GroundednessReformulationRequired =>
+        GroundednessReformulationCount > 0;
+
+    public int GroundednessReformulationCount { get; private set; }
 
     private static IReadOnlyCollection<AiConversationMessage> LimitConversationHistory(
         IReadOnlyCollection<AiConversationMessage> history,
@@ -157,6 +181,18 @@ public sealed class MessageOrchestrationState
     public void RequireCitationRepairResponse()
     {
         CitationRepairResponseRequired = true;
+    }
+
+    public bool TryRequireGroundednessReformulation(int maximumAttempts)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegative(maximumAttempts);
+        if (GroundednessReformulationCount >= maximumAttempts)
+        {
+            return false;
+        }
+
+        GroundednessReformulationCount++;
+        return true;
     }
 
     private void CollectNewEvidence(IReadOnlyCollection<RetrievedEvidence> evidence)

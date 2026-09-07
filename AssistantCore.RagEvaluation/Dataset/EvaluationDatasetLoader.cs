@@ -90,6 +90,7 @@ public sealed class EvaluationDatasetLoader
             .ToHashSet(StringComparer.Ordinal);
         var retrievedReferences = evaluationCase.Fixture.RetrievalRounds.SelectMany(round => round);
         var unknownFixtureReference = retrievedReferences
+            .Concat(evaluationCase.Fixture.CorrectedSourceReferences ?? [])
             .Concat(evaluationCase.Expected.ExpectedSourceReferences)
             .Concat(evaluationCase.Expected.ForbiddenSourceReferences)
             .FirstOrDefault(reference => !knownReferences.Contains(reference));
