@@ -18,19 +18,24 @@ public sealed partial class ExtractiveAnswerGroundednessEvaluator : IAnswerGroun
     public Task<GroundednessResult> EvaluateAsync(string answer, IReadOnlyCollection<RagPassage> evidence, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        var claims = Sentences().Split(answer).Select(Normalize).Where(s => s.Length > 0).ToArray();
+        var claims = Sentences().Split(ListMarkers().Replace(answer, string.Empty))
+            .Select(Normalize)
+            .Where(claim => claim.Length > 0)
+            .ToArray();
         var sourceText = Normalize(string.Join(' ', evidence.Select(p => p.Content)));
+        var sourceNumbers = GroundedAnswerNumbers.Read(sourceText);
         var sourceTerms = Terms().Matches(RemoveDiacritics(sourceText))
             .Select(match => match.Value)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
         var sourceSentences = evidence.SelectMany(p => Sentences().Split(p.Content))
             .Select(Normalize)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
-        var numericGrounding = GroundedAnswerNumbers.Evaluate(answer, GroundedAnswerNumbers.Read(sourceText));
+        var numericGrounding = GroundedAnswerNumbers.Evaluate(answer, sourceNumbers);
         var numbersSupported = HasSufficientNumberSupport(numericGrounding);
         var supported = claims.Count(claim =>
             sourceSentences.Contains(claim)
-            || HasEnoughEvidenceTerms(claim, sourceTerms));
+            || HasEnoughEvidenceTerms(claim, sourceTerms)
+            || HasFullyGroundedDerivedNumbers(claim, sourceNumbers));
         var lexicalConfidence = claims.Length == 0 ? 0 : (double)supported / claims.Length;
         var passed = numbersSupported && HasSufficientClaimSupport(claims.Length, supported);
         var confidence = passed ? Math.Max(lexicalConfidence, 0.75) : numbersSupported ? lexicalConfidence : 0;
@@ -46,8 +51,18 @@ public sealed partial class ExtractiveAnswerGroundednessEvaluator : IAnswerGroun
         if (result.UnsupportedNumberCount == 0)
             return true;
 
-        return result.SupportedNumberCount > 0
-            && result.UnsupportedNumberCount <= result.SupportedNumberCount;
+        return result.SupportedNumberCount > result.UnsupportedNumberCount;
+    }
+
+    private static bool HasFullyGroundedDerivedNumbers(
+        string claim,
+        IReadOnlySet<decimal> sourceNumbers)
+    {
+        var result = GroundedAnswerNumbers.Evaluate(claim, sourceNumbers);
+        return !result.HasBlockingFailure
+            && result.SupportedNumberCount > 0
+            && result.UnsupportedNumberCount == 0
+            && GroundedAnswerNumbers.HasDerivedNumber(claim, sourceNumbers);
     }
 
     private static bool HasSufficientClaimSupport(int claimCount, int supported)
@@ -87,6 +102,8 @@ public sealed partial class ExtractiveAnswerGroundednessEvaluator : IAnswerGroun
 
     [GeneratedRegex(@"[.!?](?:\s+|$)|[\r\n]+")]
     private static partial Regex Sentences();
+    [GeneratedRegex(@"^\s*\d+[.)]\s+", RegexOptions.Multiline)]
+    private static partial Regex ListMarkers();
     [GeneratedRegex(@"[\p{L}\p{N}]+(?:[,.]\p{N}+)?")]
     private static partial Regex Terms();
     [GeneratedRegex(@"\s+")]

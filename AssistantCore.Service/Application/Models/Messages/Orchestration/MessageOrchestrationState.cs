@@ -69,14 +69,15 @@ public sealed class MessageOrchestrationState
     {
         get
         {
-            var retainedEvidenceIds = CollectedEvidence
-                .Select(evidence => evidence.EvidenceId)
-                .ToHashSet(StringComparer.Ordinal);
+            var retainedEvidenceIndexes = CollectedEvidence
+                .Select((evidence, index) => new { evidence.EvidenceId, Index = index })
+                .ToDictionary(item => item.EvidenceId, item => item.Index, StringComparer.Ordinal);
 
             return _toolResults
                 .Select(result => result.WithEvidence(
                     result.Evidence
-                        .Where(evidence => retainedEvidenceIds.Contains(evidence.EvidenceId))
+                        .Where(evidence => retainedEvidenceIndexes.ContainsKey(evidence.EvidenceId))
+                        .OrderBy(evidence => retainedEvidenceIndexes[evidence.EvidenceId])
                         .ToArray()))
                 .ToArray();
         }

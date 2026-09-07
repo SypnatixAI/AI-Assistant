@@ -17,6 +17,26 @@ internal static partial class GroundedAnswerNumbers
         return result.HasBlockingFailure ? result.Reason : null;
     }
 
+    public static bool HasDerivedNumber(
+        string answer,
+        IReadOnlySet<decimal> sourceNumbers)
+    {
+        var hasNonSourceEquationResult = ComplementPercentageEquations().Matches(answer)
+            .Cast<Match>()
+            .Concat(Equations().Matches(answer).Cast<Match>())
+            .SelectMany(match => ParseCandidates(match.Groups["result"].Value))
+            .Any(number => !sourceNumbers.Contains(number));
+        if (hasNonSourceEquationResult)
+            return true;
+
+        return Numbers().Matches(answer)
+            .Where(match => !IsStructuralNumber(answer, match))
+            .SelectMany(match => ParseCandidates(match.Value))
+            .Any(number =>
+                !sourceNumbers.Contains(number)
+                && IsSupportedByEvidenceOrCalculation(number, sourceNumbers));
+    }
+
     public static NumericGroundingResult Evaluate(string answer, IReadOnlySet<decimal> sourceNumbers)
     {
         var justifiedNumbers = sourceNumbers.ToHashSet();
@@ -86,8 +106,8 @@ internal static partial class GroundedAnswerNumbers
                 justifiedNumbers.Add(verifiedResult.Value / 100);
         }
 
-        var supportedNumbers = 0;
-        var unsupportedNumbers = 0;
+        var supportedNumbers = new HashSet<decimal>();
+        var unsupportedNumbers = new HashSet<decimal>();
         string? firstUnsupportedReason = null;
         foreach (Match match in Numbers().Matches(answer))
         {
@@ -97,18 +117,25 @@ internal static partial class GroundedAnswerNumbers
             var candidates = ParseCandidates(match.Value).ToArray();
             if (candidates.Length == 0)
                 return NumericGroundingResult.Blocked($"Unparseable number (position {match.Index}).");
-            if (!candidates.Any(candidate => IsSupportedByEvidenceOrCalculation(candidate, justifiedNumbers)))
+            var supportedCandidates = candidates
+                .Where(candidate => IsSupportedByEvidenceOrCalculation(candidate, justifiedNumbers))
+                .ToArray();
+            if (supportedCandidates.Length == 0)
             {
-                unsupportedNumbers++;
+                unsupportedNumbers.Add(candidates[0]);
                 firstUnsupportedReason ??= $"Number {candidates[0].ToString(CultureInfo.InvariantCulture)} at position {match.Index} is absent from cited evidence and verified calculations.";
             }
             else
             {
-                supportedNumbers++;
+                supportedNumbers.Add(supportedCandidates[0]);
             }
         }
 
-        return new NumericGroundingResult(false, firstUnsupportedReason, supportedNumbers, unsupportedNumbers);
+        return new NumericGroundingResult(
+            false,
+            firstUnsupportedReason,
+            supportedNumbers.Count,
+            unsupportedNumbers.Count);
     }
 
     private static bool IsInsideHandledRange(Match equation, IReadOnlyCollection<(int Start, int End)> ranges) =>
