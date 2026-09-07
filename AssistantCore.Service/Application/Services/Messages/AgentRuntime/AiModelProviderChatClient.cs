@@ -1,3 +1,4 @@
+using System.Threading.Channels;
 using AssistantCore.Service.Application.Models.Messages.AiModels;
 using AssistantCore.Service.Application.Models.Messages.Orchestration;
 using AssistantCore.Service.Application.Services.Messages.AiModels;
@@ -28,15 +29,37 @@ internal sealed class AiModelProviderChatClient(
         [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
         var request = CreateRequest(messages, options);
-        var response = await FindSelectedProvider().GetNextActionStreamingAsync(
+        var updates = Channel.CreateUnbounded<ChatResponseUpdate>();
+        var streamedAnyText = false;
+        var providerTask = StreamProviderResponseAsync(
             request,
-            (_, _) => ValueTask.CompletedTask,
+            updates.Writer,
+            () => streamedAnyText = true,
             cancellationToken);
 
-        foreach (var update in CreateChatResponse(response).ToChatResponseUpdates())
+        await foreach (var update in updates.Reader.ReadAllAsync(cancellationToken))
         {
             yield return update;
         }
+
+        var response = await providerTask;
+        if (!streamedAnyText)
+        {
+            yield return new ChatResponseUpdate(
+                ChatRole.Assistant,
+                GetResponseText(response))
+            {
+                ModelId = selectedModel.ModelName,
+                RawRepresentation = response
+            };
+        }
+
+        yield return new ChatResponseUpdate
+        {
+            Contents = [new UsageContent(CreateUsageDetails(response.Usage))],
+            ModelId = selectedModel.ModelName,
+            RawRepresentation = response
+        };
     }
 
     public object? GetService(Type serviceType, object? serviceKey = null)
@@ -50,6 +73,43 @@ internal sealed class AiModelProviderChatClient(
 
     public void Dispose()
     {
+    }
+
+    private async Task<AiModelResponse> StreamProviderResponseAsync(
+        AiModelRequest request,
+        ChannelWriter<ChatResponseUpdate> writer,
+        Action onTextStreamed,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var response = await FindSelectedProvider().GetNextActionStreamingAsync(
+                request,
+                async (delta, token) =>
+                {
+                    if (string.IsNullOrEmpty(delta))
+                    {
+                        return;
+                    }
+
+                    onTextStreamed();
+                    await writer.WriteAsync(
+                        new ChatResponseUpdate(ChatRole.Assistant, delta)
+                        {
+                            ModelId = selectedModel.ModelName
+                        },
+                        token);
+                },
+                cancellationToken);
+
+            writer.TryComplete();
+            return response;
+        }
+        catch (Exception exception)
+        {
+            writer.TryComplete(exception);
+            throw;
+        }
     }
 
     private AiModelRequest CreateRequest(
