@@ -8,6 +8,7 @@ using AssistantCore.Service.Application.Services.Messages.Connectors;
 using AssistantCore.Service.Application.Services.Messages.Connectors.Microsoft365;
 using AssistantCore.Service.Application.Services.Messages.Evidence;
 using Microsoft.Extensions.Logging;
+using AssistantCore.Service.Application.Services.Messages.Rag;
 
 namespace AssistantCore.Service.Infrastructure.Connectors.Microsoft365;
 
@@ -20,7 +21,8 @@ public sealed class Microsoft365Connector(
     IEvidenceNormalizer evidenceNormalizer,
     IMicrosoft365QueryExpansionService? queryExpansionService = null,
     IMicrosoft365SearchResultFusionService? searchResultFusionService = null,
-    ILogger<Microsoft365Connector>? logger = null) : IMicrosoft365Connector
+    ILogger<Microsoft365Connector>? logger = null,
+    ICorrectiveRetrievalService? correctiveRetrieval = null) : IMicrosoft365Connector
 {
     public async Task<ConnectorResult> SearchAsync(
         SearchMicrosoft365ToolArguments request,
@@ -63,15 +65,24 @@ public sealed class Microsoft365Connector(
                 groupIds,
                 sharePointGroupIds),
             Math.Min(options.MaximumResults, context.RetrievalCandidateLimit));
-        var records = await SearchAcrossQueriesAsync(searchParameters, cancellationToken);
-        var authorizedRecords = await accessVerifier.KeepAuthorizedAsync(
-            context.OrganizationId,
-            context.ExternalTenantId!,
-            normalizedUserId,
-            groupIds,
-            sharePointGroupIds,
-            records,
-            cancellationToken);
+        async Task<IReadOnlyCollection<Microsoft365SearchRecord>> SearchAuthorizedAsync(
+            Microsoft365SearchParameters parameters, CancellationToken token)
+        {
+            var records = parameters.TextOnly
+                ? await searchRepository.SearchAsync(parameters, token)
+                : await SearchAcrossQueriesAsync(parameters, token);
+            return await accessVerifier.KeepAuthorizedAsync(
+                context.OrganizationId,
+                context.ExternalTenantId!,
+                normalizedUserId,
+                groupIds,
+                sharePointGroupIds,
+                records,
+                token);
+        }
+        var authorizedRecords = correctiveRetrieval is null
+            ? await SearchAuthorizedAsync(searchParameters, cancellationToken)
+            : await correctiveRetrieval.RetrieveAsync(searchParameters, context, SearchAuthorizedAsync, cancellationToken);
         var evidence = evidenceNormalizer.Normalize(
             authorizedRecords.Select(MapCandidate).ToArray(),
             new EvidenceNormalizationOptions(

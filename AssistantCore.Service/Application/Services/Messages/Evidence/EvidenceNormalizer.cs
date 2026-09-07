@@ -12,17 +12,69 @@ public sealed class EvidenceNormalizer : IEvidenceNormalizer
         int maximumResults)
     {
         ArgumentNullException.ThrowIfNull(evidence);
+        ValidateOptions(new EvidenceNormalizationOptions(int.MaxValue, maximumResults));
 
-        return new EvidenceNormalizer().Normalize(
-            evidence.Select(item => new EvidenceCandidate(
-                item.SourceType,
-                item.Title,
-                item.Content,
-                item.Reference,
-                item.Url,
-                item.OccurredAt,
-                item.RelevanceScore)).ToArray(),
-            new EvidenceNormalizationOptions(int.MaxValue, maximumResults));
+        return evidence
+            .Where(item => !string.IsNullOrWhiteSpace(item.EvidenceId))
+            .GroupBy(item => item.EvidenceId, StringComparer.Ordinal)
+            .Select(group => group
+                .OrderByDescending(item => item.RelevanceScore.HasValue)
+                .ThenByDescending(item => item.RelevanceScore)
+                .ThenByDescending(item => item.Content.Length)
+                .First())
+            .OrderByDescending(item => item.RelevanceScore.HasValue)
+            .ThenByDescending(item => item.RelevanceScore)
+            .ThenByDescending(item => item.Content.Length)
+            .ThenBy(item => item.SourceType, StringComparer.Ordinal)
+            .ThenBy(item => item.Reference, StringComparer.Ordinal)
+            .Take(maximumResults)
+            .ToArray();
+    }
+
+    public static IReadOnlyCollection<RetrievedEvidence> LimitAcrossRetrievals(
+        IReadOnlyCollection<IReadOnlyCollection<RetrievedEvidence>> retrievals,
+        int maximumResults)
+    {
+        ArgumentNullException.ThrowIfNull(retrievals);
+        ValidateOptions(new EvidenceNormalizationOptions(int.MaxValue, maximumResults));
+
+        var rankedRetrievals = retrievals
+            .Select(retrieval => Limit(retrieval, Math.Max(1, retrieval.Count)).ToArray())
+            .Where(retrieval => retrieval.Length > 0)
+            .ToArray();
+        var selectedEvidence = new List<RetrievedEvidence>(maximumResults);
+        var selectedEvidenceIds = new HashSet<string>(StringComparer.Ordinal);
+        var nextIndexes = new int[rankedRetrievals.Length];
+
+        while (selectedEvidence.Count < maximumResults)
+        {
+            var addedDuringRound = false;
+            for (var retrievalIndex = 0;
+                 retrievalIndex < rankedRetrievals.Length && selectedEvidence.Count < maximumResults;
+                 retrievalIndex++)
+            {
+                var retrieval = rankedRetrievals[retrievalIndex];
+                while (nextIndexes[retrievalIndex] < retrieval.Length)
+                {
+                    var evidence = retrieval[nextIndexes[retrievalIndex]++];
+                    if (!selectedEvidenceIds.Add(evidence.EvidenceId))
+                    {
+                        continue;
+                    }
+
+                    selectedEvidence.Add(evidence);
+                    addedDuringRound = true;
+                    break;
+                }
+            }
+
+            if (!addedDuringRound)
+            {
+                break;
+            }
+        }
+
+        return selectedEvidence;
     }
 
     public IReadOnlyCollection<RetrievedEvidence> Normalize(

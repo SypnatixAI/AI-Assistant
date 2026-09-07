@@ -7,6 +7,7 @@ using AssistantCore.Service.Application.Models.Messages.Lifecycle;
 using AssistantCore.Service.Application.Models.Messages.Orchestration;
 using AssistantCore.Service.Application.Models.Messages.Tools;
 using Microsoft.Extensions.Options;
+using AssistantCore.Service.Application.Services.Messages.Rag;
 
 namespace AssistantCore.Service.Application.Services.Messages.Orchestration;
 
@@ -16,7 +17,8 @@ public sealed class MessageToolOrchestrator(
     IToolCallBatchExecutor toolCallBatchExecutor,
     IOrchestrationResultBuilder resultBuilder,
     IOptions<MessageOrchestrationOptions> options,
-    TimeProvider timeProvider) : IMessageToolOrchestrator
+    TimeProvider timeProvider,
+    IAnswerGroundednessGuard? groundednessGuard = null) : IMessageToolOrchestrator
 {
     private static readonly ActivitySource RagActivitySource = new("AssistantCore.Rag");
     private readonly MessageOrchestrationOptions _options = options.Value;
@@ -77,6 +79,15 @@ public sealed class MessageToolOrchestrator(
                         continue;
                     }
 
+                    if (groundednessGuard is not null && modelResponse.Decision.Type == AiModelDecisionType.Answer)
+                    {
+                        result = await groundednessGuard.ValidateAsync(state, result, cancellationToken);
+                        if (TryRequireGroundednessReformulation(state, result))
+                        {
+                            continue;
+                        }
+                    }
+                    RagTelemetry.Record("rag.pipeline.duration_ms", (timeProvider.GetUtcNow() - state.Budget.StartedAtUtc).TotalMilliseconds);
                     activity?.SetStatus(ActivityStatusCode.Ok);
                     return result;
                 }
@@ -88,6 +99,7 @@ public sealed class MessageToolOrchestrator(
                         throw new OrchestrationBudgetExceededException(exceededBudget);
                     }
 
+                    RecordBudgetExceededToolResults(state, modelResponse.Decision.ToolCalls);
                     state.RequireFinalResponse(exceededBudget);
                     continue;
                 }
@@ -150,6 +162,15 @@ public sealed class MessageToolOrchestrator(
                         continue;
                     }
 
+                    if (groundednessGuard is not null && modelResponse.Decision.Type == AiModelDecisionType.Answer)
+                    {
+                        result = await groundednessGuard.ValidateAsync(state, result, cancellationToken);
+                        if (TryRequireGroundednessReformulation(state, result))
+                        {
+                            continue;
+                        }
+                    }
+                    RagTelemetry.Record("rag.pipeline.duration_ms", (timeProvider.GetUtcNow() - state.Budget.StartedAtUtc).TotalMilliseconds);
                     activity?.SetStatus(ActivityStatusCode.Ok);
                     await WriteProgressAsync(modelResponse.Decision, onProgress, cancellationToken);
                     var streamedAnswer = string.Concat(turnAnswerDeltas);
@@ -176,6 +197,7 @@ public sealed class MessageToolOrchestrator(
                         throw new OrchestrationBudgetExceededException(exceededBudget);
                     }
 
+                    RecordBudgetExceededToolResults(state, modelResponse.Decision.ToolCalls);
                     state.RequireFinalResponse(exceededBudget);
                     continue;
                 }
@@ -219,6 +241,38 @@ public sealed class MessageToolOrchestrator(
         {
             await onProgress(decision.ProgressMessage, cancellationToken);
         }
+    }
+
+    private static void RecordBudgetExceededToolResults(
+        MessageOrchestrationState state,
+        IReadOnlyCollection<AiRequestedToolCall> requestedToolCalls)
+    {
+        var skippedResults = requestedToolCalls
+            .Select(toolCall => ToolExecutionResult.Failed(
+                toolCall.CallId,
+                "TOOL_BUDGET_EXCEEDED"))
+            .ToArray();
+
+        state.RecordToolResults(skippedResults);
+    }
+
+    private bool TryRequireGroundednessReformulation(
+        MessageOrchestrationState state,
+        MessageOrchestrationResult result)
+    {
+        if (groundednessGuard is null
+            || !result.Warnings.Contains(
+                IAnswerGroundednessGuard.ContentRejectedWarning,
+                StringComparer.Ordinal)
+            || state.GroundednessReformulationCount
+                >= groundednessGuard.MaximumReformulationAttempts
+            || timeProvider.GetUtcNow() >= state.Budget.DeadlineUtc)
+        {
+            return false;
+        }
+
+        return state.TryRequireGroundednessReformulation(
+            groundednessGuard.MaximumReformulationAttempts);
     }
 
     private OrchestrationExecutionLimits CreateExecutionLimits() =>

@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using AssistantCore.Service.Application.Services.Messages.Rag;
 using System.Text.Json;
 using AssistantCore.RagEvaluation.Models;
 using AssistantCore.Service.Application.Configuration;
@@ -20,7 +21,9 @@ namespace AssistantCore.RagEvaluation.Targets;
 internal sealed class OrchestrationEvaluationTarget(
     Func<RagEvaluationCase, IReadOnlyDictionary<string, RetrievedEvidence>, IAiModelProvider>
         providerFactory,
-    TimeProvider timeProvider) : IRagEvaluationTarget
+    TimeProvider timeProvider,
+    RagOptions? ragOptions = null,
+    IDedicatedRagReranker? dedicatedReranker = null) : IRagEvaluationTarget
 {
     private static readonly AiToolDefinition InternalSearchTool = new(
         AiToolNames.SearchInternalData,
@@ -40,10 +43,15 @@ internal sealed class OrchestrationEvaluationTarget(
     {
         var stopwatch = Stopwatch.StartNew();
         var evidenceByReference = NormalizeDocuments(evaluationCase.Documents);
+        var configuration = Options.Create(ragOptions ?? new RagOptions());
+        var corrective = ragOptions is null ? null : new CorrectiveRetrievalService(
+            new RetrievalQualityEvaluator(configuration),
+            new AdaptiveRagReranker(new SemanticOnlyRagReranker(), configuration, timeProvider, dedicatedReranker),
+            configuration, timeProvider, NullLogger<CorrectiveRetrievalService>.Instance);
         var toolExecutor = new FixtureToolCallBatchExecutor(
             evaluationCase,
             evidenceByReference,
-            timeProvider);
+            timeProvider, corrective);
         var recordingTurnService = new RecordingAiModelTurnService(
             new AiModelTurnService(
                 [providerFactory(evaluationCase, evidenceByReference)],
@@ -56,7 +64,9 @@ internal sealed class OrchestrationEvaluationTarget(
                 new EvidenceCitationResolver(),
                 NullLogger<OrchestrationResultBuilder>.Instance),
             Options.Create(CreateOptions()),
-            timeProvider);
+            timeProvider,
+            ragOptions is null ? null : new AnswerGroundednessGuard(new ExtractiveAnswerGroundednessEvaluator(),
+                configuration, timeProvider, NullLogger<AnswerGroundednessGuard>.Instance));
 
         try
         {
@@ -70,14 +80,17 @@ internal sealed class OrchestrationEvaluationTarget(
 
             return new EvaluationObservation(
                 evaluationCase.Id,
-                MapOutcome(terminalDecision.Type),
+                result.Warnings.Contains("rag.groundedness.unverified") ? EvaluationOutcome.CannotAnswer : MapOutcome(terminalDecision.Type),
                 result.Answer,
                 toolExecutor.RetrievedReferences,
                 result.CitedEvidence.Select(evidence => evidence.Reference).ToArray(),
                 toolExecutor.SearchQueries,
                 recordingTurnService.Decisions.Count,
-                toolExecutor.ToolCallCount,
-                stopwatch.ElapsedMilliseconds);
+                result.Usage.ToolCallCount,
+                stopwatch.ElapsedMilliseconds,
+                CorrectionAttempts: toolExecutor.CorrectionAttempts,
+                EstimatedCost: result.Usage.EstimatedCost,
+                GroundednessDegraded: result.Warnings.Contains("rag.groundedness.unverified"));
         }
         catch (AiProviderInvalidResponseException exception)
         {

@@ -90,7 +90,7 @@ public static class ConnectorServiceCollectionExtensions
         var timeoutMilliseconds = section.GetValue<int?>(
             nameof(Microsoft365QueryExpansionOptions.TimeoutMilliseconds)) ?? 1500;
         var minimumWordCountForExpansion = section.GetValue<int?>(
-            nameof(Microsoft365QueryExpansionOptions.MinimumWordCountForExpansion)) ?? 5;
+            nameof(Microsoft365QueryExpansionOptions.MinimumWordCountForExpansion)) ?? 2;
 
         if (maximumGeneratedQueries is < 0 or > MaximumAllowedGeneratedQueries)
         {

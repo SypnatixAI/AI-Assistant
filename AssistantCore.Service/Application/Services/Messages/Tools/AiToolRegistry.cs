@@ -19,6 +19,7 @@ public sealed class AiToolRegistry(
     {
         ArgumentOutOfRangeException.ThrowIfEqual(organizationId, Guid.Empty);
 
+      //Todo: Lorsquon retourne lorg depuis la BD, il devrait peut etre retourner aussi les connecteurs actifs et configurés, pour éviter de faire une autre requête pour récupérer les connecteurs. On pourrait peut-être créer un query qui retourne l'organisation avec ses connecteurs actifs et configurés.    
         var connectors = await organizationConnectorQueries.GetActiveConfiguredConnectors(
             organizationId,
             cancellationToken);

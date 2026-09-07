@@ -4,6 +4,30 @@ namespace AssistantCore.Service.Application.Models.Messages.Orchestration;
 
 public sealed class OrchestrationBudgetTracker
 {
+    private readonly object reservationLock = new();
+
+    public bool TryReserveAuxiliaryOperation(decimal estimatedCost, DateTimeOffset now)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegative(estimatedCost);
+        lock (reservationLock)
+        {
+            if (now >= DeadlineUtc
+                || Usage.ModelTokenCount >= Limits.MaximumModelTokens
+                || Usage.EstimatedCost + estimatedCost > Limits.MaximumEstimatedCost
+                || Usage.ContextSize >= Limits.MaximumContextSize)
+            {
+                return false;
+            }
+
+            Usage = Usage with
+            {
+                EstimatedCost = Usage.EstimatedCost + estimatedCost,
+                ExecutionTime = now - StartedAtUtc
+            };
+            return true;
+        }
+    }
+
     private readonly Dictionary<string, int> _acceptedToolCallCountsByFingerprint =
         new(StringComparer.Ordinal);
 

@@ -8,7 +8,8 @@ namespace AssistantCore.Service.Infrastructure.Microsoft365;
 public sealed class Microsoft365SearchIndexInitializerAdapter(
     AzureAiSearchIndexClient client,
     IOptions<AzureAiSearchOptions> searchOptions,
-    IOptions<Microsoft365Options> microsoft365Options) : IMicrosoft365SearchIndexInitializer
+    IOptions<Microsoft365Options> microsoft365Options,
+    IOptions<RagOptions>? ragOptions = null) : IMicrosoft365SearchIndexInitializer
 {
     public Task EnsureCreatedAsync(CancellationToken cancellationToken = default)
     {
@@ -20,7 +21,8 @@ public sealed class Microsoft365SearchIndexInitializerAdapter(
                 search.ApiKey,
                 microsoft365Options.Value.EmbeddingDimensions,
                 search.SemanticConfigurationName,
-                cancellationToken)
+                cancellationToken,
+                ragOptions?.Value.VectorSearch.Metric ?? "cosine")
             : Task.CompletedTask;
     }
 }

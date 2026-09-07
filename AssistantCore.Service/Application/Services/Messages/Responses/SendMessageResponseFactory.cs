@@ -17,7 +17,7 @@ public sealed class SendMessageResponseFactory : ISendMessageResponseFactory
             orchestrationResult.Answer,
             orchestrationResult.ModelName,
             orchestrationResult.CitedEvidence.Select(MapSource).ToArray(),
-            orchestrationResult.Warnings,
+            orchestrationResult.Warnings.Where(IsUserFacingWarning).ToArray(),
             completedProcessing.CreatedAt);
 
     private static MessageSourceResponse MapSource(RetrievedEvidence evidence) =>
@@ -26,4 +26,8 @@ public sealed class SendMessageResponseFactory : ISendMessageResponseFactory
             evidence.Title,
             evidence.Url,
             evidence.Reference);
+
+    private static bool IsUserFacingWarning(string warning) =>
+        !string.IsNullOrWhiteSpace(warning)
+        && !warning.StartsWith("rag.", StringComparison.OrdinalIgnoreCase);
 }

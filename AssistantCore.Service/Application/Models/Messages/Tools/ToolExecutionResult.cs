@@ -30,6 +30,18 @@ public sealed class ToolExecutionResult
 
     public string? ErrorCode { get; }
 
+    public ToolExecutionResult WithEvidence(IReadOnlyCollection<RetrievedEvidence> evidence)
+    {
+        ArgumentNullException.ThrowIfNull(evidence);
+
+        return new ToolExecutionResult(
+            ToolCallId,
+            Status,
+            evidence.ToArray(),
+            Warnings,
+            ErrorCode);
+    }
+
     public static ToolExecutionResult Succeeded(
         string toolCallId,
         IReadOnlyCollection<RetrievedEvidence> evidence)

@@ -17,6 +17,8 @@ public static class Microsoft365ServiceCollectionExtensions
         this IServiceCollection services,
         IConfiguration configuration)
     {
+        services.AddOptions<RagOptions>().Bind(configuration.GetSection(RagOptions.SectionName))
+            .Validate(options => options.IsValid(), "Invalid Rag configuration.").ValidateOnStart();
         services.AddOptions<Microsoft365Options>()
             .Bind(configuration.GetSection(Microsoft365Options.SectionName))
             .Validate(options =>
