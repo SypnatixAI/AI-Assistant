@@ -67,10 +67,11 @@ public sealed class SendMessageStreamCommandHandler(
                     CreateAcceptedPayload(processing)),
                 cancellationToken);
 
-            var orchestrationResult = await agentRuntime.RunStreamingAsync(
+            var agentTurnResult = await agentRuntime.RunStreamingAsync(
                 CreateAgentTurnRequest(processing, userContext, selectedModel),
                 CreateStreamingCallbacks(writer),
                 cancellationToken);
+            var orchestrationResult = AgentTurnResultAdapter.ToMessageOrchestrationResult(agentTurnResult);
             var completedProcessing = await lifecycleService.CompleteAsync(
                 processing,
                 orchestrationResult,

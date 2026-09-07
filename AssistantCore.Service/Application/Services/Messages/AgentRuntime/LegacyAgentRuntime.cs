@@ -10,22 +10,24 @@ public sealed class LegacyAgentRuntime(
     IAiToolRegistry toolRegistry,
     IMessageToolOrchestrator orchestrator) : IAgentRuntime
 {
-    public async Task<MessageOrchestrationResult> RunAsync(
+    public async Task<AgentTurnResult> RunAsync(
         AgentTurnRequest request,
         CancellationToken cancellationToken)
     {
         var availableTools = await LoadAvailableToolsAsync(request, cancellationToken);
 
-        return await orchestrator.OrchestrateAsync(
+        var result = await orchestrator.OrchestrateAsync(
             request.Processing,
             request.ExecutionContext,
             request.SelectedModel,
             request.Processing.ConversationHistory,
             availableTools,
             cancellationToken);
+
+        return CreateAgentTurnResult(result);
     }
 
-    public async Task<MessageOrchestrationResult> RunStreamingAsync(
+    public async Task<AgentTurnResult> RunStreamingAsync(
         AgentTurnRequest request,
         AgentTurnStreamingCallbacks callbacks,
         CancellationToken cancellationToken)
@@ -34,7 +36,7 @@ public sealed class LegacyAgentRuntime(
 
         var availableTools = await LoadAvailableToolsAsync(request, cancellationToken);
 
-        return await orchestrator.OrchestrateStreamingAsync(
+        var result = await orchestrator.OrchestrateStreamingAsync(
             request.Processing,
             request.ExecutionContext,
             request.SelectedModel,
@@ -43,6 +45,8 @@ public sealed class LegacyAgentRuntime(
             callbacks.OnProgress,
             callbacks.OnAnswerDelta,
             cancellationToken);
+
+        return CreateAgentTurnResult(result);
     }
 
     private Task<IReadOnlyCollection<AiToolDefinition>> LoadAvailableToolsAsync(
@@ -51,4 +55,21 @@ public sealed class LegacyAgentRuntime(
         toolRegistry.GetAvailableToolsAsync(
             request.Processing.OrganizationId,
             cancellationToken);
+
+    private static AgentTurnResult CreateAgentTurnResult(
+        MessageOrchestrationResult result) =>
+        new(
+            result.Answer,
+            result.ModelName,
+            result.CitedEvidence,
+            result.Warnings,
+            new AgentTurnUsage(
+                result.Usage.ExecutionTime,
+                result.Usage.InputTokens,
+                result.Usage.OutputTokens,
+                result.Usage.ModelCallCount,
+                result.Usage.ToolCallCount,
+                result.Usage.EstimatedCost,
+                result.Usage.ContextSize,
+                result.Usage.RepeatedToolCallCount));
 }

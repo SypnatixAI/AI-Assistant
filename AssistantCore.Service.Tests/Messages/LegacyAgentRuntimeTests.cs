@@ -34,7 +34,18 @@ public sealed class LegacyAgentRuntimeTests
             CancellationToken.None);
 
         // Then
-        Assert.Same(expectedResult, result);
+        Assert.Equal(expectedResult.Answer, result.Content);
+        Assert.Equal(expectedResult.ModelName, result.ModelName);
+        Assert.Equal(expectedResult.CitedEvidence, result.Citations);
+        Assert.Equal(expectedResult.Warnings, result.Warnings);
+        Assert.Equal(expectedResult.Usage.ExecutionTime, result.Usage.ExecutionTime);
+        Assert.Equal(expectedResult.Usage.InputTokens, result.Usage.InputTokens);
+        Assert.Equal(expectedResult.Usage.OutputTokens, result.Usage.OutputTokens);
+        Assert.Equal(expectedResult.Usage.ModelCallCount, result.Usage.ModelCallCount);
+        Assert.Equal(expectedResult.Usage.ToolCallCount, result.Usage.ToolCallCount);
+        Assert.Equal(expectedResult.Usage.EstimatedCost, result.Usage.EstimatedCost);
+        Assert.Equal(expectedResult.Usage.ContextSize, result.Usage.ContextSize);
+        Assert.Equal(expectedResult.Usage.RepeatedToolCallCount, result.Usage.RepeatedToolCallCount);
         Assert.Equal(["LoadTools", "Orchestrate"], operations);
         Assert.Equal(processing.OrganizationId, toolRegistry.ReceivedOrganizationId);
         Assert.Same(processing, orchestrator.ReceivedProcessing);

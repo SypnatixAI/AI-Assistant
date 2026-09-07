@@ -45,12 +45,13 @@ public sealed class SendMessageCommandHandler(
                 userContext.Member,
                 cancellationToken);
             processing.SelectedModel = selectedModel;
-            var orchestrationResult = await agentRuntime.RunAsync(
+            var agentTurnResult = await agentRuntime.RunAsync(
                 new AgentTurnRequest(
                     processing,
                     userContext.CreateConnectorExecutionContext(),
                     selectedModel),
                 cancellationToken);
+            var orchestrationResult = AgentTurnResultAdapter.ToMessageOrchestrationResult(agentTurnResult);
             var completedProcessing = await lifecycleService.CompleteAsync(
                 processing,
                 orchestrationResult,

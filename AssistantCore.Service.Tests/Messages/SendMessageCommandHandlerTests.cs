@@ -525,18 +525,18 @@ public sealed class SendMessageCommandHandlerTests
     {
         public AgentTurnRequest? ReceivedRequest { get; private set; }
 
-        public Task<MessageOrchestrationResult> RunAsync(
+        public Task<AgentTurnResult> RunAsync(
             AgentTurnRequest request,
             CancellationToken cancellationToken)
         {
             operations.Add("RunAgent");
             ReceivedRequest = request;
             return exception is null
-                ? Task.FromResult(result)
-                : Task.FromException<MessageOrchestrationResult>(exception);
+                ? Task.FromResult(CreateAgentTurnResult())
+                : Task.FromException<AgentTurnResult>(exception);
         }
 
-        public async Task<MessageOrchestrationResult> RunStreamingAsync(
+        public async Task<AgentTurnResult> RunStreamingAsync(
             AgentTurnRequest request,
             AgentTurnStreamingCallbacks callbacks,
             CancellationToken cancellationToken)
@@ -550,9 +550,25 @@ public sealed class SendMessageCommandHandlerTests
             }
 
             return exception is null
-                ? result
-                : await Task.FromException<MessageOrchestrationResult>(exception);
+                ? CreateAgentTurnResult()
+                : await Task.FromException<AgentTurnResult>(exception);
         }
+
+        private AgentTurnResult CreateAgentTurnResult() =>
+            new(
+                result.Answer,
+                result.ModelName,
+                result.CitedEvidence,
+                result.Warnings,
+                new AgentTurnUsage(
+                    result.Usage.ExecutionTime,
+                    result.Usage.InputTokens,
+                    result.Usage.OutputTokens,
+                    result.Usage.ModelCallCount,
+                    result.Usage.ToolCallCount,
+                    result.Usage.EstimatedCost,
+                    result.Usage.ContextSize,
+                    result.Usage.RepeatedToolCallCount));
     }
 
     private sealed class StubMessageStreamErrorReporter : IMessageStreamErrorReporter
