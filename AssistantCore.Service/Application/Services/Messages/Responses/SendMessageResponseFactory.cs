@@ -18,7 +18,8 @@ public sealed class SendMessageResponseFactory : ISendMessageResponseFactory
             orchestrationResult.ModelName,
             orchestrationResult.CitedEvidence.Select(MapSource).ToArray(),
             orchestrationResult.Warnings.Where(IsUserFacingWarning).ToArray(),
-            completedProcessing.CreatedAt);
+            completedProcessing.CreatedAt,
+            completedProcessing.Usage);
 
     private static MessageSourceResponse MapSource(RetrievedEvidence evidence) =>
         new(

@@ -18,6 +18,7 @@ using AssistantCore.Service.Application.Services.Messages.Validation;
 using AssistantCore.Service.Application.Services.Microsoft365;
 using AssistantCore.Service.Application.Services.Organizations;
 using AssistantCore.Service.Application.Services.TenantAdmission;
+using AssistantCore.Service.Application.Services.Usage;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -88,6 +89,13 @@ public static class ServiceCollectionExtensions
                     && !string.IsNullOrWhiteSpace(options.TenantAdminRole),
                 $"{OrganizationRoleOptions.SectionName}:{nameof(OrganizationRoleOptions.RequiredAdmissionRole)} and {nameof(OrganizationRoleOptions.TenantAdminRole)} are required.")
             .ValidateOnStart();
+        services.AddOptions<UsageOptions>()
+            .Bind(configuration.GetSection(UsageOptions.SectionName))
+            .Validate(
+                options => options.DefaultMonthlyTokenLimit > 0,
+                $"{UsageOptions.SectionName}:{nameof(UsageOptions.DefaultMonthlyTokenLimit)} must be greater than zero.")
+            .ValidateOnStart();
+        services.AddScoped<IUsageTrackingService, UsageTrackingService>();
         services.AddScoped<ISendMessageCommandValidator, SendMessageCommandValidator>();
         services.AddSingleton<IConversationCursorCodec, ConversationCursorCodec>();
         services.AddSingleton<IConversationMessageCursorCodec, ConversationMessageCursorCodec>();
