@@ -1,4 +1,5 @@
 using System.Text.Json;
+using AssistantCore.Service.Application.Models.Messages;
 using AssistantCore.Service.Application.Models.Messages.AiModels;
 using AssistantCore.Service.Application.Models.Messages.Lifecycle;
 using AssistantCore.Service.Application.Models.Messages.Orchestration;
@@ -130,6 +131,14 @@ public sealed class AiModelTurnServiceTests
             normalizedInstructions,
             StringComparison.Ordinal);
         Assert.Contains(
+            "first try the available enterprise retrieval tools with those terms",
+            normalizedInstructions,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "Use clarification only after retrieval when the evidence is missing, weak, or still ambiguous",
+            normalizedInstructions,
+            StringComparison.Ordinal);
+        Assert.Contains(
             "Use general model knowledge directly only when the request is clearly general",
             normalizedInstructions,
             StringComparison.Ordinal);
@@ -142,6 +151,10 @@ public sealed class AiModelTurnServiceTests
             normalizedInstructions,
             StringComparison.Ordinal);
         Assert.Contains(
+            "If a source gives a day and month without a year, do not infer or add a year",
+            normalizedInstructions,
+            StringComparison.Ordinal);
+        Assert.Contains(
             "For requests requiring an aggregation, ratio, comparison, or other derived result",
             normalizedInstructions,
             StringComparison.Ordinal);
@@ -149,6 +162,111 @@ public sealed class AiModelTurnServiceTests
             "Do not assume missing values or invent a calculation rule",
             normalizedInstructions,
             StringComparison.Ordinal);
+        Assert.Contains(
+            "For financial comparisons across multiple documents, keep each document's scope and provenance separate",
+            normalizedInstructions,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "Do not combine a total, provision, margin, threshold, or adjusted result from one document",
+            normalizedInstructions,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "Verify arithmetic before concluding",
+            normalizedInstructions,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "If qualitative immediacy and quantitative size point to different risks",
+            normalizedInstructions,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "Normalize each candidate risk before concluding",
+            normalizedInstructions,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "compute the missing margin amount from the relevant revenue and threshold",
+            normalizedInstructions,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "Do not dismiss a margin issue as non-immediate without comparing that quantified shortfall",
+            normalizedInstructions,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "When break-even is part of the requested comparison, search for and use fixed costs",
+            normalizedInstructions,
+            StringComparison.Ordinal);
+    }
+
+    [Theory, AutoDomainData]
+    public async Task Given_GroundednessReformulationRequired_When_RequestNextActionAsync_Then_ReusesEvidenceWithoutTools(
+        StartedMessageProcessing processing,
+        DateTimeOffset startedAtUtc)
+    {
+        // Given
+        var provider = new RecordingAiModelProvider(
+            "OpenAI",
+            CreateResponse(AiModelDecisionType.Answer));
+        var state = CreateState(processing, startedAtUtc);
+        Assert.True(state.TryRequireGroundednessReformulation(3));
+        var service = new AiModelTurnService(
+            [provider],
+            new StubTimeProvider(startedAtUtc.AddSeconds(1)));
+
+        // When
+        await service.RequestNextActionAsync(state, CancellationToken.None);
+
+        // Then
+        var request = Assert.IsType<AiModelRequest>(provider.ReceivedRequest);
+        var normalizedInstructions = NormalizeWhitespace(request.Instructions);
+        Assert.Empty(request.AllowedTools);
+        Assert.Contains(
+            "preserve partial dates exactly and never add a missing year, month, or day",
+            normalizedInstructions,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "return exactly one concise factual sentence",
+            normalizedInstructions,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "successful tool results already collected",
+            normalizedInstructions,
+            StringComparison.Ordinal);
+    }
+
+    [Theory, AutoDomainData]
+    public async Task Given_CollectedEvidenceExceedsTheFinalLimit_When_RequestNextActionAsync_Then_SendsOnlyRetainedToolEvidence(
+        StartedMessageProcessing processing,
+        DateTimeOffset startedAtUtc)
+    {
+        // Given
+        var provider = new RecordingAiModelProvider(
+            "OpenAI",
+            CreateResponse(AiModelDecisionType.Answer));
+        var state = CreateState(processing, startedAtUtc);
+        var evidence = Enumerable.Range(1, 10)
+            .Select(index => new RetrievedEvidence(
+                $"evidence-{index}",
+                "Microsoft365",
+                $"Title {index}",
+                $"Content {index}",
+                $"reference-{index}",
+                null,
+                null,
+                index))
+            .ToArray();
+        state.RecordToolResults([ToolExecutionResult.Succeeded("tool-call", evidence)]);
+        var service = new AiModelTurnService(
+            [provider],
+            new StubTimeProvider(startedAtUtc.AddSeconds(1)));
+
+        // When
+        await service.RequestNextActionAsync(state, CancellationToken.None);
+
+        // Then
+        var request = Assert.IsType<AiModelRequest>(provider.ReceivedRequest);
+        var result = Assert.Single(request.ToolResults);
+        Assert.Equal(
+            Enumerable.Range(3, 8).Reverse().Select(value => $"evidence-{value}"),
+            result.Evidence.Select(item => item.EvidenceId));
     }
 
     [Theory, AutoDomainData]

@@ -10,5 +10,5 @@ public sealed record Microsoft365QueryExpansionOptions(
         false,
         0,
         1500,
-        5);
+        2);
 }

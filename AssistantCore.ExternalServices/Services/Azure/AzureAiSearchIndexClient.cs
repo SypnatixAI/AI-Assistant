@@ -1,4 +1,6 @@
 using System.Net;
+using System.Text.Json;
+using System.Diagnostics;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using AssistantCore.ExternalServices.Entities.Azure;
@@ -31,9 +33,12 @@ public sealed class AzureAiSearchIndexClient
         string? apiKey,
         int embeddingDimensions,
         string semanticConfigurationName,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        string vectorMetric = "cosine")
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(semanticConfigurationName);
+        if (vectorMetric != "cosine") throw new ArgumentException("The configured embedding strategy requires cosine.", nameof(vectorMetric));
+        Activity.Current?.SetTag("rag.vector.metric", vectorMetric);
 
         var uri = new Uri(
             new Uri(endpoint),
@@ -47,6 +52,23 @@ public sealed class AzureAiSearchIndexClient
                 $"Azure AI Search index validation failed with status {(int)existing.StatusCode}.");
         }
 
+        if (existing.IsSuccessStatusCode)
+        {
+            using var definition = await JsonDocument.ParseAsync(await existing.Content.ReadAsStreamAsync(cancellationToken), cancellationToken: cancellationToken);
+            if (definition.RootElement.TryGetProperty("vectorSearch", out var vectorSearch)
+                && vectorSearch.TryGetProperty("algorithms", out var algorithms))
+            {
+                foreach (var algorithm in algorithms.EnumerateArray())
+                {
+                    if (algorithm.GetProperty("name").GetString() == "m365-hnsw"
+                        && algorithm.TryGetProperty("hnswParameters", out var parameters)
+                        && parameters.TryGetProperty("metric", out var metric)
+                        && metric.GetString() != vectorMetric)
+                        throw new AzureAiSearchExternalException("Vector metric migration requires a new index and full reingestion; the existing index was not changed.");
+                }
+            }
+        }
+
         var fields = AzureAiSearchMicrosoft365IndexDefinition.CreateFields()
             .Select(field => CreateField(field, embeddingDimensions))
             .ToArray();
@@ -58,7 +80,7 @@ public sealed class AzureAiSearchIndexClient
                 fields,
                 vectorSearch = new
                 {
-                    algorithms = new[] { new { name = "m365-hnsw", kind = "hnsw" } },
+                    algorithms = new[] { new { name = "m365-hnsw", kind = "hnsw", hnswParameters = new { metric = vectorMetric } } },
                     profiles = new[] { new { name = "m365-vector-profile", algorithm = "m365-hnsw" } }
                 },
                 semantic = new

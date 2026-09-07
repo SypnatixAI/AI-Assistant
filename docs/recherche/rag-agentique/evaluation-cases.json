@@ -115,6 +115,148 @@
       "documents": [{"reference": "atlas-project", "title": "Projet Atlas", "content": "Le projet Atlas porte le code ORANGE-7429 et doit se terminer le 1er septembre."}, {"reference": "atlas-logistics-contract", "title": "Contrat Atlas Logistics", "content": "Nordrive Technologies a signé une entente commerciale de trois ans avec Atlas Logistics."}],
       "expected": {"outcome": "answer", "requiredAnswerTerms": ["ORANGE-7429", "Atlas Logistics", "ne confirment pas"], "forbiddenAnswerTerms": [], "expectedSourceReferences": ["atlas-project", "atlas-logistics-contract"], "forbiddenSourceReferences": [], "minimumSearchRounds": 1},
       "fixture": {"outcome": "answer", "answer": "Le projet Atlas porte le code ORANGE-7429. Atlas Logistics est présenté séparément comme une partie à une entente commerciale. Les informations disponibles ne confirment pas de lien entre les deux.", "retrievalRounds": [["atlas-project", "atlas-logistics-contract"]], "citedSourceReferences": ["atlas-project", "atlas-logistics-contract"], "searchQueries": ["projet Atlas Atlas Logistics lien"]}
+    },
+    {
+      "id": "fr-adaptive-easy",
+      "language": "fr",
+      "conversation": [
+        "Quelle est la politique de télétravail ?"
+      ],
+      "toolsAvailable": true,
+      "modes": [
+        "offline",
+        "model"
+      ],
+      "documents": [
+        {
+          "reference": "hybride",
+          "title": "Politique de travail hybride",
+          "content": "La présence au bureau est obligatoire deux jours par semaine. Le télétravail est autorisé le vendredi.",
+          "semanticScore": 3.5
+        }
+      ],
+      "expected": {
+        "outcome": "answer",
+        "requiredAnswerTerms": [],
+        "forbiddenAnswerTerms": [
+          "budget de 100000"
+        ],
+        "expectedSourceReferences": [
+          "hybride"
+        ],
+        "forbiddenSourceReferences": [],
+        "minimumSearchRounds": 1
+      },
+      "fixture": {
+        "outcome": "answer",
+        "answer": "La présence au bureau est obligatoire deux jours par semaine. Le télétravail est autorisé le vendredi.",
+        "retrievalRounds": [
+          [
+            "hybride"
+          ]
+        ],
+        "correctedSourceReferences": [
+          "hybride"
+        ],
+        "citedSourceReferences": [
+          "hybride"
+        ],
+        "searchQueries": [
+          "Quelle est la politique de télétravail ?"
+        ]
+      }
+    },
+    {
+      "id": "fr-adaptive-vocabulary",
+      "adaptiveComparisonOnly": true,
+      "language": "fr",
+      "conversation": [
+        "Je peux bosser de chez moi vendredi ?"
+      ],
+      "toolsAvailable": true,
+      "modes": [
+        "offline",
+        "model"
+      ],
+      "documents": [
+        {
+          "reference": "hybride",
+          "title": "Politique de travail hybride",
+          "content": "La présence au bureau est obligatoire deux jours par semaine. Le télétravail est autorisé le vendredi.",
+          "semanticScore": 3.5
+        },
+        {
+          "reference": "bureau",
+          "title": "Bureau",
+          "content": "Le bureau ouvre à huit heures.",
+          "semanticScore": 0.5
+        }
+      ],
+      "expected": {
+        "outcome": "answer",
+        "requiredAnswerTerms": [],
+        "forbiddenAnswerTerms": [
+          "budget de 100000"
+        ],
+        "expectedSourceReferences": [
+          "hybride"
+        ],
+        "forbiddenSourceReferences": [],
+        "minimumSearchRounds": 1
+      },
+      "fixture": {
+        "outcome": "answer",
+        "answer": "La présence au bureau est obligatoire deux jours par semaine. Le télétravail est autorisé le vendredi.",
+        "retrievalRounds": [
+          [
+            "bureau"
+          ]
+        ],
+        "correctedSourceReferences": [
+          "hybride"
+        ],
+        "citedSourceReferences": [
+          "hybride"
+        ],
+        "searchQueries": [
+          "Je peux bosser de chez moi vendredi ?"
+        ]
+      }
+    },
+    {
+      "id": "fr-adaptive-absent",
+      "language": "fr",
+      "conversation": [
+        "Quel est le budget voyage 2027 ?"
+      ],
+      "toolsAvailable": true,
+      "modes": [
+        "offline",
+        "model"
+      ],
+      "documents": [],
+      "expected": {
+        "outcome": "cannotAnswer",
+        "requiredAnswerTerms": [],
+        "forbiddenAnswerTerms": [
+          "budget de 100000"
+        ],
+        "expectedSourceReferences": [],
+        "forbiddenSourceReferences": [],
+        "minimumSearchRounds": 1
+      },
+      "fixture": {
+        "outcome": "cannotAnswer",
+        "answer": "Les informations disponibles ne permettent pas de confirmer le budget voyage 2027.",
+        "retrievalRounds": [
+          []
+        ],
+        "correctedSourceReferences": [],
+        "citedSourceReferences": [],
+        "searchQueries": [
+          "Quel est le budget voyage 2027 ?"
+        ]
+      }
     }
   ]
 }

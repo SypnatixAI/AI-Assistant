@@ -191,6 +191,40 @@ public sealed class MessageOrchestrationStateTests
     }
 
     [Theory, AutoDomainData]
+    public void Given_ThreeAllowedReformulations_When_TryRequireGroundednessReformulation_Then_StopsAfterThreeAttempts(
+        StartedMessageProcessing processing,
+        SelectedAiModel selectedModel,
+        DateTimeOffset startedAtUtc)
+    {
+        // Given
+        var state = MessageOrchestrationState.Start(
+            processing,
+            selectedModel,
+            [],
+            [],
+            new OrchestrationExecutionLimits(
+                TimeSpan.FromMinutes(2),
+                8,
+                12_000,
+                1.25m,
+                20,
+                8,
+                30_000,
+                2),
+            startedAtUtc);
+
+        // When
+        var attempts = Enumerable.Range(0, 4)
+            .Select(_ => state.TryRequireGroundednessReformulation(3))
+            .ToArray();
+
+        // Then
+        Assert.Equal([true, true, true, false], attempts);
+        Assert.True(state.GroundednessReformulationRequired);
+        Assert.Equal(3, state.GroundednessReformulationCount);
+    }
+
+    [Theory, AutoDomainData]
     public void Given_TwentyRetrievedCandidates_When_RecordToolResults_Then_ExposesOnlyTheBestEightEvidenceItems(
         StartedMessageProcessing processing,
         SelectedAiModel selectedModel,
@@ -233,5 +267,119 @@ public sealed class MessageOrchestrationStateTests
         Assert.Equal(
             Enumerable.Range(13, 8).Reverse().Select(value => (double?)value),
             state.CollectedEvidence.Select(item => item.RelevanceScore));
+        Assert.Equal(
+            Enumerable.Range(13, 8).Reverse().Select(value => $"evidence-{value}"),
+            state.CollectedEvidence.Select(item => item.EvidenceId));
+    }
+
+    [Theory, AutoDomainData]
+    public void Given_MultipleRetrievalsWithDifferentScoreScales_When_RecordToolResults_Then_RetainsEvidenceFromEachRetrieval(
+        StartedMessageProcessing processing,
+        SelectedAiModel selectedModel,
+        DateTimeOffset startedAtUtc)
+    {
+        // Given
+        var limits = new OrchestrationExecutionLimits(
+            MaximumExecutionTime: TimeSpan.FromMinutes(2),
+            MaximumToolCalls: 8,
+            MaximumModelTokens: 12_000,
+            MaximumEstimatedCost: 1.25m,
+            RetrievalCandidateLimit: 20,
+            FinalEvidenceLimit: 3,
+            MaximumContextSize: 30_000,
+            MaximumRepeatedToolCalls: 2);
+        var state = MessageOrchestrationState.Start(
+            processing,
+            selectedModel,
+            [],
+            [],
+            limits,
+            startedAtUtc);
+        var dominantEvidence = Enumerable.Range(1, 3)
+            .Select(index => new RetrievedEvidence(
+                $"metalpro-{index}",
+                "Microsoft365",
+                "MetalPro",
+                $"MetalPro content {index}",
+                $"metalpro-reference-{index}",
+                null,
+                null,
+                10 - index))
+            .ToArray();
+        var nordikEvidence = new RetrievedEvidence(
+            "atelier-nordik",
+            "Microsoft365",
+            "Atelier Nordik",
+            "Atelier Nordik accounting content",
+            "atelier-nordik-reference",
+            null,
+            null,
+            0.03);
+        var financialEvidence = new RetrievedEvidence(
+            "financial-calculations",
+            "Microsoft365",
+            "Financial calculations",
+            "Break-even calculations",
+            "financial-calculations-reference",
+            null,
+            null,
+            0.02);
+
+        // When
+        state.RecordToolResults(
+        [
+            ToolExecutionResult.Succeeded("metalpro-call", dominantEvidence),
+            ToolExecutionResult.Succeeded("nordik-call", [nordikEvidence]),
+            ToolExecutionResult.Succeeded("financial-call", [financialEvidence])
+        ]);
+
+        // Then
+        Assert.Equal(
+            ["metalpro-1", "atelier-nordik", "financial-calculations"],
+            state.CollectedEvidence.Select(evidence => evidence.EvidenceId));
+    }
+
+    [Theory, AutoDomainData]
+    public void Given_MoreEvidenceThanTheFinalLimit_When_ModelVisibleToolResults_Then_ExposesOnlyRetainedEvidence(
+        StartedMessageProcessing processing,
+        SelectedAiModel selectedModel,
+        DateTimeOffset startedAtUtc)
+    {
+        // Given
+        var limits = new OrchestrationExecutionLimits(
+            MaximumExecutionTime: TimeSpan.FromMinutes(2),
+            MaximumToolCalls: 8,
+            MaximumModelTokens: 12_000,
+            MaximumEstimatedCost: 1.25m,
+            RetrievalCandidateLimit: 20,
+            FinalEvidenceLimit: 2,
+            MaximumContextSize: 30_000,
+            MaximumRepeatedToolCalls: 2);
+        var state = MessageOrchestrationState.Start(
+            processing,
+            selectedModel,
+            [],
+            [],
+            limits,
+            startedAtUtc);
+        var evidence = Enumerable.Range(1, 3)
+            .Select(index => new RetrievedEvidence(
+                $"evidence-{index}",
+                "Microsoft365",
+                $"Title {index}",
+                $"Content {index}",
+                $"reference-{index}",
+                null,
+                null,
+                index))
+            .ToArray();
+
+        // When
+        state.RecordToolResults([ToolExecutionResult.Succeeded("tool-call", evidence)]);
+
+        // Then
+        var result = Assert.Single(state.ModelVisibleToolResults);
+        Assert.Equal(["evidence-3", "evidence-2"], result.Evidence.Select(item => item.EvidenceId));
+        Assert.Equal(["evidence-1", "evidence-2", "evidence-3"], state.ToolResults.Single().Evidence.Select(item => item.EvidenceId));
     }
 }

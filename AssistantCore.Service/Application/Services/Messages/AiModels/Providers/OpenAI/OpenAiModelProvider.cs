@@ -50,7 +50,8 @@ public sealed class OpenAiModelProvider(
         {
             throw new AiProviderUnavailableException(
                 ProviderName,
-                exception.StatusCode);
+                exception.StatusCode,
+                exception.ProviderErrorMessage);
         }
         catch (AiProviderException)
         {
@@ -104,7 +105,10 @@ public sealed class OpenAiModelProvider(
         }
         catch (OpenAiTransportException exception)
         {
-            throw new AiProviderUnavailableException(ProviderName, exception.StatusCode);
+            throw new AiProviderUnavailableException(
+                ProviderName,
+                exception.StatusCode,
+                exception.ProviderErrorMessage);
         }
         catch (AiProviderException)
         {
@@ -160,7 +164,10 @@ public sealed class OpenAiModelProvider(
         }
         catch (OpenAiTransportException exception)
         {
-            throw new AiProviderUnavailableException(ProviderName, exception.StatusCode);
+            throw new AiProviderUnavailableException(
+                ProviderName,
+                exception.StatusCode,
+                exception.ProviderErrorMessage);
         }
         catch (AiProviderException)
         {

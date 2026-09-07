@@ -9,4 +9,6 @@ public sealed record ConnectorExecutionContext(
     Guid? EntraUserId = null,
     IdentityProvider? IdentityProvider = null,
     int RetrievalCandidateLimit = int.MaxValue,
-    string? UserEmail = null);
+    string? UserEmail = null,
+    Orchestration.OrchestrationBudgetTracker? Budget = null,
+    Rag.RagExecutionStatus? RagStatus = null);

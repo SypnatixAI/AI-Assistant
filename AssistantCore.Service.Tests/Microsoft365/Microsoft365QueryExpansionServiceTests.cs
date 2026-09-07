@@ -106,23 +106,23 @@ public sealed class Microsoft365QueryExpansionServiceTests
     public void Given_QueryBelowMinimumWordCount_When_ShouldExpand_Then_ReturnsFalse()
     {
         // Given
-        var policy = new Microsoft365QueryExpansionBypassPolicy(5);
+        var policy = new Microsoft365QueryExpansionBypassPolicy(2);
 
         // When
-        var shouldExpand = policy.ShouldExpand("Politique teletravail");
+        var shouldExpand = policy.ShouldExpand("ProjetX");
 
         // Then
         Assert.False(shouldExpand);
     }
 
     [Theory, AutoDomainData]
-    public void Given_QueryReachesMinimumWordCount_When_ShouldExpand_Then_ReturnsTrue()
+    public void Given_TwoWordQuery_When_ShouldExpand_Then_ReturnsTrue()
     {
         // Given
-        var policy = new Microsoft365QueryExpansionBypassPolicy(5);
+        var policy = new Microsoft365QueryExpansionBypassPolicy(2);
 
         // When
-        var shouldExpand = policy.ShouldExpand("Je peux travailler cinq jours maison");
+        var shouldExpand = policy.ShouldExpand("code projetx");
 
         // Then
         Assert.True(shouldExpand);

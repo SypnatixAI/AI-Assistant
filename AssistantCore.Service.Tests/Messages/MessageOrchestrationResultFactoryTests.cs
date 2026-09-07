@@ -169,6 +169,60 @@ public sealed class OrchestrationResultBuilderTests
     }
 
     [Theory, AutoDomainData]
+    public void Given_ALatinAnswerContainingAnUnexpectedScriptWord_When_Build_Then_RemovesTheUnexpectedWord(
+        StartedMessageProcessing processing,
+        DateTimeOffset startedAtUtc)
+    {
+        // Given
+        var state = CreateState(processing, startedAtUtc);
+        var evidence = CreateEvidence("reference-for-answer");
+        state.RecordToolResults(
+        [
+            ToolExecutionResult.Succeeded("call-1", [evidence])
+        ]);
+        var response = CreateResponse(
+            AiModelDecisionType.Answer,
+            "La réduction est de 12 % sur l’abonnement de la troisième année בלבד, uniquement si la disponibilité annuelle est inférieure à 99,70 %.",
+            [evidence.EvidenceId]);
+        var builder = CreateBuilder();
+
+        // When
+        var result = builder.Build(state, response);
+
+        // Then
+        Assert.Equal(
+            "La réduction est de 12 % sur l’abonnement de la troisième année, uniquement si la disponibilité annuelle est inférieure à 99,70 %.",
+            result.Answer);
+        Assert.Equal([evidence], result.CitedEvidence);
+    }
+
+    [Theory, AutoDomainData]
+    public void Given_ALatinAnswerContainingASourcedNonLatinWord_When_Build_Then_KeepsTheSourcedWord(
+        StartedMessageProcessing processing,
+        DateTimeOffset startedAtUtc)
+    {
+        // Given
+        var state = CreateState(processing, startedAtUtc);
+        var evidence = CreateEvidence("reference-בלבד");
+        state.RecordToolResults(
+        [
+            ToolExecutionResult.Succeeded("call-1", [evidence])
+        ]);
+        var response = CreateResponse(
+            AiModelDecisionType.Answer,
+            "Le document mentionne בלבד.",
+            [evidence.EvidenceId]);
+        var builder = CreateBuilder();
+
+        // When
+        var result = builder.Build(state, response);
+
+        // Then
+        Assert.Equal("Le document mentionne בלבד.", result.Answer);
+        Assert.Equal([evidence], result.CitedEvidence);
+    }
+
+    [Theory, AutoDomainData]
     public void Given_AnUnknownEvidenceIdentifier_When_Build_Then_RejectsTheProviderResponse(
         StartedMessageProcessing processing,
         DateTimeOffset startedAtUtc,

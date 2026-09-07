@@ -26,7 +26,7 @@ public sealed class SendMessageResponseFactoryTests
             "Sales increased.",
             "gpt-5.6-luna",
             [evidence],
-            ["One source was unavailable."],
+            ["One source was unavailable.", "rag.groundedness.unverified", "rag.groundedness.content_rejected"],
             OrchestrationExecutionUsage.Empty);
         var factory = new SendMessageResponseFactory();
 
@@ -41,7 +41,7 @@ public sealed class SendMessageResponseFactoryTests
         Assert.Equal(completedProcessing.AssistantMessageId, response.MessageId);
         Assert.Equal(orchestrationResult.Answer, response.Answer);
         Assert.Equal(orchestrationResult.ModelName, response.Model);
-        Assert.Equal(orchestrationResult.Warnings, response.Warnings);
+        Assert.Equal(["One source was unavailable."], response.Warnings);
         Assert.Equal(completedProcessing.CreatedAt, response.CreatedAt);
         var source = Assert.Single(response.Sources);
         Assert.Equal(evidence.SourceType, source.Type);

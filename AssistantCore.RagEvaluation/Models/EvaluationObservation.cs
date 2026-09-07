@@ -10,7 +10,10 @@ public sealed record EvaluationObservation(
     int ModelCalls,
     int ToolCalls,
     long DurationMilliseconds,
-    string? Error = null);
+    string? Error = null,
+    int CorrectionAttempts = 0,
+    decimal EstimatedCost = 0,
+    bool GroundednessDegraded = false);
 
 public sealed record CaseEvaluationResult(
     string CaseId,

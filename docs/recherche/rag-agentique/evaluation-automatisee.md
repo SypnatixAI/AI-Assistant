@@ -9,6 +9,7 @@
 - [Métriques et décision](#metriques-et-decision)
 - [Exécution locale](#execution-locale)
 - [Configuration GitHub](#configuration-github)
+- [Corrective RAG adaptatif](#corrective-rag)
 - [Limites](#limites)
 - [Documentation de référence](#documentation-de-reference)
 
@@ -169,3 +170,121 @@ jeton GitHub possède volontairement des droits plus limités.
 
 - [Architecture cible du RAG agentique — jeu d'évaluation initial](report-source.md#jeu-dévaluation-initial)
 - [OpenAI Evals API](https://developers.openai.com/api/reference/java/resources/evals/methods/create)
+
+
+<a id="corrective-rag"></a>
+## Corrective RAG adaptatif — ticket 226
+
+Le pipeline conserve Hybrid Search et Semantic Ranker. `Rag:CorrectiveRag:Enabled`
+est activé dans les configurations livrées. Les seuils restent à calibrer avec le
+dataset d'évaluation. `Rag:Reranking:DedicatedCrossEncoderEnabled` reste désactivé.
+Les deux options sont indépendantes. Aucun fournisseur supplémentaire n'est imposé.
+
+### Recherche et correction
+
+Le chemin controller → dispatcher → handler → services applicatifs reste inchangé.
+Le connecteur Microsoft 365 construit le contexte de sécurité une seule fois.
+Chaque recherche, initiale ou corrective, utilise les mêmes tenant, utilisateur,
+groupes, types de sources et dates, puis repasse par la vérification d'accès.
+Seuls les passages autorisés arrivent au grader et au reranker.
+
+`RetrievalQualityEvaluator` conserve le score sémantique Azure séparément du score
+hybride ou RRF. Il retient les passages non vides atteignant `MinimumSemanticScore`
+(2 par défaut). Sa confiance combine le meilleur score divisé par 4, la proportion
+atteinte de `MinimumRelevantPassages` et celle de `MinimumDistinctSources`
+(1 par défaut pour les deux). Un score absent ne devient jamais un score sémantique
+à partir du score hybride. Les seuils de 0,65 et 2 sont provisoires. Une source
+unique peut suffire pour une politique complète ; augmenter la diversité exigée
+peut provoquer des corrections inutiles sur ce cas.
+
+Si la confiance est faible, la première correction exécute une recherche textuelle
+avec Semantic Ranker, sans recalculer d'embedding ni appeler un LLM. Le nombre de
+candidats augmente dans la limite du message et de 100. Les tentatives suivantes
+augmentent encore ce nombre, puis s'arrêtent si cette limite est atteinte.
+`MaximumCorrectionAttempts` borne chaque recherche applicative (1 par défaut,
+maximum autorisé 5). Le budget partagé du message borne aussi l'ensemble des appels.
+La correction ne reformule pas les dates, ne change pas les ACL et n'active pas le
+Multi-Query de l'issue 225. Elle conserve le meilleur résultat évalué, sans remplacer
+un résultat utile par un résultat moins pertinent.
+
+Les étapes supplémentaires réservent une opération et leur coût estimé dans le
+budget du message. Le coût d'une recherche textuelle vient de `EstimatedSearchCost`
+(0,001 par défaut, à adapter au déploiement), celui d'un reranker de son estimation.
+Ces valeurs sont des estimations réservées, pas des factures ni des mesures de
+consommation Azure. Un plafond local de cinq secondes (`MaximumStageDurationSeconds`)
+et l'échéance globale bornent les étapes correctives. L'annulation utilisateur est
+propagée. Le chemin initial et les permissions ne dépendent pas de ces options.
+
+### Reranking et réponse finale
+
+`IRagReranker` utilise `SemanticOnlyRagReranker` par défaut. Pour comparer un candidat,
+fournir `IDedicatedRagReranker`, avec une estimation de coût, via un adapter
+Infrastructure. Tout futur appel fournisseur doit rester dans un client
+`AssistantCore.ExternalServices`, derrière une interface applicative. Le candidat
+est appelé uniquement si activé, disponible, budgété et si la confiance est faible
+ou les deux meilleurs scores sont proches (`AmbiguityScoreGap`, 0,15 par défaut).
+Il ne peut ni inventer ni modifier un passage. Son ordre est conservé lors de la
+normalisation des preuves.
+
+Quand Corrective RAG et `GroundednessCheckEnabled` sont activés, une réponse après
+utilisation des outils est traitée comme une réponse à risque. La validation a lieu
+avant sa diffusion, y compris en streaming. Les demandes de clarification et les
+réponses déjà déclarées insuffisantes ne sont pas revérifiées.
+
+L'évaluateur livré est **extractif et conservateur** : chaque phrase doit apparaître
+comme une phrase complète dans les preuves citées, après normalisation des espaces.
+Il ne sait pas valider les paraphrases ni établir une implication sémantique. Il ne
+suffit donc pas à mesurer la groundedness sémantique d'un modèle en production.
+Une phrase non vérifiable entraîne une réponse française explicite indiquant que
+les sources accessibles ne permettent pas de confirmer la réponse, sans citations
+présentées comme justification de l'affirmation rejetée. Le seuil de groundedness
+ne permet pas de laisser passer une phrase non supportée. Une implémentation future
+peut remplacer `IAnswerGroundednessEvaluator` ; un évaluateur réseau devra déclarer
+et réserver son budget avant son appel, contrairement à l'évaluateur local actuel.
+
+Un échec du grader ou du reranker conserve le retrieval autorisé disponible
+(fail-open). Un échec de vérification finale entraîne la réponse prudente (fail-safe).
+Désactiver Corrective RAG et le reranker dédié restaure le chemin initial.
+Ainsi, avant une correction les preuves peuvent être faibles ; après, le système
+possède les meilleurs passages autorisés trouvés dans le budget. La réponse envoyée
+est soit vérifiée selon la méthode choisie, soit explicitement insuffisante.
+
+### Observabilité et comparaison
+
+Les activités `AssistantCore.Rag.Corrective` exposent `rag.retrieval.quality_score`,
+`rag.retrieval.sufficient`, `rag.corrective.triggered`, `rag.corrective.attempt_count`,
+`rag.reranker.type`, `rag.reranker.duration_ms`, `rag.groundedness.score`,
+`rag.groundedness.passed`, `rag.pipeline.duration_ms` et
+`rag.corrective.estimated_cost`. Le Meter du même nom expose `rag.stage.value`,
+avec le nom de mesure dans le tag `rag.measurement`. `rag.vector.metric` est ajouté
+à l'activité courante lors de la définition de l'index. Les logs de fallback
+contiennent le type d'erreur, sans requête, document ou message fournisseur complet.
+
+Le runner accepte `--compare-adaptive true` et écrit `adaptive-comparison.json`.
+Il compare A (initial), B (correctif), C (reranker dédié) et D (les deux) en utilisant
+les composants applicatifs de production. L'API `AdaptiveRagComparisonRunner.RunAsync`
+accepte un candidat `IDedicatedRagReranker`. En CLI, C et D sont explicitement
+indisponibles tant qu'aucun candidat n'est fourni ; aucun résultat n'est inventé.
+
+Les fixtures peuvent fournir `semanticScore` par document et
+`correctedSourceReferences` pour la réponse de la recherche corrective. Elles
+simulent le moteur de recherche ; elles ne prouvent pas un gain sur Azure réel.
+Le mode modèle utilise aussi cette recherche simulée. Les documents non autorisés
+sont exclus dans toutes les variantes de la comparaison.
+
+Le scénario de vocabulaire porte `adaptiveComparisonOnly: true` : il est exclu du
+runner initial et inclus dans la comparaison, où son échec initial est attendu.
+
+Le rapport ajoute Recall@10, précision des passages pertinents parmi les résultats
+retournés jusqu'à 10, MRR jusqu'à 10, support extractif, proportion de réponses
+insuffisamment sourcées, latences p50/p95, coût réservé moyen, corrections moyennes, taux de réponses, d’abstention et d’erreur.
+`LabeledHallucinationRate` détecte uniquement les termes interdits annotés dans le
+corpus ; ce n'est pas un détecteur universel d'hallucinations. Une réponse prudente
+est comptée comme abstention, pas comme une réponse grounded. Les scores de support
+portent uniquement sur les réponses factuelles finales.
+
+Avant d'activer un candidat ou le correctif en production : mesurer sur un corpus
+représentatif avec jugements de pertinence et support sémantique, comparer qualité,
+abstention, latence et coût, puis documenter le gain. Aucun gain ni validation de
+seuil n'est revendiqué par cette implémentation. Les tests et le runner ne sont pas
+exécutés par Codex conformément aux règles du dépôt.

@@ -366,6 +366,8 @@ public sealed class MessageProcessingLifecycleService(
         Organization organization,
         OrganizationMember member)
     {
+        //Todo: cette vérification est redondante avec la vérification effectuée dans MessageUserContextService. On pourrait peut-être supprimer cette vérification ici et s'assurer que le membre appartient à l'organisation avant d'appeler StartAsync.
+        //surtout que si la verification dans MessageUserContextService est faite en seule query, alors si le membre n'appartient pas à l'organisation, on ne pourra pas récupérer l'organisation et le membre en même temps.
         if (member.OrganizationId != organization.Id)
         {
             throw new ArgumentException(

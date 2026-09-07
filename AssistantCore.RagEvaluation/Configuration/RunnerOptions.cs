@@ -4,7 +4,8 @@ public sealed record RunnerOptions(
     string DatasetPath,
     string OutputDirectory,
     string Mode,
-    string Model)
+    string Model,
+    bool CompareAdaptive = false)
 {
     private const string DefaultDatasetPath =
         "docs/recherche/rag-agentique/evaluation-cases.json";
@@ -36,7 +37,8 @@ public sealed record RunnerOptions(
             GetValue(values, "dataset", DefaultDatasetPath),
             GetValue(values, "output", "artifacts/rag-evaluation"),
             mode,
-            GetValue(values, "model", "gpt-5.6-luna"));
+            GetValue(values, "model", "gpt-5.6-luna"),
+            bool.Parse(GetValue(values, "compare-adaptive", "false")));
     }
 
     private static string GetValue(

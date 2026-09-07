@@ -22,6 +22,7 @@ public sealed class MessageUserContextService(
         CancellationToken cancellationToken)
     {
         var identity = currentIdentity.GetIdentity();
+        //Todo: Regarder si on peut éviter de faire 2 requêtes pour récupérer l'organisation et le membre. On pourrait peut-être faire un seul query qui retourne les deux.
         var organization = await organizationQueries.FindOrganization(
             identity.Provider,
             identity.ExternalOrganizationId,

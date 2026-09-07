@@ -1,4 +1,6 @@
 using AssistantCore.RagEvaluation.Models;
+using AssistantCore.Service.Application.Models.Messages.Connectors.Microsoft365;
+using AssistantCore.Service.Application.Services.Messages.Rag;
 using AssistantCore.Service.Application.Models.Messages;
 using AssistantCore.Service.Application.Models.Messages.Orchestration;
 using AssistantCore.Service.Application.Models.Messages.Tools;
@@ -9,7 +11,8 @@ namespace AssistantCore.RagEvaluation.Targets;
 internal sealed class FixtureToolCallBatchExecutor(
     RagEvaluationCase evaluationCase,
     IReadOnlyDictionary<string, RetrievedEvidence> evidenceByReference,
-    TimeProvider timeProvider) : IToolCallBatchExecutor
+    TimeProvider timeProvider,
+    ICorrectiveRetrievalService? correctiveRetrieval = null) : IToolCallBatchExecutor
 {
     private readonly ToolCallFingerprintGenerator _fingerprintGenerator = new();
     private readonly List<string> _retrievedReferences = [];
@@ -21,8 +24,9 @@ internal sealed class FixtureToolCallBatchExecutor(
     public IReadOnlyCollection<string> SearchQueries => _searchQueries;
 
     public int ToolCallCount { get; private set; }
+    public int CorrectionAttempts { get; private set; }
 
-    public Task<IReadOnlyCollection<ToolExecutionResult>> ExecuteAsync(
+    public async Task<IReadOnlyCollection<ToolExecutionResult>> ExecuteAsync(
         MessageOrchestrationState state,
         IReadOnlyCollection<AiRequestedToolCall> requestedToolCalls,
         CancellationToken cancellationToken)
@@ -49,6 +53,29 @@ internal sealed class FixtureToolCallBatchExecutor(
         var evidence = roundReferences
             .Select(reference => evidenceByReference[reference])
             .ToArray();
+        if (correctiveRetrieval is not null)
+        {
+            var records = await correctiveRetrieval.RetrieveAsync(
+                new Microsoft365SearchParameters(state.Question, null, null, null,
+                    new Microsoft365SearchSecurityContext(state.MessageProcessing.OrganizationId, Guid.NewGuid().ToString(), [], []),
+                    state.ToolExecutionContext.RetrievalCandidateLimit),
+                state.ToolExecutionContext,
+                (parameters, token) =>
+                {
+                    token.ThrowIfCancellationRequested();
+                    var references = parameters.TextOnly ? evaluationCase.Fixture.CorrectedSourceReferences ?? roundReferences : roundReferences;
+                    IReadOnlyCollection<Microsoft365SearchRecord> found = references
+                        .Select(reference => evaluationCase.Documents.Single(d => d.Reference == reference))
+                        .Where(d => d.Allowed)
+                        .Take(parameters.MaximumResults)
+                        .Select(d => new Microsoft365SearchRecord("evaluation-fixture", d.Title, d.Content, d.Reference,
+                            null, null, null, null, null, null, d.SemanticScore)).ToArray();
+                    return Task.FromResult(found);
+                }, cancellationToken);
+            roundReferences = records.Select(r => r.Reference).ToArray();
+            evidence = roundReferences.Select(reference => evidenceByReference[reference]).ToArray();
+            CorrectionAttempts = state.ToolExecutionContext.RagStatus?.CorrectionAttempts ?? 0;
+        }
         var results = requestedToolCalls
             .Select(toolCall => ToolExecutionResult.Succeeded(toolCall.CallId, evidence))
             .ToArray();
@@ -66,6 +93,6 @@ internal sealed class FixtureToolCallBatchExecutor(
         _roundIndex++;
         state.RecordToolResults(results);
 
-        return Task.FromResult<IReadOnlyCollection<ToolExecutionResult>>(results);
+        return results;
     }
 }

@@ -52,19 +52,73 @@ public sealed partial class OrchestrationResultBuilder(
                 state.SelectedModel.Provider)
         };
 
-        var sanitizedAnswer = EvidenceIdentifierPattern()
-            .Replace(answer, string.Empty)
-            .Trim();
+        var sanitizedAnswer = SanitizeAnswer(state, answer);
 
         return !string.IsNullOrWhiteSpace(sanitizedAnswer)
             ? sanitizedAnswer
             : throw new AiProviderInvalidResponseException(state.SelectedModel.Provider);
     }
 
+    private static string SanitizeAnswer(MessageOrchestrationState state, string answer)
+    {
+        var sanitizedAnswer = EvidenceIdentifierPattern()
+            .Replace(answer, string.Empty);
+
+        if (LatinLetterPattern().IsMatch(sanitizedAnswer))
+        {
+            sanitizedAnswer = UnexpectedScriptWordPattern()
+                .Replace(sanitizedAnswer, match =>
+                    IsSupportedNonLatinWord(state, match.Groups["word"].Value)
+                        ? match.Value
+                        : string.Empty);
+        }
+
+        return RepeatedWhitespacePattern()
+            .Replace(
+                SpaceBeforePunctuationPattern()
+                    .Replace(sanitizedAnswer, "$1"),
+                " ")
+            .Trim();
+    }
+
+    private static bool IsSupportedNonLatinWord(MessageOrchestrationState state, string word)
+    {
+        if (state.Question.Contains(word, StringComparison.Ordinal))
+        {
+            return true;
+        }
+
+        return state.CollectedEvidence.Any(evidence =>
+            evidence.Title.Contains(word, StringComparison.Ordinal)
+            || evidence.Content.Contains(word, StringComparison.Ordinal)
+            || evidence.Reference.Contains(word, StringComparison.Ordinal)
+            || (evidence.Url?.Contains(word, StringComparison.Ordinal) ?? false));
+    }
+
     [GeneratedRegex(
         @"[ \t]*\[?evidence-[a-f0-9]{24}\]?",
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex EvidenceIdentifierPattern();
+
+    [GeneratedRegex(
+        @"[A-Za-z\u00C0-\u024F]",
+        RegexOptions.CultureInvariant)]
+    private static partial Regex LatinLetterPattern();
+
+    [GeneratedRegex(
+        @"[ \t]+(?<word>[\p{IsHebrew}\p{IsArabic}\p{IsCyrillic}]+)",
+        RegexOptions.CultureInvariant)]
+    private static partial Regex UnexpectedScriptWordPattern();
+
+    [GeneratedRegex(
+        @"[ \t]+([,.;:!?])",
+        RegexOptions.CultureInvariant)]
+    private static partial Regex SpaceBeforePunctuationPattern();
+
+    [GeneratedRegex(
+        @"[ \t]{2,}",
+        RegexOptions.CultureInvariant)]
+    private static partial Regex RepeatedWhitespacePattern();
 
     private void ThrowWhenAnyCitationIsUnknown(
         MessageOrchestrationState state,

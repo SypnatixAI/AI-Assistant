@@ -32,7 +32,9 @@ public sealed class OpenAiResponsesClientAdapter(
         }
         catch (OpenAiExternalException exception)
         {
-            throw new ApplicationOpenAi.OpenAiTransportException(exception.StatusCode);
+            throw new ApplicationOpenAi.OpenAiTransportException(
+                exception.StatusCode,
+                exception.ProviderErrorMessage);
         }
     }
 
@@ -61,7 +63,9 @@ public sealed class OpenAiResponsesClientAdapter(
         }
         catch (OpenAiExternalException exception)
         {
-            throw new ApplicationOpenAi.OpenAiTransportException(exception.StatusCode);
+            throw new ApplicationOpenAi.OpenAiTransportException(
+                exception.StatusCode,
+                exception.ProviderErrorMessage);
         }
     }
 
@@ -77,7 +81,9 @@ public sealed class OpenAiResponsesClientAdapter(
         }
         catch (OpenAiExternalException exception)
         {
-            throw new ApplicationOpenAi.OpenAiTransportException(exception.StatusCode);
+            throw new ApplicationOpenAi.OpenAiTransportException(
+                exception.StatusCode,
+                exception.ProviderErrorMessage);
         }
     }
 

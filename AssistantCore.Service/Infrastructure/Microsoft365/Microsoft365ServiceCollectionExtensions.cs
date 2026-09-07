@@ -17,6 +17,8 @@ public static class Microsoft365ServiceCollectionExtensions
         this IServiceCollection services,
         IConfiguration configuration)
     {
+        services.AddOptions<RagOptions>().Bind(configuration.GetSection(RagOptions.SectionName))
+            .Validate(options => options.IsValid(), "Invalid Rag configuration.").ValidateOnStart();
         services.AddOptions<Microsoft365Options>()
             .Bind(configuration.GetSection(Microsoft365Options.SectionName))
             .Validate(options =>
@@ -25,6 +27,7 @@ public static class Microsoft365ServiceCollectionExtensions
                     && Guid.TryParse(options.ClientId, out var clientId)
                     && clientId != Guid.Empty
                     && !string.IsNullOrWhiteSpace(options.ClientSecret)
+                    && options.ClientStateHmacKey.Length >= 32
                     && HasValidSharePointCertificateConfiguration(options)
                     && IsHttpsUrl(options.ConsentCallbackUrl)
                     && IsSecureOrLoopbackUrl(options.ConsentSuccessRedirectUrl)
@@ -56,7 +59,7 @@ public static class Microsoft365ServiceCollectionExtensions
                     && options.DocumentWorkLeaseMinutes > 0
                     && options.DocumentWorkRetryMinutes > 0
                     && options.DocumentWorkMaximumAttempts > 0,
-                "Microsoft365 requires HTTPS URLs, credentials, paired SharePoint certificate settings, valid lifetimes, and valid limits.")
+                "Microsoft365 requires HTTPS URLs, credentials, a client-state HMAC key of at least 32 characters, paired SharePoint certificate settings, valid lifetimes, and valid limits.")
             .ValidateOnStart();
 
         services.AddOptions<ServiceBusOptions>()

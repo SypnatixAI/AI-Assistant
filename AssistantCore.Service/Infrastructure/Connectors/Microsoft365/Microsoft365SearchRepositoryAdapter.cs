@@ -32,7 +32,7 @@ public sealed class Microsoft365SearchRepositoryAdapter(
 
         var filter = BuildFilter(parameters);
         IReadOnlyList<float>? queryVector = null;
-        if (embeddingGenerator is not null)
+        if (embeddingGenerator is not null && !parameters.TextOnly)
         {
             var queryVectors = await embeddingGenerator.CreateAsync(
                 [parameters.Query],
@@ -68,7 +68,8 @@ public sealed class Microsoft365SearchRepositoryAdapter(
                 result.DriveItemId,
                 result.Url,
                 result.ModifiedAt,
-                result.Score))
+                result.Score,
+                result.SemanticScore))
             .ToArray();
     }
 

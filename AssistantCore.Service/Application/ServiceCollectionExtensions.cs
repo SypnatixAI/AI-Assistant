@@ -1,4 +1,5 @@
 using AssistantCore.Service.Application.Configuration;
+using AssistantCore.Service.Application.Services.Messages.Rag;
 using AssistantCore.Service.Application.Services.AuthenticateUser;
 using AssistantCore.Service.Application.Services.Conversations;
 using AssistantCore.Service.Application.Services.Conversations.Audit;
@@ -34,6 +35,14 @@ public static class ServiceCollectionExtensions
         this IServiceCollection services,
         IConfiguration configuration)
     {
+        services.AddOptions<RagOptions>().Bind(configuration.GetSection(RagOptions.SectionName))
+            .Validate(options => options.IsValid(), "Invalid Rag configuration.").ValidateOnStart();
+        services.AddScoped<IRetrievalQualityEvaluator, RetrievalQualityEvaluator>();
+        services.AddScoped<IRagReranker, SemanticOnlyRagReranker>();
+        services.AddScoped<AdaptiveRagReranker>();
+        services.AddScoped<ICorrectiveRetrievalService, CorrectiveRetrievalService>();
+        services.AddScoped<IAnswerGroundednessEvaluator, ExtractiveAnswerGroundednessEvaluator>();
+        services.AddScoped<IAnswerGroundednessGuard, AnswerGroundednessGuard>();
         services.AddOptions<MessagesOptions>()
             .Bind(configuration.GetSection(MessagesOptions.SectionName))
             .Validate(

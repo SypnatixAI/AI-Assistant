@@ -2,6 +2,7 @@
 
 ## Table des matières
 
+- [Métrique vectorielle et migration](#vector-metric-migration)
 - [But](#m365-sharepoint-purpose)
 - [Résultat attendu](#m365-sharepoint-result)
 - [Périmètre de la première version](#m365-sharepoint-scope)
@@ -387,6 +388,27 @@ seule : l'adapter Infrastructure demande un token applicatif à ce tenant avec
 le flow `client_credentials`, appelle Microsoft Graph avec ce token et vérifie
 que Graph retourne le même tenant. Le service refuse aussi ce tenant s'il est
 déjà associé à une autre organisation.
+
+Un consentement accordé ne prouve pas à lui seul que les permissions requises
+par le connecteur sont réellement utilisables : elles peuvent avoir été
+retirées après coup, ou l'administrateur peut avoir accordé un consentement
+partiel. Avant d'activer la connexion, le service effectue donc un appel Graph
+représentatif (`GET /v1.0/sites?search=*&$top=1`) avec le token applicatif
+obtenu. Cet appel ne lit aucune donnée utile : il sert uniquement à vérifier
+que `Sites.Read.All` est effectivement utilisable. Un refus `403` de Microsoft
+Graph interrompt l'activation; tout autre échec technique est traité comme une
+validation impossible.
+
+Chacun de ces refus est exposé à l'appelant via un code d'erreur métier stable
+plutôt qu'un simple message :
+
+| Code | Situation |
+| --- | --- |
+| `admin_consent_incomplete` | `state` absent, invalide, expiré ou déjà utilisé |
+| `admin_consent_refused` | Microsoft indique une erreur ou `admin_consent=False` |
+| `wrong_tenant` | le tenant validé est déjà connecté à une autre organisation |
+| `admin_consent_validation_failed` | l'acquisition du token applicatif ou l'appel Graph de vérification échoue techniquement |
+| `missing_required_permissions` | l'appel Graph représentatif est refusé (`403`) : permissions absentes ou retirées |
 
 Après un retour valide, la connexion devient :
 
@@ -999,6 +1021,27 @@ Pour chaque notification :
 
 Le webhook ne fait jamais confiance à un `organizationId` fourni dans la
 notification. Il retrouve l’organisation depuis la souscription enregistrée.
+
+### Protection du `clientState`
+
+Le `clientState` original n'est jamais stocké : Microsoft Graph ne l'exige
+jamais pour renouveler une souscription (seules l'expiration et l'URL de
+notification sont renvoyées lors d'un renouvellement), donc seule sa capacité
+à être vérifié est nécessaire. La base ne conserve qu'un HMAC-SHA256 du
+`clientState`, calculé avec une clé secrète qui n'est jamais stockée en SQL
+(comme `ClientSecret`, via la configuration/Key Vault). La comparaison à la
+réception d'une notification se fait en temps constant
+(`CryptographicOperations.FixedTimeEquals`) pour ne pas exposer d'information
+via le temps de réponse. Aucune valeur de `clientState` n'est jamais journalisée.
+
+Un `clientState` protégé est irréversible par construction : il ne peut donc
+pas être migré vers un nouvel algorithme ou une nouvelle clé sans connaître la
+valeur d'origine. Si l'algorithme ou la clé change, les souscriptions
+existantes sont marquées pour être recréées proprement (suppression de
+l'abonnement Microsoft Graph existant puis nouvelle souscription avec un
+nouveau `clientState`) par le traitement planifié de renouvellement, qui
+déclenche aussi une réconciliation complète pour couvrir toute notification
+manquée pendant la bascule.
 
 <a id="m365-sharepoint-webhook-renewal"></a>
 ## Renouvellement des webhooks
@@ -2518,3 +2561,32 @@ La fonctionnalité est terminée seulement si :
 - [Exécuter une recherche vectorielle](https://learn.microsoft.com/en-us/azure/search/vector-search-how-to-query)
 - [Exécuter une recherche hybride](https://learn.microsoft.com/en-us/azure/search/hybrid-search-how-to-query)
 - [Émulateur Azure Service Bus](https://learn.microsoft.com/azure/service-bus-messaging/overview-emulator)
+
+
+<a id="vector-metric-migration"></a>
+## Métrique vectorielle et migration
+
+`Rag:VectorSearch:Metric` vaut explicitement `cosine`, cohérent avec la stratégie
+actuelle `text-embedding-3-small`. Une autre métrique est rejetée. Azure recommande
+cosine pour les embeddings Azure OpenAI :
+[création d'un index vectoriel](https://learn.microsoft.com/en-us/azure/search/vector-search-how-to-create-index).
+Le score Semantic Ranker (0 à 4) reste distinct du score de recherche hybride :
+[fonctionnement du Semantic Ranker](https://learn.microsoft.com/en-us/azure/search/semantic-search-overview).
+
+Le service et le Worker doivent recevoir la même configuration Rag et AzureSearch.
+L'initialisation écrit `hnswParameters.metric` dans le profil `m365-hnsw`. Si l'index
+existant déclare une métrique différente, elle échoue avant toute écriture avec une
+instruction de migration. Aucun index n'est supprimé automatiquement. Une définition
+historique sans métrique explicite reçoit désormais cosine ; si Azure refuse cette
+mise à jour, utiliser la migration ci-dessous plutôt que supprimer l'index actif.
+
+Pour migrer une métrique incompatible : créer un nouvel index sous un autre nom,
+configurer un Worker pour alimenter ce nouvel index, puis effectuer une réingestion
+complète des sources et ACL (ne pas se limiter aux deltas ou aux versions déjà
+marquées comme indexées). Vérifier la complétude, les permissions et les résultats
+avant de basculer `AzureSearch:IndexName` pour les lecteurs et les writers. Conserver
+l'ancien index pour revenir à l'ancienne configuration en cas de problème. Ne le
+supprimer qu'après validation opérationnelle. La migration et le basculement Azure
+restent des opérations explicites de déploiement ; le démarrage ne les effectue pas.
+
+Voir [Corrective RAG et comparaison des variantes](../../../recherche/rag-agentique/evaluation-automatisee.md#corrective-rag).
