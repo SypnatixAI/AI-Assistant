@@ -372,6 +372,43 @@ public sealed class SendMessageCommandHandlerTests
         Assert.Equal(["Validate", "ResolveUser"], operations);
     }
 
+    [Theory, AutoDomainData]
+    public async Task Given_AnOrchestrationFailure_When_HandleAsync_Then_FailsStartedProcessing(
+        SendMessageCommand command,
+        MessageUserContext userContext,
+        SelectedAiModel selectedModel,
+        StartedMessageProcessing processing,
+        MessageOrchestrationResult orchestrationResult,
+        CompletedMessageProcessing completedProcessing,
+        SendMessageResponse response)
+    {
+        // Given
+        var operations = new List<string>();
+        var expectedException = new InvalidOperationException("The provider is unavailable.");
+        var lifecycle = new StubLifecycleService(operations, processing, completedProcessing);
+        var handler = new SendMessageCommandHandler(
+            new StubCommandValidator(operations),
+            new StubUserContextService(operations, userContext),
+            new StubModelSelector(operations, selectedModel),
+            lifecycle,
+            new StubToolRegistry(operations),
+            new StubOrchestrator(operations, orchestrationResult, expectedException),
+            new StubResponseFactory(operations, response));
+
+        // When
+        var exception = await Record.ExceptionAsync(() =>
+            handler.HandleAsync(command, CancellationToken.None));
+
+        // Then
+        Assert.Same(expectedException, exception);
+        Assert.Equal(
+            ["Validate", "ResolveUser", "SelectModel", "StartProcessing", "LoadTools", "Orchestrate"],
+            operations);
+        Assert.NotNull(lifecycle.ReceivedFailure);
+        Assert.False(lifecycle.ReceivedFailure!.WasCancelled);
+        Assert.Equal("message_generation_failed", lifecycle.ReceivedFailure.ErrorCode);
+    }
+
     private static SendMessageCommandHandler CreateHandler(
         List<string> operations,
         MessageUserContext userContext,
