@@ -43,6 +43,7 @@
 ## Qualité du code
 
 * C# moderne et lisible.
+* Toujours écrire du code simple à comprendre pour un humain : préférer des fonctions courtes, des responsabilités évidentes et un flux de lecture clair plutôt qu'une abstraction ou une optimisation difficile à suivre.
 * Nullable reference types respectés.
 * Pas de code dupliqué inutile.
 * Noms de classes, méthodes et variables explicites.
@@ -54,7 +55,7 @@
 * La partie `When` du nom d'un test doit toujours contenir le nom exact de la méthode testée.
 * Structurer le corps des tests avec les sections `// Given`, `// When` et `// Then`.
 * Ne jamais lancer les tests, qu'ils soient ciblés ou complets.
-* Exécuter uniquement le build avec `dotnet build Solution.sln` lorsqu'une modification importante implique plusieurs fichiers.
+* Ne jamais lancer de build lorsque tu finis d'implémenter, même si la modification touche plusieurs fichiers.
 * Pour une correction ponctuelle ou une modification ciblée, ne lancer ni test ni build.
 * Ne jamais présenter les tests comme validés puisqu'ils ne sont pas exécutés par Codex.
 * Gérer les erreurs proprement sans masquer les exceptions importantes.

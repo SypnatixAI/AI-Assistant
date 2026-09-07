@@ -2,14 +2,16 @@ using System.Threading.Channels;
 using AssistantCore.Service.Application.Abstractions;
 using AssistantCore.Service.Application.Commands.SendMessage.Models;
 using AssistantCore.Service.Application.Exceptions;
+using AssistantCore.Service.Application.Models.Messages;
+using AssistantCore.Service.Application.Models.Messages.AgentRuntime;
+using AssistantCore.Service.Application.Models.Messages.AiModels;
 using AssistantCore.Service.Application.Models.Messages.Lifecycle;
 using AssistantCore.Service.Application.Services.Messages.AiModels;
+using AssistantCore.Service.Application.Services.Messages.AgentRuntime;
 using AssistantCore.Service.Application.Services.Messages.Authorization;
 using AssistantCore.Service.Application.Services.Messages.Lifecycle;
-using AssistantCore.Service.Application.Services.Messages.Orchestration;
 using AssistantCore.Service.Application.Services.Messages.Responses;
 using AssistantCore.Service.Application.Services.Messages.Streaming;
-using AssistantCore.Service.Application.Services.Messages.Tools;
 using AssistantCore.Service.Application.Services.Messages.Validation;
 
 namespace AssistantCore.Service.Application.Commands.SendMessage;
@@ -19,8 +21,7 @@ public sealed class SendMessageStreamCommandHandler(
     IMessageUserContextService userContextService,
     IAuthorizedAiModelSelector modelSelector,
     IMessageProcessingLifecycleService lifecycleService,
-    IAiToolRegistry toolRegistry,
-    IMessageToolOrchestrator orchestrator,
+    IAgentRuntime agentRuntime,
     ISendMessageResponseFactory responseFactory,
     IMessageStreamErrorReporter errorReporter)
     : IRequestHandler<SendMessageStreamCommand, IAsyncEnumerable<SendMessageStreamEvent>>
@@ -66,25 +67,9 @@ public sealed class SendMessageStreamCommandHandler(
                     CreateAcceptedPayload(processing)),
                 cancellationToken);
 
-            var availableTools = await toolRegistry.GetAvailableToolsAsync(
-                userContext.Organization.Id,
-                cancellationToken);
-            var orchestrationResult = await orchestrator.OrchestrateStreamingAsync(
-                processing,
-                userContext.CreateConnectorExecutionContext(),
-                selectedModel,
-                processing.ConversationHistory,
-                availableTools,
-                async (message, token) => await writer.WriteAsync(
-                    new SendMessageStreamEvent(
-                        SendMessageStreamEvent.ProgressUpdated,
-                        new { Message = message }),
-                    token),
-                async (delta, token) => await writer.WriteAsync(
-                    new SendMessageStreamEvent(
-                        SendMessageStreamEvent.AnswerDelta,
-                        new { Delta = delta }),
-                    token),
+            var orchestrationResult = await agentRuntime.RunStreamingAsync(
+                CreateAgentTurnRequest(processing, userContext, selectedModel),
+                CreateStreamingCallbacks(writer),
                 cancellationToken);
             var completedProcessing = await lifecycleService.CompleteAsync(
                 processing,
@@ -119,6 +104,41 @@ public sealed class SendMessageStreamCommandHandler(
             writer.TryComplete();
         }
     }
+
+    private static AgentTurnRequest CreateAgentTurnRequest(
+        StartedMessageProcessing processing,
+        MessageUserContext userContext,
+        SelectedAiModel selectedModel) =>
+        new(
+            processing,
+            userContext.CreateConnectorExecutionContext(),
+            selectedModel);
+
+    private static AgentTurnStreamingCallbacks CreateStreamingCallbacks(
+        ChannelWriter<SendMessageStreamEvent> writer) =>
+        new(
+            async (message, token) => await WriteProgressEventAsync(writer, message, token),
+            async (delta, token) => await WriteAnswerDeltaEventAsync(writer, delta, token));
+
+    private static async ValueTask WriteProgressEventAsync(
+        ChannelWriter<SendMessageStreamEvent> writer,
+        string message,
+        CancellationToken cancellationToken) =>
+        await writer.WriteAsync(
+            new SendMessageStreamEvent(
+                SendMessageStreamEvent.ProgressUpdated,
+                new { Message = message }),
+            cancellationToken);
+
+    private static async ValueTask WriteAnswerDeltaEventAsync(
+        ChannelWriter<SendMessageStreamEvent> writer,
+        string delta,
+        CancellationToken cancellationToken) =>
+        await writer.WriteAsync(
+            new SendMessageStreamEvent(
+                SendMessageStreamEvent.AnswerDelta,
+                new { Delta = delta }),
+            cancellationToken);
 
     /// <summary>
     /// Construit la charge utile du premier evenement. Le resume de la conversation

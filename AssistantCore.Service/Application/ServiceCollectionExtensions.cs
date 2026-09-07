@@ -6,6 +6,7 @@ using AssistantCore.Service.Application.Services.Conversations.Audit;
 using AssistantCore.Service.Application.Services.Conversations.Pagination;
 using AssistantCore.Service.Application.Services.Members;
 using AssistantCore.Service.Application.Services.Messages;
+using AssistantCore.Service.Application.Services.Messages.AgentRuntime;
 using AssistantCore.Service.Application.Services.Messages.Authorization;
 using AssistantCore.Service.Application.Services.Messages.Evidence;
 using AssistantCore.Service.Application.Services.Messages.Lifecycle;
@@ -113,6 +114,7 @@ public static class ServiceCollectionExtensions
         services.AddMicrosoft365Application();
         services.AddScoped<IMessageProcessingLifecycleService, MessageProcessingLifecycleService>();
         services.AddScoped<IConversationMemorySummaryService, ConversationMemorySummaryService>();
+        services.AddScoped<IAgentRuntime, LegacyAgentRuntime>();
         services.AddScoped<IMessageToolOrchestrator, MessageToolOrchestrator>();
         services.AddSingleton<ISendMessageResponseFactory, SendMessageResponseFactory>();
         services.AddScoped<IMessageStreamErrorReporter, MessageStreamErrorReporter>();
