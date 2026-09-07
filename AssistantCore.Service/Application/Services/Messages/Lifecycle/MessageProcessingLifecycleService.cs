@@ -9,22 +9,26 @@ using AssistantCore.Service.Application.Models.Messages.Lifecycle;
 using AssistantCore.Service.Application.Models.Messages.Orchestration;
 using AssistantCore.Service.Application.Services.Conversations;
 using AssistantCore.Service.Application.Services.Messages.Memory;
+using AssistantCore.Service.Application.Services.Usage;
 
 namespace AssistantCore.Service.Application.Services.Messages.Lifecycle;
 
 public sealed class MessageProcessingLifecycleService(
     IConversationRepository conversationRepository,
     IConversationMemorySummaryService conversationMemorySummaryService,
+    IUsageTrackingService usageTrackingService,
     TimeProvider timeProvider) : IMessageProcessingLifecycleService
 {
     private const int MaximumProcessingErrorCodeLength = 100;
 
     public MessageProcessingLifecycleService(
         IConversationRepository conversationRepository,
+        IUsageTrackingService usageTrackingService,
         TimeProvider timeProvider)
         : this(
             conversationRepository,
             new DeterministicConversationMemorySummaryService(),
+            usageTrackingService,
             timeProvider)
     {
     }
@@ -234,9 +238,18 @@ public sealed class MessageProcessingLifecycleService(
             completedAt,
             cancellationToken);
 
+        var usage = await usageTrackingService.RecordConsumptionAsync(
+            processing.OrganizationId,
+            completedMessage.Id,
+            result.Usage.InputTokens,
+            result.Usage.OutputTokens,
+            completedAt,
+            cancellationToken);
+
         return new CompletedMessageProcessing(
             completedMessage.Id,
-            completedMessage.CreatedAt);
+            completedMessage.CreatedAt,
+            usage);
     }
 
     public async Task FailAsync(

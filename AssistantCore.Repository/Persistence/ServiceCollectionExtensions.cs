@@ -34,6 +34,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<
             IMicrosoft365PendingSynchronizationRepository,
             Microsoft365PendingSynchronizationRepository>();
+        services.AddScoped<ITokenConsumptionRepository, TokenConsumptionRepository>();
 
         return services;
     }

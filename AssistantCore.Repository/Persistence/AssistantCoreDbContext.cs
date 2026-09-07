@@ -46,6 +46,8 @@ public class AssistantCoreDbContext(DbContextOptions<AssistantCoreDbContext> opt
 
     public DbSet<MessageWarning> MessageWarnings => Set<MessageWarning>();
 
+    public DbSet<TokenConsumption> TokenConsumptions => Set<TokenConsumption>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(AssistantCoreDbContext).Assembly);
