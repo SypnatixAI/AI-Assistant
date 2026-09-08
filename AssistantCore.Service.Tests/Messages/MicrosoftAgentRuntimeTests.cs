@@ -1,11 +1,15 @@
+using AssistantCore.Service.Application.Configuration;
 using AssistantCore.Service.Application.Models.Messages.AgentRuntime;
 using AssistantCore.Service.Application.Models.Messages.AiModels;
 using AssistantCore.Service.Application.Models.Messages.Connectors;
 using AssistantCore.Service.Application.Models.Messages.Lifecycle;
 using AssistantCore.Service.Application.Models.Messages.Orchestration;
+using AssistantCore.Service.Application.Models.Messages.Tools;
 using AssistantCore.Service.Application.Services.Messages.AgentRuntime;
 using AssistantCore.Service.Application.Services.Messages.AiModels;
+using AssistantCore.Service.Application.Services.Messages.Tools;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 
 namespace AssistantCore.Service.Tests.Messages;
 
@@ -172,7 +176,28 @@ public sealed class MicrosoftAgentRuntimeTests
 
     private static MicrosoftAgentRuntime CreateRuntime(
         params IAiModelProvider[] providers) =>
-        new(providers, NullLoggerFactory.Instance);
+        new(
+            providers,
+            new EmptyToolRegistry(),
+            new ThrowingToolCallValidator(),
+            new ThrowingToolExecutionRouter(),
+            Options.Create(CreateOrchestrationOptions()),
+            TimeProvider.System,
+            NullLoggerFactory.Instance);
+
+    private static MessageOrchestrationOptions CreateOrchestrationOptions() =>
+        new()
+        {
+            MaximumExecutionTimeSeconds = 30,
+            MaximumToolCalls = 4,
+            MaximumModelTokens = 12_000,
+            MaximumEstimatedCost = 1,
+            RetrievalCandidateLimit = 10,
+            FinalEvidenceLimit = 5,
+            MaximumContextSize = 30_000,
+            MaximumRepeatedToolCalls = 2,
+            MaximumParallelToolCalls = 2
+        };
 
     private static SelectedAiModel CreateSelectedModel() =>
         new("OpenAI", "gpt-test");
@@ -269,5 +294,31 @@ public sealed class MicrosoftAgentRuntimeTests
 
         public void CompleteFinalResponse() =>
             _completeFinalResponse.TrySetResult();
+    }
+
+    private sealed class EmptyToolRegistry : IAiToolRegistry
+    {
+        public Task<IReadOnlyCollection<AiToolDefinition>> GetAvailableToolsAsync(
+            Guid organizationId,
+            CancellationToken cancellationToken) =>
+            Task.FromResult<IReadOnlyCollection<AiToolDefinition>>([]);
+    }
+
+    private sealed class ThrowingToolCallValidator : IAiToolCallValidator
+    {
+        public Task<ValidatedToolCall> ValidateAsync(
+            AiRequestedToolCall requestedToolCall,
+            IReadOnlyCollection<AiToolDefinition> availableTools,
+            CancellationToken cancellationToken) =>
+            throw new NotSupportedException();
+    }
+
+    private sealed class ThrowingToolExecutionRouter : IToolExecutionRouter
+    {
+        public Task<ToolExecutionResult> ExecuteAsync(
+            ValidatedToolCall toolCall,
+            ConnectorExecutionContext executionContext,
+            CancellationToken cancellationToken) =>
+            throw new NotSupportedException();
     }
 }

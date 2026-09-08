@@ -1,17 +1,32 @@
 using System.Diagnostics;
+using AssistantCore.Repository.Domain.Enums;
+using AssistantCore.Service.Application.Configuration;
 using AssistantCore.Service.Application.Models.Messages.AgentRuntime;
 using AssistantCore.Service.Application.Models.Messages.AiModels;
+using AssistantCore.Service.Application.Models.Messages.Connectors;
+using AssistantCore.Service.Application.Models.Messages.Orchestration;
+using AssistantCore.Service.Application.Models.Messages.Rag;
+using AssistantCore.Service.Application.Models.Messages.Tools;
 using AssistantCore.Service.Application.Services.Messages.AiModels;
+using AssistantCore.Service.Application.Services.Messages.Tools;
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace AssistantCore.Service.Application.Services.Messages.AgentRuntime;
 
 public sealed class MicrosoftAgentRuntime(
     IEnumerable<IAiModelProvider> modelProviders,
+    IAiToolRegistry toolRegistry,
+    IAiToolCallValidator toolCallValidator,
+    IToolExecutionRouter toolExecutionRouter,
+    IOptions<MessageOrchestrationOptions> options,
+    TimeProvider timeProvider,
     ILoggerFactory loggerFactory) : IAgentRuntime
 {
+    private readonly MessageOrchestrationOptions _options = options.Value;
+
     private const string SystemPrompt =
         """
         You are Synaptix's assistant. Resolve the user's request from the current
@@ -27,13 +42,17 @@ public sealed class MicrosoftAgentRuntime(
         ArgumentNullException.ThrowIfNull(request);
 
         var stopwatch = Stopwatch.StartNew();
-        var agent = CreateAgent(request.SelectedModel);
-        var response = await agent.RunAsync(
+        var agentContext = await CreateAgentContextAsync(request, cancellationToken);
+        var response = await agentContext.Agent.RunAsync(
             CreateMessages(request),
             cancellationToken: cancellationToken);
         stopwatch.Stop();
 
-        return CreateAgentTurnResult(response, request.SelectedModel, stopwatch.Elapsed);
+        return CreateAgentTurnResult(
+            response,
+            request.SelectedModel,
+            agentContext,
+            stopwatch.Elapsed);
     }
 
     public async Task<AgentTurnResult> RunStreamingAsync(
@@ -45,11 +64,11 @@ public sealed class MicrosoftAgentRuntime(
         ArgumentNullException.ThrowIfNull(callbacks);
 
         var stopwatch = Stopwatch.StartNew();
-        var agent = CreateAgent(request.SelectedModel);
+        var agentContext = await CreateAgentContextAsync(request, cancellationToken);
         var responseText = new List<string>();
         UsageDetails? usage = null;
 
-        await foreach (var update in agent.RunStreamingAsync(
+        await foreach (var update in agentContext.Agent.RunStreamingAsync(
                            CreateMessages(request),
                            cancellationToken: cancellationToken))
         {
@@ -72,20 +91,76 @@ public sealed class MicrosoftAgentRuntime(
             string.Concat(responseText),
             request.SelectedModel,
             usage,
+            agentContext,
             stopwatch.Elapsed);
     }
 
-    private ChatClientAgent CreateAgent(SelectedAiModel selectedModel)
+    private async Task<AgentContext> CreateAgentContextAsync(
+        AgentTurnRequest request,
+        CancellationToken cancellationToken)
     {
-        IChatClient chatClient = new AiModelProviderChatClient(
+        var authorizedTools = await toolRegistry.GetAvailableToolsAsync(
+            request.Processing.OrganizationId,
+            cancellationToken);
+        var enterpriseSearchTool = authorizedTools.SingleOrDefault(tool =>
+            string.Equals(
+                tool.Name,
+                AiToolNames.SearchMicrosoft365,
+                StringComparison.Ordinal));
+        var agentTool = enterpriseSearchTool is null
+            || !CanUseEnterpriseSearch(request.ExecutionContext)
+            ? null
+            : new EnterpriseSearchAgentTool(
+                enterpriseSearchTool,
+                CreateToolExecutionContext(request),
+                toolCallValidator,
+                toolExecutionRouter);
+        var chatClient = new AiModelProviderChatClient(
             modelProviders.ToArray(),
-            selectedModel);
-
-        return new ChatClientAgent(
+            request.SelectedModel);
+        var agentTools = agentTool is null
+            ? []
+            : new AITool[] { agentTool.CreateFunction() };
+        var agent = new ChatClientAgent(
             chatClient,
             instructions: SystemPrompt,
+            tools: agentTools,
             loggerFactory: loggerFactory);
+
+        return new AgentContext(agent, chatClient, agentTool);
     }
+
+    private static bool CanUseEnterpriseSearch(ConnectorExecutionContext context) =>
+        context.OrganizationId != Guid.Empty
+            && context.MemberId != Guid.Empty
+            && context.IdentityProvider == IdentityProvider.MicrosoftEntraId
+            && !string.IsNullOrWhiteSpace(context.ExternalTenantId)
+            && context.EntraUserId is not null
+            && context.EntraUserId != Guid.Empty
+            && !string.IsNullOrWhiteSpace(context.UserEmail);
+
+    private ConnectorExecutionContext CreateToolExecutionContext(AgentTurnRequest request)
+    {
+        var limits = CreateExecutionLimits();
+        return request.ExecutionContext with
+        {
+            RetrievalCandidateLimit = limits.RetrievalCandidateLimit,
+            Budget = new OrchestrationBudgetTracker(limits, timeProvider.GetUtcNow()),
+            RagStatus = new RagExecutionStatus()
+        };
+    }
+
+    private OrchestrationExecutionLimits CreateExecutionLimits() =>
+        new(
+            TimeSpan.FromSeconds(_options.MaximumExecutionTimeSeconds),
+            _options.MaximumToolCalls,
+            _options.MaximumModelTokens,
+            _options.MaximumEstimatedCost,
+            _options.RetrievalCandidateLimit,
+            _options.FinalEvidenceLimit,
+            _options.MaximumContextSize,
+            _options.MaximumRepeatedToolCalls,
+            _options.MaximumParallelToolCalls);
 
     private static IReadOnlyCollection<ChatMessage> CreateMessages(
         AgentTurnRequest request)
@@ -110,33 +185,48 @@ public sealed class MicrosoftAgentRuntime(
     private static AgentTurnResult CreateAgentTurnResult(
         AgentResponse response,
         SelectedAiModel selectedModel,
+        AgentContext agentContext,
         TimeSpan executionTime) =>
         CreateAgentTurnResult(
             response.Text,
             selectedModel,
             response.Usage,
+            agentContext,
             executionTime);
 
     private static AgentTurnResult CreateAgentTurnResult(
         string content,
         SelectedAiModel selectedModel,
         UsageDetails? usage,
+        AgentContext agentContext,
         TimeSpan executionTime)
     {
         var inputTokens = ToTokenCount(usage?.InputTokenCount);
         var outputTokens = ToTokenCount(usage?.OutputTokenCount);
+        var executedToolResults = agentContext.EnterpriseSearchTool?.ExecutedResults ?? [];
+        var citedEvidenceIds = agentContext.ChatClient.LastResponse?.Decision.CitedEvidenceIds
+            ?? [];
+        var citedEvidenceIdSet = citedEvidenceIds.ToHashSet(StringComparer.Ordinal);
+        var citations = executedToolResults
+            .SelectMany(result => result.Evidence)
+            .Where(evidence => citedEvidenceIdSet.Contains(evidence.EvidenceId))
+            .ToArray();
+        var warnings = executedToolResults
+            .SelectMany(result => result.Warnings)
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
 
         return new AgentTurnResult(
             content,
             selectedModel.ModelName,
-            Citations: [],
-            Warnings: [],
+            citations,
+            warnings,
             new AgentTurnUsage(
                 executionTime,
                 inputTokens,
                 outputTokens,
-                ModelCallCount: 1,
-                ToolCallCount: 0,
+                agentContext.ChatClient.ModelCallCount,
+                executedToolResults.Count,
                 EstimatedCost: 0,
                 ContextSize: inputTokens,
                 RepeatedToolCallCount: 0));
@@ -146,4 +236,9 @@ public sealed class MicrosoftAgentRuntime(
         tokenCount is null
             ? 0
             : checked((int)tokenCount.Value);
+
+    private sealed record AgentContext(
+        ChatClientAgent Agent,
+        AiModelProviderChatClient ChatClient,
+        EnterpriseSearchAgentTool? EnterpriseSearchTool);
 }
