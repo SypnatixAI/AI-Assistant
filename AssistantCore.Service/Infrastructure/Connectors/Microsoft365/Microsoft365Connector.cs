@@ -50,15 +50,27 @@ public sealed class Microsoft365Connector(
         }
 
         var normalizedUserId = context.EntraUserId.Value.ToString("D");
+
+        var entraGroupsStartedAt = TimeProvider.System.GetTimestamp();
         var groupIds = await groupResolver.ResolveGroupIdsAsync(
             context.ExternalTenantId!,
             normalizedUserId,
             cancellationToken);
+        logger?.LogInformation(
+            "Microsoft365 Entra group resolution completed in {ElapsedMilliseconds} ms with {GroupCount} groups.",
+            TimeProvider.System.GetElapsedTime(entraGroupsStartedAt).TotalMilliseconds,
+            groupIds.Count);
+
+        var sharePointGroupsStartedAt = TimeProvider.System.GetTimestamp();
         var sharePointGroupIds = await sharePointGroupResolver.ResolveGroupIdsAsync(
             context.OrganizationId,
             context.ExternalTenantId!,
             context.UserEmail!,
             cancellationToken);
+        logger?.LogInformation(
+            "Microsoft365 SharePoint group resolution completed in {ElapsedMilliseconds} ms with {GroupCount} groups.",
+            TimeProvider.System.GetElapsedTime(sharePointGroupsStartedAt).TotalMilliseconds,
+            sharePointGroupIds.Count);
         var searchParameters = new Microsoft365SearchParameters(
             request.Query,
             request.SourceTypes,
@@ -122,6 +134,7 @@ public sealed class Microsoft365Connector(
             ?? throw new InvalidOperationException(
                 "AzureSearch options are required for Microsoft 365 agentic retrieval.");
         var filter = Microsoft365SearchRepositoryAdapter.BuildFilter(searchParameters);
+        var retrievalStartedAt = TimeProvider.System.GetTimestamp();
         var result = await agenticRetrievalClient!.RetrieveAsync(
             new AgenticRetrievalRequest(
                 request.Query,
@@ -133,6 +146,11 @@ public sealed class Microsoft365Connector(
                 options.AgenticRetrieval.MaxRuntimeInSeconds,
                 options.AgenticRetrieval.MaxOutputSizeInTokens),
             cancellationToken);
+        logger?.LogInformation(
+            "Microsoft365 agentic retrieval stage completed in {ElapsedMilliseconds} ms with {ReferenceCount} references.",
+            TimeProvider.System.GetElapsedTime(retrievalStartedAt).TotalMilliseconds,
+            result.References.Count);
+
         var records = result.References.Select(reference => new Microsoft365SearchRecord(
             "Microsoft365",
             reference.Title,
@@ -145,6 +163,7 @@ public sealed class Microsoft365Connector(
             reference.ModifiedAt,
             reference.RelevanceScore,
             reference.RelevanceScore)).ToArray();
+        var accessVerificationStartedAt = TimeProvider.System.GetTimestamp();
         var authorizedRecords = await accessVerifier.KeepAuthorizedAsync(
             context.OrganizationId,
             context.ExternalTenantId!,
@@ -153,6 +172,12 @@ public sealed class Microsoft365Connector(
             sharePointGroupIds,
             records,
             cancellationToken);
+        logger?.LogInformation(
+            "Microsoft365 post-retrieval ACL stage completed in {ElapsedMilliseconds} ms with {AuthorizedCount} authorized records from {ReferenceCount} references.",
+            TimeProvider.System.GetElapsedTime(accessVerificationStartedAt).TotalMilliseconds,
+            authorizedRecords.Count,
+            records.Length);
+
         var evidence = evidenceNormalizer.Normalize(
             authorizedRecords.Select(MapCandidate).ToArray(),
             new EvidenceNormalizationOptions(
