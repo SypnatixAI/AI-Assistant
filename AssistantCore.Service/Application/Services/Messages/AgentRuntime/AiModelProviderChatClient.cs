@@ -42,7 +42,7 @@ internal sealed class AiModelProviderChatClient(
         [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
         var request = CreateRequest(messages, options);
-        var response = await StreamProviderResponseAsync(
+        var response = await FindSelectedProvider().GetNextActionAsync(
             request,
             cancellationToken);
         RecordResponse(response);
@@ -82,14 +82,6 @@ internal sealed class AiModelProviderChatClient(
     public void Dispose()
     {
     }
-
-    private Task<AiModelResponse> StreamProviderResponseAsync(
-        AiModelRequest request,
-        CancellationToken cancellationToken) =>
-        FindSelectedProvider().GetNextActionStreamingAsync(
-            request,
-            static (_, _) => ValueTask.CompletedTask,
-            cancellationToken);
 
     private AiModelRequest CreateRequest(
         IEnumerable<ChatMessage> messages,
@@ -137,10 +129,15 @@ internal sealed class AiModelProviderChatClient(
             ? $"""
               {instructions}
 
-              You may call EnterpriseSearch only when the user's request depends on private,
-              organization-specific, project-specific, or current enterprise information.
-              Answer greetings, small talk, and clearly general questions directly without
-              calling a tool. After EnterpriseSearch returns evidence, answer only from that
+              Use EnterpriseSearch whenever the user's request is reasonably interpretable as
+              a lookup of private, organization-specific, project-specific, or current enterprise
+              information. Prefer searching over asking for clarification when a short or terse
+              request contains an internal entity plus an information cue, for example "code atlas",
+              "budget orion", "statut phoenix", or a follow-up that can be resolved from conversation
+              history. Ask for clarification only when the request remains materially ambiguous
+              after considering the conversation history and an enterprise search would not resolve
+              that ambiguity. Answer greetings, small talk, and clearly general questions directly
+              without calling a tool. After EnterpriseSearch returns evidence, answer only from that
               evidence for enterprise-specific claims and cite only evidenceIds present in the
               tool result.
 
