@@ -41,6 +41,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IRetrievalQualityEvaluator, RetrievalQualityEvaluator>();
         services.AddScoped<IRagReranker, SemanticOnlyRagReranker>();
         services.AddScoped<AdaptiveRagReranker>();
+        services.AddScoped<IRagPassageDiversifier, RagPassageDiversifier>();
         services.AddScoped<ICorrectiveRetrievalService, CorrectiveRetrievalService>();
         services.AddScoped<IAnswerGroundednessEvaluator, ExtractiveAnswerGroundednessEvaluator>();
         services.AddScoped<IAnswerGroundednessGuard, AnswerGroundednessGuard>();

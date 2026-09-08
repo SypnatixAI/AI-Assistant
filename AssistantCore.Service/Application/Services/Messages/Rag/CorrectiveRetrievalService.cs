@@ -10,6 +10,7 @@ namespace AssistantCore.Service.Application.Services.Messages.Rag;
 public sealed class CorrectiveRetrievalService(
     IRetrievalQualityEvaluator evaluator,
     AdaptiveRagReranker reranker,
+    IRagPassageDiversifier diversifier,
     IOptions<RagOptions> options,
     TimeProvider timeProvider,
     ILogger<CorrectiveRetrievalService> logger) : ICorrectiveRetrievalService
@@ -55,6 +56,9 @@ public sealed class CorrectiveRetrievalService(
             }
             var passages = records.Select(ToPassage).ToArray();
             var ranked = await reranker.RerankAsync(parameters.Query, passages, quality, context, timeout.Token);
+            // La diversification vient apres le classement : elle reduit la redondance
+            // documentaire sans jamais introduire de preuve absente du classement.
+            ranked = diversifier.Diversify(ranked);
             var byReference = records.ToDictionary(r => r.Reference, StringComparer.Ordinal);
             // Carry the selected ordering through the existing evidence normalizer.
             return ranked.Select((p, index) => byReference[p.Reference] with { RelevanceScore = ranked.Count - index }).ToArray();

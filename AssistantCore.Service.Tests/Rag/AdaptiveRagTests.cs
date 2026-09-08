@@ -195,6 +195,7 @@ public sealed class AdaptiveRagTests
         var settings = Options.Create(new RagOptions { CorrectiveRag = new() { Enabled = true } });
         return new(grader ?? new RetrievalQualityEvaluator(settings),
             new AdaptiveRagReranker(new SemanticOnlyRagReranker(), settings, TimeProvider.System),
+            new RagPassageDiversifier(settings),
             settings, TimeProvider.System, NullLogger<CorrectiveRetrievalService>.Instance);
     }
     private static ConnectorExecutionContext Context(Guid id, decimal maximumCost = 1m) => new(id, Guid.NewGuid(),
