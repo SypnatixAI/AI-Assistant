@@ -4,6 +4,7 @@ using AssistantCore.Service.Application.Models.Messages.Tools;
 using AssistantCore.Service.Application.Models.Messages.Tools.Arguments;
 using AssistantCore.Service.Application.Services.Messages.Connectors;
 using AssistantCore.Service.Infrastructure.Connectors.Microsoft365;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace AssistantCore.Service.Tests.Microsoft365;
 
@@ -16,7 +17,8 @@ public sealed class Microsoft365SearchToolExecutionHandlerTests
     {
         // Given
         var handler = new Microsoft365SearchToolExecutionHandler(
-            new TimeoutMicrosoft365Connector());
+            new TimeoutMicrosoft365Connector(),
+            NullLogger<Microsoft365SearchToolExecutionHandler>.Instance);
         var arguments = JsonSerializer.SerializeToElement(
             new SearchMicrosoft365ToolArguments(query, null, null, null),
             new JsonSerializerOptions(JsonSerializerDefaults.Web));
