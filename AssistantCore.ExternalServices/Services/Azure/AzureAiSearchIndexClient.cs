@@ -121,7 +121,6 @@ public sealed class AzureAiSearchIndexClient
                 endpoint,
                 indexName,
                 apiKey,
-                semanticConfigurationName,
                 knowledgeSourceName,
                 cancellationToken);
             await EnsureKnowledgeBaseCreatedAsync(
@@ -129,9 +128,6 @@ public sealed class AzureAiSearchIndexClient
                 apiKey,
                 knowledgeSourceName,
                 knowledgeBaseName,
-                retrievalMaxRuntimeInSeconds,
-                retrievalMaxOutputDocuments,
-                retrievalMaxOutputSizeInTokens,
                 cancellationToken);
         }
     }
@@ -140,7 +136,6 @@ public sealed class AzureAiSearchIndexClient
         string endpoint,
         string indexName,
         string? apiKey,
-        string semanticConfigurationName,
         string knowledgeSourceName,
         CancellationToken cancellationToken)
     {
@@ -159,12 +154,6 @@ public sealed class AzureAiSearchIndexClient
                 searchIndexParameters = new
                 {
                     searchIndexName = indexName,
-                    semanticConfigurationName,
-                    searchFields = new[]
-                    {
-                        new { name = "title" },
-                        new { name = "content" }
-                    },
                     sourceDataFields = new[]
                     {
                         new { name = "chunkId" },
@@ -184,8 +173,9 @@ public sealed class AzureAiSearchIndexClient
         using var response = await httpClient.SendAsync(request, cancellationToken);
         if (!response.IsSuccessStatusCode)
         {
+            var errorBody = await response.Content.ReadAsStringAsync(cancellationToken);
             throw new AzureAiSearchExternalException(
-                $"Azure AI Search knowledge source creation failed with status {(int)response.StatusCode}.");
+                $"Azure AI Search knowledge source creation failed with status {(int)response.StatusCode}: {errorBody}");
         }
     }
 
@@ -194,9 +184,6 @@ public sealed class AzureAiSearchIndexClient
         string? apiKey,
         string knowledgeSourceName,
         string knowledgeBaseName,
-        int? retrievalMaxRuntimeInSeconds,
-        int? retrievalMaxOutputDocuments,
-        int? retrievalMaxOutputSizeInTokens,
         CancellationToken cancellationToken)
     {
         using var request = new HttpRequestMessage(
@@ -213,20 +200,10 @@ public sealed class AzureAiSearchIndexClient
                 {
                     new
                     {
-                        name = knowledgeSourceName,
-                        alwaysQuerySource = true,
-                        includeReferences = true,
-                        includeReferenceSourceData = true
+                        name = knowledgeSourceName
                     }
                 },
                 outputMode = "extractiveData",
-                retrievalReasoningEffort = new { kind = "low" },
-                retrieveDefaults = new
-                {
-                    maxRuntimeInSeconds = retrievalMaxRuntimeInSeconds,
-                    maxOutputDocuments = retrievalMaxOutputDocuments,
-                    maxOutputSizeInTokens = retrievalMaxOutputSizeInTokens
-                },
                 encryptionKey = (object?)null
             })
         };
@@ -234,8 +211,9 @@ public sealed class AzureAiSearchIndexClient
         using var response = await httpClient.SendAsync(request, cancellationToken);
         if (!response.IsSuccessStatusCode)
         {
+            var errorBody = await response.Content.ReadAsStringAsync(cancellationToken);
             throw new AzureAiSearchExternalException(
-                $"Azure AI Search knowledge base creation failed with status {(int)response.StatusCode}.");
+                $"Azure AI Search knowledge base creation failed with status {(int)response.StatusCode}: {errorBody}");
         }
     }
 
