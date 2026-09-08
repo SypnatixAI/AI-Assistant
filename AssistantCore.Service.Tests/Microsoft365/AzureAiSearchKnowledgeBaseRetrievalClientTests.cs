@@ -108,8 +108,10 @@ public sealed class AzureAiSearchKnowledgeBaseRetrievalClientTests
         Assert.Equal("low", document.RootElement.GetProperty("retrievalReasoningEffort").GetProperty("kind").GetString());
         Assert.Equal(30, document.RootElement.GetProperty("maxRuntimeInSeconds").GetInt32());
         Assert.Equal(6000, document.RootElement.GetProperty("maxOutputSize").GetInt32());
+        Assert.Equal(50, document.RootElement.GetProperty("maxOutputDocuments").GetInt32());
         var sourceParams = document.RootElement.GetProperty("knowledgeSourceParams")[0];
         Assert.Equal("searchIndex", sourceParams.GetProperty("kind").GetString());
+        Assert.Equal(50, sourceParams.GetProperty("maxOutputDocuments").GetInt32());
         Assert.True(sourceParams.GetProperty("alwaysQuerySource").GetBoolean());
         Assert.True(sourceParams.GetProperty("includeReferences").GetBoolean());
         Assert.True(sourceParams.GetProperty("includeReferenceSourceData").GetBoolean());
