@@ -12,6 +12,7 @@ public sealed class AzureAiSearchOptions
     public double MinimumSemanticRelevanceScore { get; init; } = 1.5d;
     public string KnowledgeSourceName { get; init; } = "synaptix-m365-knowledge-source";
     public string KnowledgeBaseName { get; init; } = "synaptix-m365-knowledge-base";
+    public string KnowledgeBaseRetrievalReasoningEffort { get; init; } = "minimal";
     public int KnowledgeBaseMaxRuntimeInSeconds { get; init; } = 30;
     public int? KnowledgeBaseMaxOutputDocuments { get; init; }
     public int? KnowledgeBaseMaxOutputSizeInTokens { get; init; }
