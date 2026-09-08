@@ -6,6 +6,7 @@ public sealed class RagOptions
     public VectorSearchOptions VectorSearch { get; init; } = new();
     public CorrectiveRagOptions CorrectiveRag { get; init; } = new();
     public RagRerankingOptions Reranking { get; init; } = new();
+    public RagDiversificationOptions Diversification { get; init; } = new();
 
     public bool IsValid() => VectorSearch.Metric == "cosine"
         && CorrectiveRag.MaximumCorrectionAttempts is >= 0 and <= 5
@@ -18,5 +19,8 @@ public sealed class RagOptions
         && CorrectiveRag.MaximumStageDurationSeconds is > 0 and <= 60
         && CorrectiveRag.EstimatedSearchCost >= 0
         && Reranking.MaximumEstimatedCost >= 0
-        && Reranking.AmbiguityScoreGap is >= 0 and <= 4;
+        && Reranking.AmbiguityScoreGap is >= 0 and <= 4
+        && Diversification.MaximumConsecutiveFromSameSource > 0
+        && Diversification.MaximumPromotionScoreGap is >= 0 and <= 4
+        && Diversification.NearDuplicateOverlapThreshold is > 0 and <= 1;
 }

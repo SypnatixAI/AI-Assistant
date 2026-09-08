@@ -47,6 +47,7 @@ internal sealed class OrchestrationEvaluationTarget(
         var corrective = ragOptions is null ? null : new CorrectiveRetrievalService(
             new RetrievalQualityEvaluator(configuration),
             new AdaptiveRagReranker(new SemanticOnlyRagReranker(), configuration, timeProvider, dedicatedReranker),
+            new RagPassageDiversifier(configuration),
             configuration, timeProvider, NullLogger<CorrectiveRetrievalService>.Instance);
         var toolExecutor = new FixtureToolCallBatchExecutor(
             evaluationCase,
