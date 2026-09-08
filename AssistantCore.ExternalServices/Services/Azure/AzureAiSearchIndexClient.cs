@@ -209,6 +209,10 @@ public sealed class AzureAiSearchIndexClient
                     }
                 },
                 outputMode = "extractiveData",
+                retrievalReasoningEffort = new
+                {
+                    kind = "minimal"
+                },
                 encryptionKey = (object?)null
             })
         };
