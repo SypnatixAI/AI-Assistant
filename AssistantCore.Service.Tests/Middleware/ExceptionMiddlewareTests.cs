@@ -34,8 +34,8 @@ public sealed class ExceptionMiddlewareTests
         using var response = await ReadResponse(context);
         Assert.Equal(expectedStatusCode, context.Response.StatusCode);
         Assert.Equal("application/json", context.Response.ContentType);
-        Assert.Equal(message, response.RootElement.GetProperty("Message").GetString());
-        Assert.Equal(message, response.RootElement.GetProperty("Detail").GetString());
+        Assert.Equal(message, response.RootElement.GetProperty("message").GetString());
+        Assert.Equal(message, response.RootElement.GetProperty("detail").GetString());
     }
 
     [Fact]
@@ -55,10 +55,10 @@ public sealed class ExceptionMiddlewareTests
         // Then
         using var response = await ReadResponse(context);
         Assert.Equal(StatusCodes.Status403Forbidden, context.Response.StatusCode);
-        Assert.Equal(message, response.RootElement.GetProperty("Message").GetString());
+        Assert.Equal(message, response.RootElement.GetProperty("message").GetString());
         Assert.Equal(
             TenantAdmissionException.TenantAdminRequired,
-            response.RootElement.GetProperty("Code").GetString());
+            response.RootElement.GetProperty("code").GetString());
     }
 
     [Fact]
@@ -80,14 +80,14 @@ public sealed class ExceptionMiddlewareTests
         // Then
         using var response = await ReadResponse(context);
         Assert.Equal(StatusCodes.Status400BadRequest, context.Response.StatusCode);
-        Assert.Equal(message, response.RootElement.GetProperty("Message").GetString());
+        Assert.Equal(message, response.RootElement.GetProperty("message").GetString());
         Assert.Equal(
             Microsoft365ConsentException.MissingRequiredPermissions,
-            response.RootElement.GetProperty("Code").GetString());
+            response.RootElement.GetProperty("code").GetString());
     }
 
     [Fact]
-    public async Task Given_APlainBadRequestException_When_InvokingMiddleware_Then_ReturnsNullCode()
+    public async Task Given_APlainBadRequestException_When_InvokingMiddleware_Then_ReturnsTheDefaultCode()
     {
         // Given
         var exception = new BadRequestException("Invalid request.");
@@ -102,7 +102,7 @@ public sealed class ExceptionMiddlewareTests
         // Then
         using var response = await ReadResponse(context);
         Assert.Equal(StatusCodes.Status400BadRequest, context.Response.StatusCode);
-        Assert.Equal(JsonValueKind.Null, response.RootElement.GetProperty("Code").ValueKind);
+        Assert.Equal("bad_request", response.RootElement.GetProperty("code").GetString());
     }
 
     [Fact]
@@ -121,7 +121,7 @@ public sealed class ExceptionMiddlewareTests
         // Then
         using var response = await ReadResponse(context);
         Assert.Equal(StatusCodes.Status403Forbidden, context.Response.StatusCode);
-        Assert.Equal(JsonValueKind.Null, response.RootElement.GetProperty("Code").ValueKind);
+        Assert.Equal(JsonValueKind.Null, response.RootElement.GetProperty("code").ValueKind);
     }
 
     [Fact]
@@ -139,8 +139,8 @@ public sealed class ExceptionMiddlewareTests
         // Then
         using var response = await ReadResponse(context);
         Assert.Equal(StatusCodes.Status500InternalServerError, context.Response.StatusCode);
-        Assert.Equal("An unexpected error occurred.", response.RootElement.GetProperty("Message").GetString());
-        Assert.Equal("Database unavailable.", response.RootElement.GetProperty("Detail").GetString());
+        Assert.Equal("An unexpected error occurred.", response.RootElement.GetProperty("message").GetString());
+        Assert.Equal("Database unavailable.", response.RootElement.GetProperty("detail").GetString());
     }
 
     [Theory]
@@ -165,7 +165,7 @@ public sealed class ExceptionMiddlewareTests
         // Then
         using var response = await ReadResponse(context);
         Assert.Equal(expectedStatusCode, context.Response.StatusCode);
-        Assert.Equal(exception.Message, response.RootElement.GetProperty("Message").GetString());
+        Assert.Equal(exception.Message, response.RootElement.GetProperty("message").GetString());
         Assert.DoesNotContain("ApiKey", response.RootElement.GetRawText(), StringComparison.OrdinalIgnoreCase);
     }
 
@@ -185,7 +185,7 @@ public sealed class ExceptionMiddlewareTests
         // Then
         using var response = await ReadResponse(context);
         Assert.Equal(StatusCodes.Status502BadGateway, context.Response.StatusCode);
-        Assert.Equal(exception.Message, response.RootElement.GetProperty("Message").GetString());
+        Assert.Equal(exception.Message, response.RootElement.GetProperty("message").GetString());
     }
 
     [Fact]
@@ -223,7 +223,7 @@ public sealed class ExceptionMiddlewareTests
         // Then
         using var response = await ReadResponse(context);
         Assert.Equal(StatusCodes.Status500InternalServerError, context.Response.StatusCode);
-        Assert.Equal(JsonValueKind.Null, response.RootElement.GetProperty("Detail").ValueKind);
+        Assert.Equal(JsonValueKind.Null, response.RootElement.GetProperty("detail").ValueKind);
     }
 
     [Fact]
@@ -248,6 +248,59 @@ public sealed class ExceptionMiddlewareTests
         Assert.True(nextWasCalled);
         Assert.Equal(StatusCodes.Status204NoContent, context.Response.StatusCode);
         Assert.Equal(0, context.Response.Body.Length);
+    }
+
+    [Fact]
+    public async Task Given_AnyError_When_InvokingMiddleware_Then_FieldsUseTheSameCasingAsTheRestOfTheApi()
+    {
+        // Given
+        // La convention est celle qu'AddControllers applique aux reponses normales.
+        // Sans elle, les erreurs seraient le seul endroit de l'API en PascalCase et
+        // un client lisant error.message recevrait undefined sur toutes les erreurs.
+        var exception = new NotFoundException(
+            "Conversation not found.",
+            NotFoundException.ConversationNotFound);
+        var context = CreateHttpContext();
+        var middleware = CreateMiddleware(
+            _ => Task.FromException(exception),
+            Environments.Development);
+
+        // When
+        await middleware.InvokeAsync(context);
+
+        // Then
+        context.Response.Body.Position = 0;
+        using var reader = new StreamReader(context.Response.Body);
+        var payload = await reader.ReadToEndAsync();
+        Assert.Contains(@"""message""", payload);
+        Assert.Contains(@"""detail""", payload);
+        Assert.Contains(@"""code""", payload);
+        Assert.DoesNotContain(@"""Message""", payload);
+        Assert.DoesNotContain(@"""Detail""", payload);
+        Assert.DoesNotContain(@"""Code""", payload);
+    }
+
+    [Theory]
+    [InlineData("bad-request", "bad_request")]
+    [InlineData("not-found", "not_found")]
+    [InlineData("conflict", "conflict")]
+    public async Task Given_APredictableBusinessError_When_InvokingMiddleware_Then_TheCodeIsNeverNull(
+        string exceptionType,
+        string expectedCode)
+    {
+        // Given
+        var exception = CreateKnownException(exceptionType, "Message destine a l'affichage.");
+        var context = CreateHttpContext();
+        var middleware = CreateMiddleware(
+            _ => Task.FromException(exception),
+            Environments.Development);
+
+        // When
+        await middleware.InvokeAsync(context);
+
+        // Then
+        using var response = await ReadResponse(context);
+        Assert.Equal(expectedCode, response.RootElement.GetProperty("code").GetString());
     }
 
     private static ExceptionMiddleware CreateMiddleware(

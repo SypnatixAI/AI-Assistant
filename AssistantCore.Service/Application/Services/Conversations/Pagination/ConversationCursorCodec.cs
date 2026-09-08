@@ -27,7 +27,9 @@ public sealed class ConversationCursorCodec : IConversationCursorCodec
 
             if (payload is null || payload.Id == Guid.Empty)
             {
-                throw new BadRequestException("cursor is invalid.");
+                throw new BadRequestException(
+                    "cursor is invalid.",
+                    BadRequestException.InvalidPagination);
             }
 
             return new ConversationCursor(payload.UpdatedAt, payload.Id);
@@ -35,7 +37,9 @@ public sealed class ConversationCursorCodec : IConversationCursorCodec
         catch (Exception exception) when (
             exception is FormatException or JsonException or DecoderFallbackException)
         {
-            throw new BadRequestException("cursor is invalid.");
+            throw new BadRequestException(
+                    "cursor is invalid.",
+                    BadRequestException.InvalidPagination);
         }
     }
 

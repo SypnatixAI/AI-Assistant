@@ -1,7 +1,7 @@
 namespace AssistantCore.Service.Application.Exceptions;
 
 public sealed class Microsoft365ConsentException(string message, string errorCode)
-    : BadRequestException(message), IErrorCodeException
+    : BadRequestException(message, errorCode)
 {
     public const string AdminConsentRefused = "admin_consent_refused";
 
@@ -12,6 +12,4 @@ public sealed class Microsoft365ConsentException(string message, string errorCod
     public const string MissingRequiredPermissions = "missing_required_permissions";
 
     public const string AdminConsentValidationFailed = "admin_consent_validation_failed";
-
-    public string ErrorCode { get; } = errorCode;
 }
