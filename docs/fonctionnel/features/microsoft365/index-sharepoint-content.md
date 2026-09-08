@@ -18,6 +18,7 @@
 - [Renouvellement des webhooks](#m365-sharepoint-webhook-renewal)
 - [Synchronisation initiale](#m365-sharepoint-initial-sync)
 - [Synchronisation des changements](#m365-sharepoint-delta-sync)
+- [Reinitialiser la selection](#m365-sharepoint-reset-selection)
 - [Réindexation administrative d’un client](#m365-sharepoint-admin-reindex)
 - [Traitement par le worker](#m365-sharepoint-worker)
 - [Téléchargement et extraction](#m365-sharepoint-extraction)
@@ -1127,6 +1128,61 @@ son checkpoint à la fois.
 Pour une liste, le webhook ne contient pas toutes les nouvelles valeurs. Il
 réveille uniquement la synchronisation delta. Une réconciliation planifiée
 relance aussi le delta afin de couvrir une notification perdue.
+
+<a id="m365-sharepoint-admin-reindex"></a>
+<a id="m365-sharepoint-reset-selection"></a>
+## Réinitialiser la sélection
+
+```http
+POST /api/microsoft365/selection/reset
+```
+
+Un administrateur du tenant client peut redemander une sélection vierge de ses
+sites, par exemple après s'être trompé de site ou pour repartir d'une
+indexation propre.
+
+L'organisation n'est pas un paramètre : elle vient du contexte authentifié, si
+bien qu'un administrateur ne peut réinitialiser que sa propre organisation. À ne
+pas confondre avec la [réindexation administrative](#m365-sharepoint-admin-reindex),
+réservée à un opérateur Synaptix et qui agit sur une autre organisation.
+
+### Ce qui est conservé
+
+La connexion Microsoft 365 reste active et **le consentement administrateur
+n'est pas redemandé**. L'organisation, ses membres et leurs rôles sont
+intacts. Le but est de recommencer la sélection et l'indexation, pas
+l'onboarding.
+
+### Ce qui est effacé
+
+Pour cette seule organisation : abonnements, synchronisations, travaux de
+document et d'élément de liste, contenus et passages indexés, puis les sources
+elles-mêmes — sites, bibliothèques et listes. Les chunks correspondants sont
+également supprimés d'Azure AI Search.
+
+Les chunks partent de l'index **avant** que leurs lignes ne soient effacées.
+Dans l'ordre inverse, un échec laisserait des documents orphelins dans l'index,
+sans plus aucun moyen de les retrouver ni de les supprimer.
+
+### État après réinitialisation
+
+`GET /api/microsoft365/onboarding` retourne un consentement complet mais une
+sélection et une indexation incomplètes. `GET /api/microsoft365/sites` propose
+de nouveau les sites du tenant, aucun n'étant sélectionné. Le cache
+d'onboarding est invalidé immédiatement, sans quoi l'administrateur reverrait
+son organisation comme configurée pendant une trentaine de secondes.
+
+### Règles
+
+- L'opération est idempotente : la rejouer ne supprime plus rien et ne
+  produit pas d'erreur.
+- Une organisation ne peut jamais effacer les données d'une autre.
+- Un membre non administrateur reçoit `403` avant toute lecture.
+- Une connexion absente retourne `404`, une connexion inactive retourne `409`
+  avec le code `microsoft365_connection_inactive`.
+
+La réponse retourne le nombre de lignes réellement supprimées par catégorie, ce
+qui permet de constater qu'un second appel ne supprime plus rien.
 
 <a id="m365-sharepoint-admin-reindex"></a>
 ## Réindexation administrative d’un client
