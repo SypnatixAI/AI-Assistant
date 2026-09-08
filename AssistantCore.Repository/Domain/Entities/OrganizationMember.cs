@@ -22,5 +22,7 @@ public sealed class OrganizationMember
 
     public DateTimeOffset? LastSuccessfulAuthenticationAt { get; set; }
 
+    public int Version { get; set; }
+
     public Organization Organization { get; set; } = null!;
 }

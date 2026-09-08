@@ -1,7 +1,9 @@
 using AssistantCore.Repository.Abstractions;
 using AssistantCore.Repository.Domain.Entities;
 using AssistantCore.Repository.Domain.Enums;
+using AssistantCore.Service.Application.Configuration;
 using AssistantCore.Service.Application.Services.Members;
+using Microsoft.Extensions.Options;
 
 namespace AssistantCore.Service.Tests.Members;
 
@@ -29,7 +31,11 @@ public sealed class MemberManagementServiceGetMembersTests
             Result = (organization, admin)
         };
         var memberQueries = new StubOrganizationMemberQueries { Members = members };
-        var service = new MemberManagementService(authenticateUserService, memberQueries);
+        var service = new MemberManagementService(
+            authenticateUserService,
+            memberQueries,
+            new StubCurrentIdentity(),
+            Options.Create(new OrganizationRoleOptions()));
 
         // When
         var result = await service.GetMembersAsync(cancellationToken);
@@ -53,7 +59,9 @@ public sealed class MemberManagementServiceGetMembersTests
         var memberQueries = new StubOrganizationMemberQueries();
         var service = new MemberManagementService(
             new StubAuthenticateUserService { Result = (organization, user) },
-            memberQueries);
+            memberQueries,
+            new StubCurrentIdentity(),
+            Options.Create(new OrganizationRoleOptions()));
 
         // When
         var exception = await Assert.ThrowsAsync<ForbiddenException>(
