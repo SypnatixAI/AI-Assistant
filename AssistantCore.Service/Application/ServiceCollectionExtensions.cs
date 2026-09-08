@@ -115,13 +115,8 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IMessageProcessingLifecycleService, MessageProcessingLifecycleService>();
         services.AddScoped<IConversationMemorySummaryService, ConversationMemorySummaryService>();
         services.AddScoped<IAgentRuntime, MicrosoftAgentRuntime>();
-        services.AddScoped<IMessageToolOrchestrator, MessageToolOrchestrator>();
         services.AddSingleton<ISendMessageResponseFactory, SendMessageResponseFactory>();
         services.AddScoped<IMessageStreamErrorReporter, MessageStreamErrorReporter>();
-        services.AddScoped<IAiModelTurnService, AiModelTurnService>();
-        services.AddScoped<IToolCallBatchExecutor, ToolCallBatchExecutor>();
-        services.AddScoped<IOrchestrationContinuationPolicy, OrchestrationContinuationPolicy>();
-        services.AddScoped<IOrchestrationResultBuilder, OrchestrationResultBuilder>();
         services.AddSingleton<IEvidenceCitationResolver, EvidenceCitationResolver>();
         services.AddSingleton<IToolCallFingerprintGenerator, ToolCallFingerprintGenerator>();
         services.AddSingleton<IAiToolFailureWarningFactory, AiToolFailureWarningFactory>();
