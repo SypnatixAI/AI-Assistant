@@ -2,6 +2,7 @@ using System.ClientModel;
 using System.Text;
 using AssistantCore.ExternalServices.Entities.OpenAI.Models;
 using OpenAI.Responses;
+using Microsoft.Extensions.AI;
 
 namespace AssistantCore.ExternalServices.Services.OpenAI;
 
@@ -48,6 +49,12 @@ public sealed class OpenAiResponsesClient
             {
                 Endpoint = new Uri(settings.Endpoint, UriKind.Absolute)
             });
+    }
+
+    public IChatClient CreateAgentChatClient(string model)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(model);
+        return new OpenAiExternalChatClient(_client.AsIChatClient(model));
     }
 
     public async Task<OpenAiResponsesResult> CreateResponseAsync(
