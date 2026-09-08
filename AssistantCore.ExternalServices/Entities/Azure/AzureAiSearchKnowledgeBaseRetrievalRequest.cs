@@ -8,4 +8,5 @@ public sealed record AzureAiSearchKnowledgeBaseRetrievalRequest(
     string Filter,
     int MaximumResults,
     int MaxRuntimeInSeconds,
-    int MaxOutputSizeInTokens);
+    int MaxOutputSizeInTokens,
+    string RetrievalReasoningEffort);
