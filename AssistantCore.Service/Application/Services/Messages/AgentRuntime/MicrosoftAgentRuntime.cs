@@ -25,6 +25,8 @@ public sealed class MicrosoftAgentRuntime(
     ILoggerFactory loggerFactory) : IAgentRuntime
 {
     private readonly MessageOrchestrationOptions _options = options.Value;
+    private readonly ILogger<MicrosoftAgentRuntime> _logger =
+        loggerFactory.CreateLogger<MicrosoftAgentRuntime>();
 
     private const string SystemPrompt =
         """
@@ -130,7 +132,8 @@ public sealed class MicrosoftAgentRuntime(
                 toolCallValidator,
                 toolExecutionRouter);
         var trackedChatClient = new AgentChatClientUsageTracker(
-            agentChatClientFactory.Create(request.SelectedModel));
+            agentChatClientFactory.Create(request.SelectedModel),
+            loggerFactory.CreateLogger<AgentChatClientUsageTracker>());
         var middleware = new EnterpriseSearchFunctionInvocationMiddleware(
             _options,
             fingerprintGenerator,
@@ -239,6 +242,14 @@ public sealed class MicrosoftAgentRuntime(
             .SelectMany(result => result.Warnings)
             .Distinct(StringComparer.Ordinal)
             .ToArray();
+
+        _logger.LogInformation(
+            "Agent turn completed in {ElapsedMilliseconds} ms with {ModelCallCount} model calls, {ToolCallCount} tool calls, {InputTokens} input tokens and {OutputTokens} output tokens.",
+            executionTime.TotalMilliseconds,
+            agentContext.ChatClient.ModelCallCount,
+            executedToolResults.Count,
+            inputTokens,
+            outputTokens);
 
         return new AgentTurnResult(
             content,
