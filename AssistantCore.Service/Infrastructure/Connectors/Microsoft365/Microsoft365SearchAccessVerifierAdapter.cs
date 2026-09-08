@@ -3,11 +3,13 @@ using AssistantCore.Service.Application.Models.Messages.Connectors.Microsoft365;
 using AssistantCore.Service.Application.Models.Microsoft365.Permissions;
 using AssistantCore.Service.Application.Services.Microsoft365;
 using AssistantCore.Service.Application.Services.Messages.Connectors.Microsoft365;
+using Microsoft.Extensions.Logging;
 
 namespace AssistantCore.Service.Infrastructure.Connectors.Microsoft365;
 
 public sealed class Microsoft365SearchAccessVerifierAdapter(
-    IMicrosoft365AclResolver aclResolver) : IMicrosoft365SearchAccessVerifier
+    IMicrosoft365AclResolver aclResolver,
+    ILogger<Microsoft365SearchAccessVerifierAdapter>? logger = null) : IMicrosoft365SearchAccessVerifier
 {
     public async Task<IReadOnlyCollection<Microsoft365SearchRecord>> KeepAuthorizedAsync(
         Guid organizationId,
@@ -25,6 +27,7 @@ public sealed class Microsoft365SearchAccessVerifierAdapter(
         ArgumentNullException.ThrowIfNull(sharePointGroupIds);
         ArgumentNullException.ThrowIfNull(records);
 
+        var startedAt = TimeProvider.System.GetTimestamp();
         var organization = new Organization
         {
             Id = organizationId,
@@ -40,11 +43,19 @@ public sealed class Microsoft365SearchAccessVerifierAdapter(
             record,
             cancellationToken)));
 
-        return records
+        var authorizedRecords = records
             .Zip(decisions)
             .Where(item => item.Second)
             .Select(item => item.First)
             .ToArray();
+
+        logger?.LogInformation(
+            "Microsoft365 ACL verification completed in {ElapsedMilliseconds} ms: {CheckedCount} documents checked, {AuthorizedCount} authorized.",
+            TimeProvider.System.GetElapsedTime(startedAt).TotalMilliseconds,
+            records.Count,
+            authorizedRecords.Length);
+
+        return authorizedRecords;
     }
 
     private async Task<bool> IsAuthorizedAsync(
