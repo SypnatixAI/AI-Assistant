@@ -179,6 +179,8 @@ dotnet user-secrets --project AssistantCore.Service set "Microsoft365:ClientStat
 dotnet user-secrets --project AssistantCore.Service set "Microsoft365:SharePointCertificatePath" "<absolute-pfx-path>"
 dotnet user-secrets --project AssistantCore.Service set "Microsoft365:SharePointCertificatePassword" "<pfx-password>"
 dotnet user-secrets --project AssistantCore.Service set "Microsoft365:EmbeddingApiKey" "<openai-api-key>"
+dotnet user-secrets --project AssistantCore.Service set "Microsoft365:OcrEndpoint" "https://<vision-resource>.cognitiveservices.azure.com"
+dotnet user-secrets --project AssistantCore.Service set "Microsoft365:OcrApiKey" "<azure-vision-key>"
 dotnet user-secrets --project AssistantCore.Service set "AzureSearch:Endpoint" "https://<service>.search.windows.net"
 dotnet user-secrets --project AssistantCore.Service set "AzureSearch:IndexName" "microsoft-content-dev"
 dotnet user-secrets --project AssistantCore.Service set "AzureSearch:ApiKey" "<azure-search-api-key>"

@@ -7,5 +7,8 @@ public enum Microsoft365ContentExtractionStatus
     EncryptedDocument,
     CorruptedDocument,
     UnsupportedFormat,
-    TooLarge
+    TooLarge,
+    NoIndexableContent,
+    OcrUnavailable,
+    OcrTimeout
 }

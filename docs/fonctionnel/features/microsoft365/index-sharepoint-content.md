@@ -2590,3 +2590,8 @@ supprimer qu'après validation opérationnelle. La migration et le basculement A
 restent des opérations explicites de déploiement ; le démarrage ne les effectue pas.
 
 Voir [Corrective RAG et comparaison des variantes](../../../recherche/rag-agentique/evaluation-automatisee.md#corrective-rag).
+### PDF et images
+
+Les PDF sont d'abord lus avec leur couche de texte native. L'OCR Azure AI Vision Read est utilise uniquement lorsqu'une page est vide ou contient moins de texte que le seuil configure. Pour un PDF mixte, les pages lisibles restent natives et seules les pages insuffisantes sont remplacees par leur resultat OCR.
+
+Les images sont envoyees a Azure AI Vision Read uniquement pour les formats autorises. Un resultat sans texte retourne `NoIndexableContent`; un timeout ou une indisponibilite du fournisseur conserve un statut technique explicite et ne doit pas etre transforme en contenu vide indexable. Les images et textes complets ne sont jamais journalises.
