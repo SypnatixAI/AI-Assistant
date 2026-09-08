@@ -335,7 +335,7 @@ public sealed class MicrosoftAgentRuntimeTests
     }
 
     [Theory, AutoDomainData]
-    public async Task Given_AStreamingProvider_When_RunStreamingAsync_Then_ForwardsDeltaBeforeFinalResponse(
+    public async Task Given_AStreamingProvider_When_RunStreamingAsync_Then_ForwardsOnlyMappedFinalAnswer(
         StartedMessageProcessing processing,
         ConnectorExecutionContext executionContext)
     {
@@ -344,7 +344,7 @@ public sealed class MicrosoftAgentRuntimeTests
         var provider = new ControlledStreamingAiModelProvider(
             selectedModel.Provider,
             CreateResponse("Le projet", inputTokens: 21, outputTokens: 6),
-            ["Le", " projet"]);
+            ["{\"decision\":\"answer\",", "\"answer\":\"Le projet\"}"]);
         var runtime = CreateRuntime(provider);
         var receivedDeltas = new List<string>();
         var callbacks = new AgentTurnStreamingCallbacks(
@@ -352,25 +352,18 @@ public sealed class MicrosoftAgentRuntimeTests
             (delta, _) =>
             {
                 receivedDeltas.Add(delta);
-                provider.MarkDeltaObservedByRuntime();
                 return ValueTask.CompletedTask;
             });
 
         // When
-        var runtimeTask = runtime.RunStreamingAsync(
+        var result = await runtime.RunStreamingAsync(
             new AgentTurnRequest(processing, executionContext, selectedModel),
             callbacks,
             CancellationToken.None);
 
-        await provider.WaitUntilDeltaObservedByRuntimeAsync();
-
         // Then
-        Assert.Equal(new[] { "Le" }, receivedDeltas);
-        Assert.False(runtimeTask.IsCompleted);
-
-        provider.CompleteFinalResponse();
-        var result = await runtimeTask;
-        Assert.Equal(new[] { "Le", " projet" }, receivedDeltas);
+        Assert.Equal(["Le projet"], receivedDeltas);
+        Assert.DoesNotContain(receivedDeltas, delta => delta.Contains("\"decision\"", StringComparison.Ordinal));
         Assert.Equal("Le projet", result.Content);
         Assert.Equal(21, result.Usage.InputTokens);
         Assert.Equal(6, result.Usage.OutputTokens);
@@ -652,12 +645,6 @@ public sealed class MicrosoftAgentRuntimeTests
         AiModelResponse response,
         IReadOnlyCollection<string> deltas) : IAiModelProvider
     {
-        private readonly TaskCompletionSource _deltaObservedByRuntime =
-            new(TaskCreationOptions.RunContinuationsAsynchronously);
-
-        private readonly TaskCompletionSource _completeFinalResponse =
-            new(TaskCreationOptions.RunContinuationsAsynchronously);
-
         public string ProviderName => providerName;
 
         public Task<AiModelResponse> GetNextActionAsync(
@@ -673,24 +660,10 @@ public sealed class MicrosoftAgentRuntimeTests
             foreach (var delta in deltas)
             {
                 await onTextDelta(delta, cancellationToken);
-
-                if (delta == deltas.First())
-                {
-                    await _completeFinalResponse.Task.WaitAsync(cancellationToken);
-                }
             }
 
             return response;
         }
-
-        public void MarkDeltaObservedByRuntime() =>
-            _deltaObservedByRuntime.TrySetResult();
-
-        public async Task WaitUntilDeltaObservedByRuntimeAsync() =>
-            await _deltaObservedByRuntime.Task.WaitAsync(TimeSpan.FromSeconds(3));
-
-        public void CompleteFinalResponse() =>
-            _completeFinalResponse.TrySetResult();
     }
 
     private sealed class BlockingAiModelProvider(string providerName) : IAiModelProvider
