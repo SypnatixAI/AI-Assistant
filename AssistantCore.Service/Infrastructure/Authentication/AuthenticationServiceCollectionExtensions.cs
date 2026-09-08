@@ -92,6 +92,7 @@ public static class AuthenticationServiceCollectionExtensions
         services.AddSingleton<IAuthorizationHandler, RequiredScopeAuthorizationHandler>();
         services.AddSingleton<IAuthorizationHandler, RequiredAppRoleAuthorizationHandler>();
         services.AddSingleton<IConfigureOptions<AuthorizationOptions>, ConfigureApiAuthorizationOptions>();
+        services.AddSingleton<IConfigureOptions<AuthorizationOptions>, ConfigureUsagePolicyAuthorizationOptions>();
         services.AddAuthorization();
 
         return services;
