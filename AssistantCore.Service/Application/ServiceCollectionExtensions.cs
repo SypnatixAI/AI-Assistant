@@ -172,6 +172,7 @@ public static class ServiceCollectionExtensions
             IMicrosoft365PendingSynchronizationService,
             Microsoft365PendingSynchronizationService>();
         services.AddScoped<IMicrosoft365IndexCleanupService, Microsoft365IndexCleanupService>();
+        services.AddScoped<IMicrosoft365ResetService, Microsoft365ResetService>();
         services.AddScoped<
             IMicrosoft365ContentAclSynchronizationService,
             Microsoft365ContentAclSynchronizationService>();

@@ -3,6 +3,8 @@ using AssistantCore.Service.Application.Commands.CompleteMicrosoft365Consent;
 using AssistantCore.Service.Application.Commands.CompleteMicrosoft365Consent.Models;
 using AssistantCore.Service.Application.Commands.StartMicrosoft365Consent;
 using AssistantCore.Service.Application.Commands.StartMicrosoft365Consent.Models;
+using AssistantCore.Service.Application.Commands.ResetMicrosoft365Selection;
+using AssistantCore.Service.Application.Commands.ResetMicrosoft365Selection.Models;
 using AssistantCore.Service.Application.Commands.RevokeMicrosoft365Connection;
 using AssistantCore.Service.Application.Commands.RevokeMicrosoft365Connection.Models;
 using AssistantCore.Service.Application.Commands.GetMicrosoft365SiteLists;
@@ -135,6 +137,21 @@ public sealed class Microsoft365Controller(IDispatcher dispatcher) : ControllerB
     {
         var response = await dispatcher.SendAsync(
             new RevokeMicrosoft365ConnectionCommand(connectionId),
+            cancellationToken);
+        return Ok(response);
+    }
+
+    [HttpPost("selection/reset")]
+    [SwaggerOperation(Summary = "Reinitialiser la selection et l'indexation Microsoft 365")]
+    [SwaggerResponse(StatusCodes.Status200OK, "Microsoft 365 selection reset.", typeof(ResetMicrosoft365SelectionResponse))]
+    [SwaggerResponse(StatusCodes.Status403Forbidden, "Administrator access required.")]
+    [SwaggerResponse(StatusCodes.Status404NotFound, "Microsoft 365 connection not found.")]
+    [SwaggerResponse(StatusCodes.Status409Conflict, "The Microsoft 365 connection is not active.")]
+    public async Task<ActionResult<ResetMicrosoft365SelectionResponse>> ResetSelection(
+        CancellationToken cancellationToken)
+    {
+        var response = await dispatcher.SendAsync(
+            new ResetMicrosoft365SelectionCommand(),
             cancellationToken);
         return Ok(response);
     }

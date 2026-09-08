@@ -9,6 +9,8 @@ public sealed class ConflictException(string message, string? errorCode = null)
 
     public const string MemberVersionConflict = "member_version_conflict";
 
+    public const string Microsoft365ConnectionInactive = "microsoft365_connection_inactive";
+
     public const string UsagePolicyVersionConflict = "usage_policy_version_conflict";
 
     public const string UsagePolicyEffectiveAtConflict = "usage_policy_effective_at_conflict";
