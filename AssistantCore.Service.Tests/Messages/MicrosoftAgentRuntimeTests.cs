@@ -6,12 +6,11 @@ using AssistantCore.Service.Application.Models.Messages.AgentRuntime;
 using AssistantCore.Service.Application.Models.Messages.AiModels;
 using AssistantCore.Service.Application.Models.Messages.Connectors;
 using AssistantCore.Service.Application.Models.Messages.Lifecycle;
-using AssistantCore.Service.Application.Models.Messages.Orchestration;
 using AssistantCore.Service.Application.Models.Messages.Tools;
 using AssistantCore.Service.Application.Services.Messages.AgentRuntime;
-using AssistantCore.Service.Application.Services.Messages.AiModels;
 using AssistantCore.Service.Application.Services.Messages.Orchestration;
 using AssistantCore.Service.Application.Services.Messages.Tools;
+using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 
@@ -20,109 +19,23 @@ namespace AssistantCore.Service.Tests.Messages;
 public sealed class MicrosoftAgentRuntimeTests
 {
     [Theory, AutoDomainData]
-    public async Task Given_HistoryAndMessage_When_RunAsync_Then_SendsThemToTheSelectedProvider(
-        StartedMessageProcessing processing,
-        ConnectorExecutionContext executionContext)
-    {
-        // Given
-        var selectedModel = CreateSelectedModel();
-        var history = new[]
-        {
-            new AiConversationMessage(AiConversationRole.User, "Quel est le statut?"),
-            new AiConversationMessage(AiConversationRole.Assistant, "Je vais verifier.")
-        };
-        processing = processing with
-        {
-            UserMessage = "Et pour Atlas?",
-            ConversationHistory = history
-        };
-        var provider = new RecordingAiModelProvider(
-            selectedModel.Provider,
-            CreateResponse("Atlas est en attente."));
-        var runtime = CreateRuntime(provider);
-
-        // When
-        await runtime.RunAsync(
-            new AgentTurnRequest(processing, executionContext, selectedModel),
-            CancellationToken.None);
-
-        // Then
-        var request = Assert.Single(provider.ReceivedRequests);
-        Assert.Same(selectedModel, request.Model);
-        Assert.Equal("Et pour Atlas?", request.UserMessage);
-        Assert.Equal(history, request.ConversationHistory);
-        Assert.Empty(request.AllowedTools);
-        Assert.Empty(request.RequestedToolCalls);
-        Assert.Empty(request.ToolResults);
-    }
-
-    [Theory, AutoDomainData]
-    public async Task Given_MultipleProviders_When_RunAsync_Then_UsesTheSelectedModelProvider(
-        StartedMessageProcessing processing,
-        ConnectorExecutionContext executionContext)
-    {
-        // Given
-        var selectedModel = CreateSelectedModel();
-        var selectedProvider = new RecordingAiModelProvider(
-            selectedModel.Provider,
-            CreateResponse("Reponse OpenAI."));
-        var otherProvider = new RecordingAiModelProvider(
-            "Other",
-            CreateResponse("Reponse autre."));
-        var runtime = CreateRuntime(otherProvider, selectedProvider);
-
-        // When
-        var result = await runtime.RunAsync(
-            new AgentTurnRequest(processing, executionContext, selectedModel),
-            CancellationToken.None);
-
-        // Then
-        Assert.Equal("Reponse OpenAI.", result.Content);
-        Assert.Single(selectedProvider.ReceivedRequests);
-        Assert.Empty(otherProvider.ReceivedRequests);
-    }
-
-    [Theory, AutoDomainData]
-    public async Task Given_AProviderResponse_When_RunAsync_Then_ReturnsTheAgentTurnResult(
-        StartedMessageProcessing processing,
-        ConnectorExecutionContext executionContext)
-    {
-        // Given
-        var selectedModel = CreateSelectedModel();
-        var provider = new RecordingAiModelProvider(
-            selectedModel.Provider,
-            CreateResponse("Voici la reponse.", inputTokens: 17, outputTokens: 9));
-        var runtime = CreateRuntime(provider);
-
-        // When
-        var result = await runtime.RunAsync(
-            new AgentTurnRequest(processing, executionContext, selectedModel),
-            CancellationToken.None);
-
-        // Then
-        Assert.Equal("Voici la reponse.", result.Content);
-        Assert.Equal(selectedModel.ModelName, result.ModelName);
-        Assert.Empty(result.Citations);
-        Assert.Empty(result.Warnings);
-        Assert.Equal(17, result.Usage.InputTokens);
-        Assert.Equal(9, result.Usage.OutputTokens);
-        Assert.Equal(1, result.Usage.ModelCallCount);
-        Assert.Equal(0, result.Usage.ToolCallCount);
-        Assert.Equal(17, result.Usage.ContextSize);
-    }
-
-    [Theory, AutoDomainData]
-    public async Task Given_NoAuthorizedEnterpriseSearchTool_When_RunAsync_Then_ExposesNoToolToTheModel(
+    public async Task Given_HistoryAndCurrentMessage_When_RunAsync_Then_SendsConversationToNativeChatClient(
         StartedMessageProcessing processing)
     {
         // Given
         var selectedModel = CreateSelectedModel();
-        var provider = new RecordingAiModelProvider(
-            selectedModel.Provider,
-            CreateResponse("Bonjour."));
-        var runtime = CreateRuntime(
-            [provider],
-            new StubToolRegistry([]));
+        processing = processing with
+        {
+            UserMessage = "Et maintenant ?",
+            ConversationHistory =
+            [
+                new AiConversationMessage(AiConversationRole.User, "Parle-moi du projet."),
+                new AiConversationMessage(AiConversationRole.Assistant, "Que veux-tu savoir ?")
+            ]
+        };
+        var chatClient = new SequenceChatClient([CreateTextResponse("Voici la suite.")]);
+        var factory = new StubAgentChatClientFactory(chatClient);
+        var runtime = CreateRuntime(factory, new EmptyToolRegistry());
 
         // When
         await runtime.RunAsync(
@@ -130,53 +43,97 @@ public sealed class MicrosoftAgentRuntimeTests
             CancellationToken.None);
 
         // Then
-        var request = Assert.Single(provider.ReceivedRequests);
-        Assert.Empty(request.AllowedTools);
+        var messages = Assert.Single(chatClient.ReceivedMessages);
+        Assert.Equal(3, messages.Count);
+        Assert.Equal("Parle-moi du projet.", messages[0].Text);
+        Assert.Equal("Que veux-tu savoir ?", messages[1].Text);
+        Assert.Equal("Et maintenant ?", messages[2].Text);
+        Assert.Equal(selectedModel, Assert.Single(factory.SelectedModels));
     }
 
     [Theory, AutoDomainData]
-    public void Given_AuthorizedEnterpriseSearchTool_When_CreateFunction_Then_UsesAuthorizedToolInputSchema(
+    public async Task Given_DirectAnswer_When_RunAsync_Then_ReturnsNativeAgentResult(
+        StartedMessageProcessing processing)
+    {
+        // Given
+        var selectedModel = CreateSelectedModel();
+        var chatClient = new SequenceChatClient([
+            CreateTextResponse("Bonjour.", inputTokens: 11, outputTokens: 4)
+        ]);
+        var runtime = CreateRuntime(
+            new StubAgentChatClientFactory(chatClient),
+            new EmptyToolRegistry());
+
+        // When
+        var result = await runtime.RunAsync(
+            new AgentTurnRequest(processing, CreateValidExecutionContext(), selectedModel),
+            CancellationToken.None);
+
+        // Then
+        Assert.Equal("Bonjour.", result.Content);
+        Assert.Empty(result.Citations);
+        Assert.Empty(result.Warnings);
+        Assert.Equal(11, result.Usage.InputTokens);
+        Assert.Equal(4, result.Usage.OutputTokens);
+        Assert.Equal(1, result.Usage.ModelCallCount);
+        Assert.Equal(0, result.Usage.ToolCallCount);
+    }
+
+    [Theory, AutoDomainData]
+    public async Task Given_NoAuthorizedEnterpriseSearch_When_RunAsync_Then_ExposesNoTool(
+        StartedMessageProcessing processing)
+    {
+        // Given
+        var selectedModel = CreateSelectedModel();
+        var chatClient = new SequenceChatClient([CreateTextResponse("Réponse directe.")]);
+        var runtime = CreateRuntime(
+            new StubAgentChatClientFactory(chatClient),
+            new EmptyToolRegistry());
+
+        // When
+        await runtime.RunAsync(
+            new AgentTurnRequest(processing, CreateValidExecutionContext(), selectedModel),
+            CancellationToken.None);
+
+        // Then
+        var options = Assert.Single(chatClient.ReceivedOptions);
+        Assert.True(options?.Tools is null || options.Tools.Count == 0);
+    }
+
+    [Theory, AutoDomainData]
+    public void Given_AuthorizedEnterpriseSearch_When_CreateFunction_Then_UsesAuthorizedInputSchema(
         ConnectorExecutionContext executionContext)
     {
         // Given
-        var enterpriseSearchTool = new EnterpriseSearchAgentTool(
+        var tool = new EnterpriseSearchAgentTool(
             CreateAuthorizedEnterpriseSearchTool(),
             executionContext,
             new ThrowingToolCallValidator(),
             new ThrowingToolExecutionRouter());
 
         // When
-        var function = enterpriseSearchTool.CreateFunction();
+        var function = tool.CreateFunction();
 
         // Then
         AssertEnterpriseSearchSchema(function.JsonSchema);
     }
 
     [Theory, AutoDomainData]
-    public async Task Given_AuthorizedEnterpriseSearchTool_When_ModelRequestsIt_Then_ExecutesItAndReturnsFinalAnswer(
+    public async Task Given_AuthorizedEnterpriseSearch_When_RunAsync_Then_FrameworkExecutesToolAndReturnsEvidence(
         StartedMessageProcessing processing)
     {
         // Given
         var selectedModel = CreateSelectedModel();
-        var evidence = CreateEvidence("atlas-code");
-        var toolResult = ToolExecutionResult.Succeeded("internal-call", [evidence]);
-        var provider = new SequenceAiModelProvider(
-            selectedModel.Provider,
-            [
-                CreateToolCallResponse(
-                    "agent-call-1",
-                    "EnterpriseSearch",
-                    new EnterpriseSearchToolCallArguments(
-                        "code projet Atlas",
-                        ["sharepoint"],
-                        "2026-01-01",
-                        "2026-12-31")),
-                CreateResponse("Le code du projet Atlas est AT-42.")
-            ]);
+        var evidence = CreateEvidence("internal-evidence");
+        var chatClient = new SequenceChatClient([
+            CreateToolCallResponse("call-1", "information recherchée"),
+            CreateTextResponse("Voici l'information interne.")
+        ]);
         var validator = new RecordingToolCallValidator();
-        var router = new RecordingToolExecutionRouter(toolResult);
+        var router = new RecordingToolExecutionRouter(
+            ToolExecutionResult.Succeeded("internal-call", [evidence]));
         var runtime = CreateRuntime(
-            [provider],
+            new StubAgentChatClientFactory(chatClient),
             new StubToolRegistry([CreateAuthorizedEnterpriseSearchTool()]),
             validator,
             router);
@@ -187,138 +144,61 @@ public sealed class MicrosoftAgentRuntimeTests
             CancellationToken.None);
 
         // Then
-        Assert.Equal("Le code du projet Atlas est AT-42.", result.Content);
-        Assert.Equal(2, provider.ReceivedRequests.Count);
-        var firstRequest = provider.ReceivedRequests[0];
-        var exposedTool = Assert.Single(firstRequest.AllowedTools);
-        Assert.Equal("EnterpriseSearch", exposedTool.Name);
-        AssertEnterpriseSearchSchema(exposedTool.InputSchema);
-        var secondRequest = provider.ReceivedRequests[1];
-        var modelVisibleToolResult = Assert.Single(secondRequest.ToolResults);
-        Assert.Equal([evidence], modelVisibleToolResult.Evidence);
-        var validatedCall = Assert.Single(validator.ReceivedToolCalls);
-        Assert.Equal(AiToolNames.SearchMicrosoft365, validatedCall.ToolName);
-        Assert.Equal("code projet Atlas", validatedCall.Arguments.GetProperty("query").GetString());
-        Assert.Equal("sharepoint", validatedCall.Arguments.GetProperty("sourceTypes")[0].GetString());
-        Assert.Equal("2026-01-01", validatedCall.Arguments.GetProperty("dateFrom").GetString());
-        Assert.Equal("2026-12-31", validatedCall.Arguments.GetProperty("dateTo").GetString());
-        var routedCall = Assert.Single(router.ReceivedToolCalls);
-        Assert.Equal(AiToolNames.SearchMicrosoft365, routedCall.ToolName);
-        var routedContext = Assert.Single(router.ReceivedContexts);
-        Assert.Null(routedContext.Budget);
-    }
-
-    [Theory, AutoDomainData]
-    public async Task Given_EnterpriseSearchCallsExceedMaximumToolCalls_When_RunAsync_Then_StopsFunctionCallLoop(
-        StartedMessageProcessing processing)
-    {
-        // Given
-        var selectedModel = CreateSelectedModel();
-        var provider = new SequenceAiModelProvider(
-            selectedModel.Provider,
-            [
-                CreateToolCallResponse("agent-call-1", "EnterpriseSearch", "code projet Atlas"),
-                CreateToolCallResponse("agent-call-2", "EnterpriseSearch", "code projet Orion"),
-                CreateResponse("Ce message ne devrait pas etre demande.")
-            ]);
-        var router = new RecordingToolExecutionRouter(
-            ToolExecutionResult.Succeeded("internal-call", [CreateEvidence("atlas-code")]));
-        var runtime = CreateRuntime(
-            [provider],
-            new StubToolRegistry([CreateAuthorizedEnterpriseSearchTool()]),
-            new RecordingToolCallValidator(),
-            router,
-            CreateOrchestrationOptions(
-                maximumToolCalls: 1,
-                maximumRepeatedToolCalls: 5));
-
-        // When
-        var result = await runtime.RunAsync(
-            new AgentTurnRequest(processing, CreateValidExecutionContext(), selectedModel),
-            CancellationToken.None);
-
-        // Then
-        Assert.Equal(2, provider.ReceivedRequests.Count);
-        Assert.Single(router.ReceivedToolCalls);
-        Assert.Equal(1, result.Usage.ToolCallCount);
-    }
-
-    [Theory, AutoDomainData]
-    public async Task Given_EnterpriseSearchRepeatsSameArgumentsBeyondMaximum_When_RunAsync_Then_StopsFunctionCallLoop(
-        StartedMessageProcessing processing)
-    {
-        // Given
-        var selectedModel = CreateSelectedModel();
-        var provider = new SequenceAiModelProvider(
-            selectedModel.Provider,
-            [
-                CreateToolCallResponse("agent-call-1", "EnterpriseSearch", "code projet Atlas"),
-                CreateToolCallResponse("agent-call-2", "EnterpriseSearch", "code projet Atlas"),
-                CreateResponse("Ce message ne devrait pas etre demande.")
-            ]);
-        var router = new RecordingToolExecutionRouter(
-            ToolExecutionResult.Succeeded("internal-call", [CreateEvidence("atlas-code")]));
-        var runtime = CreateRuntime(
-            [provider],
-            new StubToolRegistry([CreateAuthorizedEnterpriseSearchTool()]),
-            new RecordingToolCallValidator(),
-            router,
-            CreateOrchestrationOptions(
-                maximumToolCalls: 5,
-                maximumRepeatedToolCalls: 1));
-
-        // When
-        var result = await runtime.RunAsync(
-            new AgentTurnRequest(processing, CreateValidExecutionContext(), selectedModel),
-            CancellationToken.None);
-
-        // Then
-        Assert.Equal(2, provider.ReceivedRequests.Count);
-        Assert.Single(router.ReceivedToolCalls);
-        Assert.Equal(1, result.Usage.ToolCallCount);
-    }
-
-    [Theory, AutoDomainData]
-    public async Task Given_EnterpriseSearchResultWithEvidence_When_RunAsync_Then_ReturnsCitedEvidence(
-        StartedMessageProcessing processing)
-    {
-        // Given
-        var selectedModel = CreateSelectedModel();
-        var evidence = CreateEvidence("atlas-code");
-        var provider = new SequenceAiModelProvider(
-            selectedModel.Provider,
-            [
-                CreateToolCallResponse("agent-call-1", "EnterpriseSearch", "code projet Atlas"),
-                CreateResponse(
-                    "Le code du projet Atlas est AT-42.",
-                    citedEvidenceIds: [evidence.EvidenceId])
-            ]);
-        var runtime = CreateRuntime(
-            [provider],
-            new StubToolRegistry([CreateAuthorizedEnterpriseSearchTool()]),
-            new RecordingToolCallValidator(),
-            new RecordingToolExecutionRouter(ToolExecutionResult.Succeeded("internal-call", [evidence])));
-
-        // When
-        var result = await runtime.RunAsync(
-            new AgentTurnRequest(processing, CreateValidExecutionContext(), selectedModel),
-            CancellationToken.None);
-
-        // Then
+        Assert.Equal("Voici l'information interne.", result.Content);
         Assert.Equal([evidence], result.Citations);
+        Assert.Empty(result.Warnings);
+        Assert.Equal(2, result.Usage.ModelCallCount);
+        Assert.Equal(1, result.Usage.ToolCallCount);
+        Assert.Single(validator.ReceivedToolCalls);
+        Assert.Single(router.ReceivedToolCalls);
+        Assert.Equal(2, chatClient.ReceivedMessages.Count);
+        Assert.Contains(
+            chatClient.ReceivedMessages[1].SelectMany(message => message.Contents),
+            content => content is FunctionResultContent);
     }
 
     [Theory, AutoDomainData]
-    public async Task Given_InvalidUserExecutionContext_When_RunAsync_Then_ExposesNoEnterpriseSearchTool(
+    public async Task Given_EnterpriseSearchFailure_When_RunAsync_Then_ReturnsFailureWarningAfterToolExecution(
         StartedMessageProcessing processing)
     {
         // Given
         var selectedModel = CreateSelectedModel();
-        var provider = new RecordingAiModelProvider(
-            selectedModel.Provider,
-            CreateResponse("Je ne peux pas confirmer cette information."));
+        var chatClient = new SequenceChatClient([
+            CreateToolCallResponse("call-1", "information interne"),
+            CreateTextResponse("Les informations internes sont temporairement indisponibles.")
+        ]);
+        var warning = "Microsoft 365 could not be consulted.";
+        var router = new RecordingToolExecutionRouter(
+            ToolExecutionResult.Failed(
+                "internal-call",
+                ToolExecutionErrorCodes.ExecutorNotFound,
+                [warning]));
         var runtime = CreateRuntime(
-            [provider],
+            new StubAgentChatClientFactory(chatClient),
+            new StubToolRegistry([CreateAuthorizedEnterpriseSearchTool()]),
+            new RecordingToolCallValidator(),
+            router);
+
+        // When
+        var result = await runtime.RunAsync(
+            new AgentTurnRequest(processing, CreateValidExecutionContext(), selectedModel),
+            CancellationToken.None);
+
+        // Then
+        Assert.Equal([warning], result.Warnings);
+        Assert.Empty(result.Citations);
+        Assert.Single(router.ReceivedToolCalls);
+    }
+
+    [Theory, AutoDomainData]
+    public async Task Given_InvalidEnterpriseExecutionContext_When_RunAsync_Then_ExposesNoTool(
+        StartedMessageProcessing processing)
+    {
+        // Given
+        var selectedModel = CreateSelectedModel();
+        var chatClient = new SequenceChatClient([CreateTextResponse("Réponse directe.")]);
+        var runtime = CreateRuntime(
+            new StubAgentChatClientFactory(chatClient),
             new StubToolRegistry([CreateAuthorizedEnterpriseSearchTool()]));
 
         // When
@@ -330,111 +210,86 @@ public sealed class MicrosoftAgentRuntimeTests
             CancellationToken.None);
 
         // Then
-        var request = Assert.Single(provider.ReceivedRequests);
-        Assert.Empty(request.AllowedTools);
+        var options = Assert.Single(chatClient.ReceivedOptions);
+        Assert.True(options?.Tools is null || options.Tools.Count == 0);
     }
 
     [Theory, AutoDomainData]
-    public async Task Given_AStreamingProvider_When_RunStreamingAsync_Then_ForwardsOnlyMappedFinalAnswer(
-        StartedMessageProcessing processing,
-        ConnectorExecutionContext executionContext)
+    public async Task Given_NativeStreamingAnswer_When_RunStreamingAsync_Then_ForwardsProviderTextDeltas(
+        StartedMessageProcessing processing)
     {
         // Given
         var selectedModel = CreateSelectedModel();
-        var provider = new ControlledStreamingAiModelProvider(
-            selectedModel.Provider,
-            CreateResponse("Le projet", inputTokens: 21, outputTokens: 6),
-            ["{\"decision\":\"answer\",", "\"answer\":\"Le projet\"}"]);
-        var runtime = CreateRuntime(provider);
-        var receivedDeltas = new List<string>();
+        var chatClient = new StreamingChatClient([
+            new ChatResponseUpdate(ChatRole.Assistant, "Allô"),
+            new ChatResponseUpdate(ChatRole.Assistant, " !"),
+            CreateUsageUpdate(inputTokens: 9, outputTokens: 2)
+        ]);
+        var runtime = CreateRuntime(
+            new StubAgentChatClientFactory(chatClient),
+            new EmptyToolRegistry());
+        var deltas = new List<string>();
         var callbacks = new AgentTurnStreamingCallbacks(
             (_, _) => ValueTask.CompletedTask,
             (delta, _) =>
             {
-                receivedDeltas.Add(delta);
+                deltas.Add(delta);
                 return ValueTask.CompletedTask;
             });
 
         // When
         var result = await runtime.RunStreamingAsync(
-            new AgentTurnRequest(processing, executionContext, selectedModel),
+            new AgentTurnRequest(processing, CreateValidExecutionContext(), selectedModel),
             callbacks,
             CancellationToken.None);
 
         // Then
-        Assert.Equal(["Le projet"], receivedDeltas);
-        Assert.DoesNotContain(receivedDeltas, delta => delta.Contains("\"decision\"", StringComparison.Ordinal));
-        Assert.Equal("Le projet", result.Content);
-        Assert.Equal(21, result.Usage.InputTokens);
-        Assert.Equal(6, result.Usage.OutputTokens);
+        Assert.Equal(["Allô", " !"], deltas);
+        Assert.Equal("Allô !", result.Content);
+        Assert.Equal(9, result.Usage.InputTokens);
+        Assert.Equal(2, result.Usage.OutputTokens);
+        Assert.Equal(1, result.Usage.ModelCallCount);
     }
 
     [Theory, AutoDomainData]
-    public async Task Given_ACancelledToken_When_RunAsync_Then_PropagatesCancellationToTheProvider(
-        StartedMessageProcessing processing,
-        ConnectorExecutionContext executionContext)
+    public async Task Given_TurnTimeout_When_RunAsync_Then_CancelsNativeChatClient(
+        StartedMessageProcessing processing)
     {
         // Given
         var selectedModel = CreateSelectedModel();
-        var provider = new RecordingAiModelProvider(
-            selectedModel.Provider,
-            CreateResponse("Annule."),
-            throwOnRequest: true);
-        var runtime = CreateRuntime(provider);
-        using var cancellationSource = new CancellationTokenSource();
-        await cancellationSource.CancelAsync();
-
-        // When
-        await Assert.ThrowsAnyAsync<OperationCanceledException>(async () =>
-            await runtime.RunAsync(
-                new AgentTurnRequest(processing, executionContext, selectedModel),
-                cancellationSource.Token));
-
-        // Then
-        Assert.True(provider.ReceivedCancellationToken.IsCancellationRequested);
-    }
-
-    [Theory, AutoDomainData]
-    public async Task Given_TurnExceedsMaximumExecutionTimeSeconds_When_RunAsync_Then_CancelsAgentRun(
-        StartedMessageProcessing processing,
-        ConnectorExecutionContext executionContext)
-    {
-        // Given
-        var selectedModel = CreateSelectedModel();
-        var provider = new BlockingAiModelProvider(selectedModel.Provider);
+        var chatClient = new BlockingChatClient();
         var runtime = CreateRuntime(
-            [provider],
+            new StubAgentChatClientFactory(chatClient),
             new EmptyToolRegistry(),
             options: CreateOrchestrationOptions(maximumExecutionTimeSeconds: 1));
 
         // When
         await Assert.ThrowsAnyAsync<OperationCanceledException>(async () =>
             await runtime.RunAsync(
-                new AgentTurnRequest(processing, executionContext, selectedModel),
+                new AgentTurnRequest(processing, CreateValidExecutionContext(), selectedModel),
                 CancellationToken.None));
 
         // Then
-        Assert.True(provider.ReceivedCancellationToken.IsCancellationRequested);
+        Assert.True(chatClient.ReceivedCancellationToken.IsCancellationRequested);
     }
 
     private static MicrosoftAgentRuntime CreateRuntime(
-        params IAiModelProvider[] providers) =>
-        CreateRuntime(providers, new EmptyToolRegistry());
-
-    private static MicrosoftAgentRuntime CreateRuntime(
-        IReadOnlyCollection<IAiModelProvider> providers,
+        IAgentChatClientFactory chatClientFactory,
         IAiToolRegistry toolRegistry,
         IAiToolCallValidator? toolCallValidator = null,
         IToolExecutionRouter? toolExecutionRouter = null,
         MessageOrchestrationOptions? options = null) =>
         new(
-            providers,
+            chatClientFactory,
             toolRegistry,
             toolCallValidator ?? new ThrowingToolCallValidator(),
             toolExecutionRouter ?? new ThrowingToolExecutionRouter(),
             new ToolCallFingerprintGenerator(),
             Options.Create(options ?? CreateOrchestrationOptions()),
             NullLoggerFactory.Instance);
+
+    private static SelectedAiModel CreateSelectedModel() =>
+        new("OpenAI", "gpt-test");
 
     private static ConnectorExecutionContext CreateValidExecutionContext() =>
         new(
@@ -448,112 +303,89 @@ public sealed class MicrosoftAgentRuntimeTests
     private static AiToolDefinition CreateAuthorizedEnterpriseSearchTool() =>
         new(
             AiToolNames.SearchMicrosoft365,
-            "Search Microsoft 365.",
+            "Search authorized enterprise information.",
             JsonSerializer.SerializeToElement(new
             {
                 type = "object",
                 properties = new
                 {
                     query = new { type = "string" },
-                    sourceTypes = new { type = "array", nullable = true },
-                    dateFrom = new { type = "string", nullable = true },
-                    dateTo = new { type = "string", nullable = true }
+                    sourceTypes = new { anyOf = new object[] { new { type = "array", items = new { type = "string" } }, new { type = "null" } } },
+                    dateFrom = new { anyOf = new object[] { new { type = "string" }, new { type = "null" } } },
+                    dateTo = new { anyOf = new object[] { new { type = "string" }, new { type = "null" } } }
                 },
                 required = new[] { "query", "sourceTypes", "dateFrom", "dateTo" },
                 additionalProperties = false
             }));
 
-    private static MessageOrchestrationOptions CreateOrchestrationOptions(
-        int maximumExecutionTimeSeconds = 30,
-        int maximumToolCalls = 4,
-        int maximumRepeatedToolCalls = 2) =>
-        new()
+    private static ChatResponse CreateTextResponse(
+        string text,
+        int inputTokens = 10,
+        int outputTokens = 5) =>
+        new(new ChatMessage(ChatRole.Assistant, text))
         {
-            MaximumExecutionTimeSeconds = maximumExecutionTimeSeconds,
-            MaximumToolCalls = maximumToolCalls,
-            MaximumModelTokens = 12_000,
-            MaximumEstimatedCost = 1,
-            RetrievalCandidateLimit = 10,
-            FinalEvidenceLimit = 5,
-            MaximumContextSize = 30_000,
-            MaximumRepeatedToolCalls = maximumRepeatedToolCalls,
-            MaximumParallelToolCalls = 2
+            Usage = CreateUsage(inputTokens, outputTokens)
         };
 
-    private static SelectedAiModel CreateSelectedModel() =>
-        new("OpenAI", "gpt-test");
+    private static ChatResponse CreateToolCallResponse(string callId, string query) =>
+        new(new ChatMessage(
+            ChatRole.Assistant,
+            [
+                new FunctionCallContent(
+                    callId,
+                    "EnterpriseSearch",
+                    new Dictionary<string, object?>
+                    {
+                        ["query"] = query,
+                        ["sourceTypes"] = null,
+                        ["dateFrom"] = null,
+                        ["dateTo"] = null
+                    })
+            ]))
+        {
+            Usage = CreateUsage(12, 4)
+        };
 
-    private static AiModelResponse CreateResponse(
-        string answer,
-        int inputTokens = 10,
-        int outputTokens = 5,
-        IReadOnlyCollection<string>? citedEvidenceIds = null) =>
-        new(
-            new AiModelDecision(
-                AiModelDecisionType.Answer,
-                "The model answered.",
-                ToolCalls: [],
-                answer,
-                CitedEvidenceIds: citedEvidenceIds ?? []),
-            new AiModelUsage(
-                inputTokens,
-                outputTokens,
-                ModelCallCount: 1,
-                ToolCallCount: 0,
-                EstimatedCost: null));
+    private static ChatResponseUpdate CreateUsageUpdate(
+        int inputTokens,
+        int outputTokens) =>
+        new()
+        {
+            Contents = [new UsageContent(CreateUsage(inputTokens, outputTokens))]
+        };
 
-    private static AiModelResponse CreateToolCallResponse(
-        string callId,
-        string toolName,
-        string query) =>
-        CreateToolCallResponse(
-            callId,
-            toolName,
-            new EnterpriseSearchToolCallArguments(
-                query,
-                SourceTypes: null,
-                DateFrom: null,
-                DateTo: null));
-
-    private static AiModelResponse CreateToolCallResponse(
-        string callId,
-        string toolName,
-        EnterpriseSearchToolCallArguments arguments) =>
-        new(
-            new AiModelDecision(
-                AiModelDecisionType.UseTools,
-                "The model requested enterprise search.",
-                ToolCalls:
-                [
-                    new AiRequestedToolCall(
-                        callId,
-                        toolName,
-                        JsonSerializer.SerializeToElement(new
-                        {
-                            query = arguments.Query,
-                            sourceTypes = arguments.SourceTypes,
-                            dateFrom = arguments.DateFrom,
-                            dateTo = arguments.DateTo
-                        }))
-                ],
-                Answer: null,
-                CitedEvidenceIds: []),
-            new AiModelUsage(
-                InputTokens: 12,
-                OutputTokens: 4,
-                ModelCallCount: 1,
-                ToolCallCount: 1,
-                EstimatedCost: null));
+    private static UsageDetails CreateUsage(int inputTokens, int outputTokens) =>
+        new()
+        {
+            InputTokenCount = inputTokens,
+            OutputTokenCount = outputTokens,
+            TotalTokenCount = inputTokens + outputTokens
+        };
 
     private static RetrievedEvidence CreateEvidence(string evidenceId) =>
         new(
             evidenceId,
             "SharePoint",
-            "Projet Atlas",
-            "Le code du projet Atlas est AT-42.",
-            "sharepoint://atlas",
+            "Document interne",
+            "Contenu autorisé.",
+            "sharepoint://document",
             Url: null,
             OccurredAt: null);
+
+    private static MessageOrchestrationOptions CreateOrchestrationOptions(
+        int maximumExecutionTimeSeconds = 30) =>
+        new()
+        {
+            MaximumExecutionTimeSeconds = maximumExecutionTimeSeconds,
+            MaximumToolCalls = 4,
+            MaximumModelTokens = 12_000,
+            MaximumEstimatedCost = 1,
+            RetrievalCandidateLimit = 10,
+            FinalEvidenceLimit = 5,
+            MaximumContextSize = 30_000,
+            MaximumRepeatedToolCalls = 2,
+            MaximumParallelToolCalls = 2
+        };
 
     private static void AssertEnterpriseSearchSchema(JsonElement schema)
     {
@@ -564,132 +396,134 @@ public sealed class MicrosoftAgentRuntimeTests
         Assert.True(properties.TryGetProperty("sourceTypes", out _));
         Assert.True(properties.TryGetProperty("dateFrom", out _));
         Assert.True(properties.TryGetProperty("dateTo", out _));
-
-        var required = schema.GetProperty("required")
-            .EnumerateArray()
-            .Select(property => property.GetString())
-            .ToArray();
-        Assert.Equal(["query", "sourceTypes", "dateFrom", "dateTo"], required!);
     }
 
-    private sealed record EnterpriseSearchToolCallArguments(
-        string Query,
-        IReadOnlyCollection<string>? SourceTypes,
-        string? DateFrom,
-        string? DateTo);
-
-    private sealed class RecordingAiModelProvider(
-        string providerName,
-        AiModelResponse response,
-        bool throwOnRequest = false) : IAiModelProvider
+    private sealed class StubAgentChatClientFactory(IChatClient chatClient)
+        : IAgentChatClientFactory
     {
-        public string ProviderName => providerName;
+        public List<SelectedAiModel> SelectedModels { get; } = [];
 
-        public List<AiModelRequest> ReceivedRequests { get; } = [];
-
-        public CancellationToken ReceivedCancellationToken { get; private set; }
-
-        public Task<AiModelResponse> GetNextActionAsync(
-            AiModelRequest request,
-            CancellationToken cancellationToken)
+        public IChatClient Create(SelectedAiModel selectedModel)
         {
-            ReceivedRequests.Add(request);
-            ReceivedCancellationToken = cancellationToken;
-
-            return throwOnRequest
-                ? Task.FromCanceled<AiModelResponse>(cancellationToken)
-                : Task.FromResult(response);
+            SelectedModels.Add(selectedModel);
+            return chatClient;
         }
-
-        public Task<AiModelResponse> GetNextActionStreamingAsync(
-            AiModelRequest request,
-            Func<string, CancellationToken, ValueTask> onTextDelta,
-            CancellationToken cancellationToken) =>
-            throw new NotSupportedException();
     }
 
-    private sealed class SequenceAiModelProvider(
-        string providerName,
-        IReadOnlyCollection<AiModelResponse> responses) : IAiModelProvider
+    private sealed class SequenceChatClient(
+        IReadOnlyCollection<ChatResponse> responses) : IChatClient
     {
-        private readonly Queue<AiModelResponse> _responses = new(responses);
+        private readonly Queue<ChatResponse> _responses = new(responses);
 
-        public string ProviderName => providerName;
+        public List<IReadOnlyList<ChatMessage>> ReceivedMessages { get; } = [];
 
-        public List<AiModelRequest> ReceivedRequests { get; } = [];
+        public List<ChatOptions?> ReceivedOptions { get; } = [];
 
-        public Task<AiModelResponse> GetNextActionAsync(
-            AiModelRequest request,
-            CancellationToken cancellationToken)
+        public Task<ChatResponse> GetResponseAsync(
+            IEnumerable<ChatMessage> messages,
+            ChatOptions? options = null,
+            CancellationToken cancellationToken = default)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            ReceivedRequests.Add(request);
+            ReceivedMessages.Add(messages.ToArray());
+            ReceivedOptions.Add(options);
 
             if (!_responses.TryDequeue(out var response))
             {
-                throw new InvalidOperationException("No AI model response was configured for this request.");
+                throw new InvalidOperationException("No chat response was configured.");
             }
 
             return Task.FromResult(response);
         }
 
-        public Task<AiModelResponse> GetNextActionStreamingAsync(
-            AiModelRequest request,
-            Func<string, CancellationToken, ValueTask> onTextDelta,
-            CancellationToken cancellationToken) =>
-            throw new NotSupportedException();
-    }
-
-    private sealed class ControlledStreamingAiModelProvider(
-        string providerName,
-        AiModelResponse response,
-        IReadOnlyCollection<string> deltas) : IAiModelProvider
-    {
-        public string ProviderName => providerName;
-
-        public Task<AiModelResponse> GetNextActionAsync(
-            AiModelRequest request,
-            CancellationToken cancellationToken)
+        public async IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(
+            IEnumerable<ChatMessage> messages,
+            ChatOptions? options = null,
+            [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken = default)
         {
-            cancellationToken.ThrowIfCancellationRequested();
-            return Task.FromResult(response);
-        }
-
-        public async Task<AiModelResponse> GetNextActionStreamingAsync(
-            AiModelRequest request,
-            Func<string, CancellationToken, ValueTask> onTextDelta,
-            CancellationToken cancellationToken)
-        {
-            foreach (var delta in deltas)
+            var response = await GetResponseAsync(messages, options, cancellationToken);
+            foreach (var content in response.Messages.SelectMany(message => message.Contents))
             {
-                await onTextDelta(delta, cancellationToken);
+                yield return new ChatResponseUpdate(ChatRole.Assistant, [content]);
             }
 
-            return response;
+            if (response.Usage is not null)
+            {
+                yield return new ChatResponseUpdate
+                {
+                    Contents = [new UsageContent(response.Usage)]
+                };
+            }
+        }
+
+        public object? GetService(Type serviceType, object? serviceKey = null) =>
+            serviceKey is null && serviceType.IsInstanceOfType(this) ? this : null;
+
+        public void Dispose()
+        {
         }
     }
 
-    private sealed class BlockingAiModelProvider(string providerName) : IAiModelProvider
+    private sealed class StreamingChatClient(
+        IReadOnlyCollection<ChatResponseUpdate> updates) : IChatClient
     {
-        public string ProviderName => providerName;
+        public Task<ChatResponse> GetResponseAsync(
+            IEnumerable<ChatMessage> messages,
+            ChatOptions? options = null,
+            CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
 
+        public async IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(
+            IEnumerable<ChatMessage> messages,
+            ChatOptions? options = null,
+            [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken = default)
+        {
+            foreach (var update in updates)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                yield return update;
+                await Task.Yield();
+            }
+        }
+
+        public object? GetService(Type serviceType, object? serviceKey = null) =>
+            serviceKey is null && serviceType.IsInstanceOfType(this) ? this : null;
+
+        public void Dispose()
+        {
+        }
+    }
+
+    private sealed class BlockingChatClient : IChatClient
+    {
         public CancellationToken ReceivedCancellationToken { get; private set; }
 
-        public async Task<AiModelResponse> GetNextActionAsync(
-            AiModelRequest request,
-            CancellationToken cancellationToken)
+        public async Task<ChatResponse> GetResponseAsync(
+            IEnumerable<ChatMessage> messages,
+            ChatOptions? options = null,
+            CancellationToken cancellationToken = default)
         {
             ReceivedCancellationToken = cancellationToken;
             await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
-
-            throw new InvalidOperationException("The blocking provider should only complete by cancellation.");
+            throw new InvalidOperationException("Expected cancellation.");
         }
 
-        public Task<AiModelResponse> GetNextActionStreamingAsync(
-            AiModelRequest request,
-            Func<string, CancellationToken, ValueTask> onTextDelta,
-            CancellationToken cancellationToken) =>
-            throw new NotSupportedException();
+        public async IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(
+            IEnumerable<ChatMessage> messages,
+            ChatOptions? options = null,
+            [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken = default)
+        {
+            ReceivedCancellationToken = cancellationToken;
+            await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+            yield break;
+        }
+
+        public object? GetService(Type serviceType, object? serviceKey = null) =>
+            serviceKey is null && serviceType.IsInstanceOfType(this) ? this : null;
+
+        public void Dispose()
+        {
+        }
     }
 
     private sealed class EmptyToolRegistry : IAiToolRegistry
@@ -736,8 +570,6 @@ public sealed class MicrosoftAgentRuntimeTests
     {
         public List<ValidatedToolCall> ReceivedToolCalls { get; } = [];
 
-        public List<ConnectorExecutionContext> ReceivedContexts { get; } = [];
-
         public Task<ToolExecutionResult> ExecuteAsync(
             ValidatedToolCall toolCall,
             ConnectorExecutionContext executionContext,
@@ -745,8 +577,6 @@ public sealed class MicrosoftAgentRuntimeTests
         {
             cancellationToken.ThrowIfCancellationRequested();
             ReceivedToolCalls.Add(toolCall);
-            ReceivedContexts.Add(executionContext);
-
             return Task.FromResult(result);
         }
     }
