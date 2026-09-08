@@ -5,13 +5,15 @@ using AssistantCore.Service.Application.Exceptions;
 using AssistantCore.Service.Application.Models.Messages.AgenticRetrieval;
 using AssistantCore.Service.Application.Models.Messages.AiModels;
 using AssistantCore.Service.Application.Services.Messages.Connectors.Microsoft365;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
 namespace AssistantCore.Service.Infrastructure.Connectors.Microsoft365;
 
 public sealed class AgenticRetrievalClientAdapter(
     AzureAiSearchKnowledgeBaseRetrievalClient client,
-    IOptions<AzureAiSearchOptions> options) : IAgenticRetrievalClient
+    IOptions<AzureAiSearchOptions> options,
+    ILogger<AgenticRetrievalClientAdapter>? logger = null) : IAgenticRetrievalClient
 {
     public async Task<AgenticRetrievalResult> RetrieveAsync(
         AgenticRetrievalRequest request,
@@ -29,6 +31,7 @@ public sealed class AgenticRetrievalClientAdapter(
         }
 
         AzureAiSearchKnowledgeBaseRetrievalResult result;
+        var startedAt = TimeProvider.System.GetTimestamp();
         try
         {
             result = await client.RetrieveAsync(
@@ -45,6 +48,12 @@ public sealed class AgenticRetrievalClientAdapter(
                     request.MaxOutputSizeInTokens,
                     configuration.KnowledgeBaseRetrievalReasoningEffort),
                 cancellationToken);
+
+            logger?.LogInformation(
+                "Azure AI Search knowledge retrieval completed in {ElapsedMilliseconds} ms using {ReasoningEffort} reasoning with {ReferenceCount} references.",
+                TimeProvider.System.GetElapsedTime(startedAt).TotalMilliseconds,
+                configuration.KnowledgeBaseRetrievalReasoningEffort,
+                result.References.Count);
         }
         catch (AzureAiSearchExternalException exception)
         {
