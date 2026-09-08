@@ -105,7 +105,7 @@ public sealed class AzureAiSearchKnowledgeBaseRetrievalClientTests
         using var document = JsonDocument.Parse(payload!);
         Assert.Equal("extractiveData", document.RootElement.GetProperty("outputMode").GetString());
         Assert.True(document.RootElement.GetProperty("includeActivity").GetBoolean());
-        Assert.Equal("low", document.RootElement.GetProperty("retrievalReasoningEffort").GetProperty("kind").GetString());
+        Assert.Equal("minimal", document.RootElement.GetProperty("retrievalReasoningEffort").GetProperty("kind").GetString());
         Assert.Equal(30, document.RootElement.GetProperty("maxRuntimeInSeconds").GetInt32());
         Assert.Equal(6000, document.RootElement.GetProperty("maxOutputSize").GetInt32());
         Assert.Equal(50, document.RootElement.GetProperty("maxOutputDocuments").GetInt32());
