@@ -101,7 +101,7 @@ public sealed class AzureAiSearchKnowledgeBaseRetrievalClient
         return new
         {
             messages,
-            outputMode = "extractedData",
+            outputMode = "extractiveData",
             retrievalReasoningEffort = new { kind = "low" },
             includeActivity = true,
             maxRuntimeInSeconds = request.MaxRuntimeInSeconds,
