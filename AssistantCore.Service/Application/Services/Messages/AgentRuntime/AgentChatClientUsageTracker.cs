@@ -1,9 +1,13 @@
+using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using Microsoft.Extensions.AI;
+using Microsoft.Extensions.Logging;
 
 namespace AssistantCore.Service.Application.Services.Messages.AgentRuntime;
 
-internal sealed class AgentChatClientUsageTracker(IChatClient innerClient) : IChatClient
+internal sealed class AgentChatClientUsageTracker(
+    IChatClient innerClient,
+    ILogger<AgentChatClientUsageTracker>? logger = null) : IChatClient
 {
     private int _modelCallCount;
 
@@ -14,8 +18,20 @@ internal sealed class AgentChatClientUsageTracker(IChatClient innerClient) : ICh
         ChatOptions? options = null,
         CancellationToken cancellationToken = default)
     {
-        Interlocked.Increment(ref _modelCallCount);
-        return await innerClient.GetResponseAsync(messages, options, cancellationToken);
+        var callNumber = Interlocked.Increment(ref _modelCallCount);
+        var stopwatch = Stopwatch.StartNew();
+        try
+        {
+            return await innerClient.GetResponseAsync(messages, options, cancellationToken);
+        }
+        finally
+        {
+            stopwatch.Stop();
+            logger?.LogInformation(
+                "Agent model call #{ModelCallNumber} completed in {ElapsedMilliseconds} ms.",
+                callNumber,
+                stopwatch.Elapsed.TotalMilliseconds);
+        }
     }
 
     public async IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(
@@ -23,14 +39,25 @@ internal sealed class AgentChatClientUsageTracker(IChatClient innerClient) : ICh
         ChatOptions? options = null,
         [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
-        Interlocked.Increment(ref _modelCallCount);
-
-        await foreach (var update in innerClient.GetStreamingResponseAsync(
-                           messages,
-                           options,
-                           cancellationToken))
+        var callNumber = Interlocked.Increment(ref _modelCallCount);
+        var stopwatch = Stopwatch.StartNew();
+        try
         {
-            yield return update;
+            await foreach (var update in innerClient.GetStreamingResponseAsync(
+                               messages,
+                               options,
+                               cancellationToken))
+            {
+                yield return update;
+            }
+        }
+        finally
+        {
+            stopwatch.Stop();
+            logger?.LogInformation(
+                "Agent model call #{ModelCallNumber} completed in {ElapsedMilliseconds} ms.",
+                callNumber,
+                stopwatch.Elapsed.TotalMilliseconds);
         }
     }
 
