@@ -37,6 +37,7 @@ public sealed class AzureAiSearchIndexClient
         string vectorMetric = "cosine",
         string? knowledgeSourceName = null,
         string? knowledgeBaseName = null,
+        string retrievalReasoningEffort = "minimal",
         int? retrievalMaxRuntimeInSeconds = null,
         int? retrievalMaxOutputDocuments = null,
         int? retrievalMaxOutputSizeInTokens = null)
@@ -128,6 +129,7 @@ public sealed class AzureAiSearchIndexClient
                 apiKey,
                 knowledgeSourceName,
                 knowledgeBaseName,
+                retrievalReasoningEffort,
                 cancellationToken);
         }
     }
@@ -189,6 +191,7 @@ public sealed class AzureAiSearchIndexClient
         string? apiKey,
         string knowledgeSourceName,
         string knowledgeBaseName,
+        string retrievalReasoningEffort,
         CancellationToken cancellationToken)
     {
         using var request = new HttpRequestMessage(
@@ -211,7 +214,7 @@ public sealed class AzureAiSearchIndexClient
                 outputMode = "extractiveData",
                 retrievalReasoningEffort = new
                 {
-                    kind = "minimal"
+                    kind = retrievalReasoningEffort
                 },
                 encryptionKey = (object?)null
             })
