@@ -29,6 +29,13 @@ public interface IOrganizationMemberQueries
         OrganizationRole role,
         CancellationToken cancellationToken = default);
 
+    Task<MemberUpdateResult> UpdateStatus(
+        Guid organizationId,
+        Guid memberId,
+        RecordStatus status,
+        int? expectedVersion,
+        CancellationToken cancellationToken = default);
+
     Task RecordSuccessfulAuthenticationAsync(
         Guid memberId,
         DateTimeOffset authenticatedAt,

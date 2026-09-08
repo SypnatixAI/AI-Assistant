@@ -104,6 +104,50 @@ public sealed class OrganizationMemberQueries(AssistantCoreDbContext dbContext) 
         return member;
     }
 
+    public async Task<MemberUpdateResult> UpdateStatus(
+        Guid organizationId,
+        Guid memberId,
+        RecordStatus status,
+        int? expectedVersion,
+        CancellationToken cancellationToken = default)
+    {
+        var member = await dbContext.OrganizationMembers
+            .SingleOrDefaultAsync(
+                candidate =>
+                    candidate.Id == memberId
+                    && candidate.OrganizationId == organizationId,
+                cancellationToken);
+
+        if (member is null)
+        {
+            return MemberUpdateResult.NotFound;
+        }
+
+        if (expectedVersion is not null && member.Version != expectedVersion)
+        {
+            return MemberUpdateResult.VersionConflict;
+        }
+
+        if (member.Status == status)
+        {
+            return MemberUpdateResult.Updated(member);
+        }
+
+        member.Status = status;
+        member.Version += 1;
+
+        try
+        {
+            await dbContext.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            return MemberUpdateResult.VersionConflict;
+        }
+
+        return MemberUpdateResult.Updated(member);
+    }
+
     public async Task RecordSuccessfulAuthenticationAsync(
         Guid memberId,
         DateTimeOffset authenticatedAt,
