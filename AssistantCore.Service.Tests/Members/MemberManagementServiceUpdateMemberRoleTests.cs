@@ -1,8 +1,10 @@
 using AssistantCore.Repository.Abstractions;
 using AssistantCore.Repository.Domain.Entities;
 using AssistantCore.Repository.Domain.Enums;
+using AssistantCore.Service.Application.Configuration;
 using AssistantCore.Service.Application.Exceptions;
 using AssistantCore.Service.Application.Services.Members;
+using Microsoft.Extensions.Options;
 
 namespace AssistantCore.Service.Tests.Members;
 
@@ -202,7 +204,9 @@ public sealed class MemberManagementServiceUpdateMemberRoleTests
         var memberQueries = new StubOrganizationMemberQueries { FoundMember = target };
         var service = new MemberManagementService(
             new StubAuthenticateUserService { Result = (organization, currentMember) },
-            memberQueries);
+            memberQueries,
+            new StubCurrentIdentity(),
+            Options.Create(new OrganizationRoleOptions()));
 
         return new TestContext(service, memberQueries, organization, currentMember);
     }

@@ -132,6 +132,15 @@ internal sealed class StubOrganizationMemberQueries : IOrganizationMemberQueries
 
     public int UpdateRoleCallCount { get; private set; }
 
+    public int UpdateStatusCallCount { get; private set; }
+
+    public RecordStatus? ReceivedStatus { get; private set; }
+
+    public int? ReceivedExpectedVersion { get; private set; }
+
+    public MemberUpdateResult UpdateStatusResult { get; set; } =
+        MemberUpdateResult.NotFound;
+
     public int RecordSuccessfulAuthenticationCallCount { get; private set; }
 
     public Guid? ReceivedAuthenticatedMemberId { get; private set; }
@@ -194,6 +203,22 @@ internal sealed class StubOrganizationMemberQueries : IOrganizationMemberQueries
         ReceivedCancellationToken = cancellationToken;
         member.Role = role;
         return Task.FromResult(member);
+    }
+
+    public Task<MemberUpdateResult> UpdateStatus(
+        Guid organizationId,
+        Guid memberId,
+        RecordStatus status,
+        int? expectedVersion,
+        CancellationToken cancellationToken = default)
+    {
+        UpdateStatusCallCount++;
+        ReceivedOrganizationId = organizationId;
+        ReceivedMemberId = memberId;
+        ReceivedStatus = status;
+        ReceivedExpectedVersion = expectedVersion;
+        ReceivedCancellationToken = cancellationToken;
+        return Task.FromResult(UpdateStatusResult);
     }
 
     public Task RecordSuccessfulAuthenticationAsync(

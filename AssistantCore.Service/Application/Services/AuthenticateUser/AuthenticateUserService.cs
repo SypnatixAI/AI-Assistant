@@ -21,6 +21,8 @@ public sealed class AuthenticateUserService(
     ITenantAdmissionPolicy tenantAdmissionPolicy,
     TimeProvider timeProvider) : IAuthenticateUserService
 {
+    private const int InitialMemberVersion = 1;
+
     public async Task<(Organization Organization, OrganizationMember Member)> GetOrganizationAsync(CancellationToken cancellationToken)
     {
         var identity = currentIdentity.GetIdentity();
@@ -98,7 +100,8 @@ public sealed class AuthenticateUserService(
                     IdentityProvider = identity.Provider,
                     ExternalUserId = identity.ExternalUserId,
                     Role = resolvedRole,
-                    Status = RecordStatus.Active
+                    Status = RecordStatus.Active,
+                    Version = InitialMemberVersion
                 },
                 cancellationToken);
         }
