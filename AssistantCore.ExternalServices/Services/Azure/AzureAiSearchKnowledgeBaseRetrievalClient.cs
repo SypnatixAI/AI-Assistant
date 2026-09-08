@@ -104,7 +104,7 @@ public sealed class AzureAiSearchKnowledgeBaseRetrievalClient
         {
             messages,
             outputMode = "extractiveData",
-            retrievalReasoningEffort = new { kind = "low" },
+            retrievalReasoningEffort = new { kind = "minimal" },
             includeActivity = true,
             maxRuntimeInSeconds = request.MaxRuntimeInSeconds,
             maxOutputSize = request.MaxOutputSizeInTokens,
