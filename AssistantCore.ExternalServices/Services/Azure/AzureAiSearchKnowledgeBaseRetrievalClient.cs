@@ -105,7 +105,7 @@ public sealed class AzureAiSearchKnowledgeBaseRetrievalClient
             retrievalReasoningEffort = new { kind = "low" },
             includeActivity = true,
             maxRuntimeInSeconds = request.MaxRuntimeInSeconds,
-            maxOutputSizeInTokens = request.MaxOutputSizeInTokens,
+            maxOutputSize = request.MaxOutputSizeInTokens,
             maxOutputDocuments = request.MaximumResults,
             knowledgeSourceParams = new[]
             {
