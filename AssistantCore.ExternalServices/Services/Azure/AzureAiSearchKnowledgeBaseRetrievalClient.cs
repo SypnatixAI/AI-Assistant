@@ -71,45 +71,18 @@ public sealed class AzureAiSearchKnowledgeBaseRetrievalClient
     private static object CreatePayload(
         AzureAiSearchKnowledgeBaseRetrievalRequest request)
     {
-        var messages = request.ConversationHistory
-            .Select(message => new
-            {
-                role = message.Role,
-                content = new[]
-                {
-                    new
-                    {
-                        type = "text",
-                        text = message.Content
-                    }
-                }
-            })
-            .Append(new
-            {
-                role = "user",
-                content = new[]
-                {
-                    new
-                    {
-                        type = "text",
-                        text = request.Query
-                    }
-                }
-            })
-            .ToArray();
-
         var azureMaximumResults = Math.Clamp(request.MaximumResults, 50, 200);
+        var reasoningEffort = NormalizeReasoningEffort(request.RetrievalReasoningEffort);
 
-        return new
+        var payload = new Dictionary<string, object?>
         {
-            messages,
-            outputMode = "extractiveData",
-            retrievalReasoningEffort = new { kind = "minimal" },
-            includeActivity = true,
-            maxRuntimeInSeconds = request.MaxRuntimeInSeconds,
-            maxOutputSize = request.MaxOutputSizeInTokens,
-            maxOutputDocuments = azureMaximumResults,
-            knowledgeSourceParams = new[]
+            ["outputMode"] = "extractiveData",
+            ["retrievalReasoningEffort"] = new { kind = reasoningEffort },
+            ["includeActivity"] = true,
+            ["maxRuntimeInSeconds"] = request.MaxRuntimeInSeconds,
+            ["maxOutputSize"] = request.MaxOutputSizeInTokens,
+            ["maxOutputDocuments"] = azureMaximumResults,
+            ["knowledgeSourceParams"] = new[]
             {
                 new
                 {
@@ -123,6 +96,59 @@ public sealed class AzureAiSearchKnowledgeBaseRetrievalClient
                 }
             }
         };
+
+        if (string.Equals(reasoningEffort, "minimal", StringComparison.Ordinal))
+        {
+            payload["intents"] = new[]
+            {
+                new
+                {
+                    type = "semantic",
+                    search = request.Query
+                }
+            };
+        }
+        else
+        {
+            payload["messages"] = request.ConversationHistory
+                .Select(message => new
+                {
+                    role = message.Role,
+                    content = new[]
+                    {
+                        new
+                        {
+                            type = "text",
+                            text = message.Content
+                        }
+                    }
+                })
+                .Append(new
+                {
+                    role = "user",
+                    content = new[]
+                    {
+                        new
+                        {
+                            type = "text",
+                            text = request.Query
+                        }
+                    }
+                })
+                .ToArray();
+        }
+
+        return payload;
+    }
+
+    private static string NormalizeReasoningEffort(string value)
+    {
+        var normalized = value.Trim().ToLowerInvariant();
+        return normalized is "minimal" or "low"
+            ? normalized
+            : throw new ArgumentException(
+                "Azure AI Search retrieval reasoning effort must be 'minimal' or 'low'.",
+                nameof(value));
     }
 
     private static AzureAiSearchKnowledgeBaseRetrievalResult MapResult(
