@@ -76,8 +76,11 @@ public static class Microsoft365ServiceCollectionExtensions
             .Bind(configuration.GetSection(AzureAiSearchOptions.SectionName))
             .Validate(options =>
                     double.IsFinite(options.MinimumSemanticRelevanceScore)
-                    && options.MinimumSemanticRelevanceScore is >= 0d and <= 4d,
-                "AzureSearch minimum semantic relevance score must be between 0 and 4.")
+                    && options.MinimumSemanticRelevanceScore is >= 0d and <= 4d
+                    && options.KnowledgeBaseMaxRuntimeInSeconds > 0
+                    && (options.KnowledgeBaseMaxOutputDocuments is null or > 0)
+                    && (options.KnowledgeBaseMaxOutputSizeInTokens is null or > 0),
+                "AzureSearch requires valid semantic relevance and knowledge base limits.")
             .ValidateOnStart();
 
         services.AddDataProtection();
@@ -102,6 +105,8 @@ public static class Microsoft365ServiceCollectionExtensions
         services.AddHttpClient<AzureAiSearchPassageAclClient>()
             .RedactLoggedHeaders(["api-key", "Authorization"]);
         services.AddHttpClient<AzureAiSearchPassageSearchClient>()
+            .RedactLoggedHeaders(["api-key", "Authorization"]);
+        services.AddHttpClient<AzureAiSearchKnowledgeBaseRetrievalClient>()
             .RedactLoggedHeaders(["api-key", "Authorization"]);
         services.AddHttpClient<AzureAiSearchIndexClient>()
             .RedactLoggedHeaders(["api-key", "Authorization"]);

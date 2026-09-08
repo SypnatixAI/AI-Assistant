@@ -11,4 +11,8 @@ public static class ToolExecutionErrorCodes
     public const string MaximumToolCallsExceeded = "TOOL_MAXIMUM_CALLS_EXCEEDED";
 
     public const string MaximumRepeatedToolCallsExceeded = "TOOL_MAXIMUM_REPEATED_CALLS_EXCEEDED";
+
+    public const string EnterpriseSearchUnavailable = "ENTERPRISE_SEARCH_UNAVAILABLE";
+
+    public const string EnterpriseSearchTimeout = "ENTERPRISE_SEARCH_TIMEOUT";
 }

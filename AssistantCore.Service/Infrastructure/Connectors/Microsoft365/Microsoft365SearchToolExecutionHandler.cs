@@ -1,3 +1,4 @@
+using AssistantCore.Service.Application.Exceptions;
 using AssistantCore.Service.Application.Models.Messages.Connectors;
 using AssistantCore.Service.Application.Models.Messages.Tools;
 using AssistantCore.Service.Application.Models.Messages.Tools.Arguments;
@@ -15,7 +16,24 @@ public sealed class Microsoft365SearchToolExecutionHandler(IMicrosoft365Connecto
         ConnectorExecutionContext executionContext,
         CancellationToken cancellationToken)
     {
-        var result = await connector.SearchAsync(arguments, executionContext, cancellationToken);
-        return ToolExecutionResult.Succeeded(toolCallId, result.Evidence);
+        try
+        {
+            var result = await connector.SearchAsync(arguments, executionContext, cancellationToken);
+            return ToolExecutionResult.Succeeded(toolCallId, result.Evidence);
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            return ToolExecutionResult.Failed(
+                toolCallId,
+                ToolExecutionErrorCodes.EnterpriseSearchTimeout,
+                ["Microsoft 365 retrieval timed out."]);
+        }
+        catch (Microsoft365ExternalException)
+        {
+            return ToolExecutionResult.Failed(
+                toolCallId,
+                ToolExecutionErrorCodes.EnterpriseSearchUnavailable,
+                ["Microsoft 365 could not be consulted."]);
+        }
     }
 }

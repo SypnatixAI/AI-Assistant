@@ -163,7 +163,8 @@ public sealed class MicrosoftAgentRuntime(
         {
             RetrievalCandidateLimit = _options.RetrievalCandidateLimit,
             Budget = null,
-            RagStatus = new RagExecutionStatus()
+            RagStatus = new RagExecutionStatus(),
+            ConversationHistory = request.Processing.ConversationHistory
         };
 
     private CancellationTokenSource CreateTurnTimeoutSource(

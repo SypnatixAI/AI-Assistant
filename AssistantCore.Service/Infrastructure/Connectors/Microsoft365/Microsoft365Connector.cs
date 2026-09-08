@@ -1,5 +1,7 @@
 using AssistantCore.Repository.Domain.Enums;
-using AssistantCore.Repository.Queries;
+using AssistantCore.Service.Application.Configuration;
+using AssistantCore.Service.Application.Models.Messages.AgenticRetrieval;
+using AssistantCore.Service.Application.Models.Messages.AiModels;
 using AssistantCore.Service.Application.Models.Messages.Connectors;
 using AssistantCore.Service.Application.Models.Messages.Connectors.Microsoft365;
 using AssistantCore.Service.Application.Models.Messages.Evidence;
@@ -7,8 +9,9 @@ using AssistantCore.Service.Application.Models.Messages.Tools.Arguments;
 using AssistantCore.Service.Application.Services.Messages.Connectors;
 using AssistantCore.Service.Application.Services.Messages.Connectors.Microsoft365;
 using AssistantCore.Service.Application.Services.Messages.Evidence;
-using Microsoft.Extensions.Logging;
 using AssistantCore.Service.Application.Services.Messages.Rag;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace AssistantCore.Service.Infrastructure.Connectors.Microsoft365;
 
@@ -22,7 +25,9 @@ public sealed class Microsoft365Connector(
     IMicrosoft365QueryExpansionService? queryExpansionService = null,
     IMicrosoft365SearchResultFusionService? searchResultFusionService = null,
     ILogger<Microsoft365Connector>? logger = null,
-    ICorrectiveRetrievalService? correctiveRetrieval = null) : IMicrosoft365Connector
+    ICorrectiveRetrievalService? correctiveRetrieval = null,
+    IAgenticRetrievalClient? agenticRetrievalClient = null,
+    IOptions<AzureAiSearchOptions>? searchOptions = null) : IMicrosoft365Connector
 {
     public async Task<ConnectorResult> SearchAsync(
         SearchMicrosoft365ToolArguments request,
@@ -65,6 +70,18 @@ public sealed class Microsoft365Connector(
                 groupIds,
                 sharePointGroupIds),
             Math.Min(options.MaximumResults, context.RetrievalCandidateLimit));
+        if (options.AgenticRetrieval.Enabled && agenticRetrievalClient is not null)
+        {
+            return await SearchWithAgenticRetrievalAsync(
+                request,
+                context,
+                normalizedUserId,
+                groupIds,
+                sharePointGroupIds,
+                searchParameters,
+                cancellationToken);
+        }
+
         async Task<IReadOnlyCollection<Microsoft365SearchRecord>> SearchAuthorizedAsync(
             Microsoft365SearchParameters parameters, CancellationToken token)
         {
@@ -90,6 +107,77 @@ public sealed class Microsoft365Connector(
                 context.RetrievalCandidateLimit));
 
         return new ConnectorResult(evidence);
+    }
+
+    private async Task<ConnectorResult> SearchWithAgenticRetrievalAsync(
+        SearchMicrosoft365ToolArguments request,
+        ConnectorExecutionContext context,
+        string normalizedUserId,
+        IReadOnlyCollection<string> groupIds,
+        IReadOnlyCollection<string> sharePointGroupIds,
+        Microsoft365SearchParameters searchParameters,
+        CancellationToken cancellationToken)
+    {
+        var configuration = searchOptions?.Value
+            ?? throw new InvalidOperationException(
+                "AzureSearch options are required for Microsoft 365 agentic retrieval.");
+        var filter = Microsoft365SearchRepositoryAdapter.BuildFilter(searchParameters);
+        var result = await agenticRetrievalClient!.RetrieveAsync(
+            new AgenticRetrievalRequest(
+                request.Query,
+                MapConversationHistory(context.ConversationHistory),
+                configuration.KnowledgeBaseName,
+                configuration.KnowledgeSourceName,
+                filter,
+                searchParameters.MaximumResults,
+                options.AgenticRetrieval.MaxRuntimeInSeconds,
+                options.AgenticRetrieval.MaxOutputSizeInTokens),
+            cancellationToken);
+        var records = result.References.Select(reference => new Microsoft365SearchRecord(
+            "Microsoft365",
+            reference.Title,
+            reference.Content,
+            reference.DocumentKey,
+            reference.SiteId,
+            reference.DriveId,
+            reference.DriveItemId,
+            reference.Url,
+            reference.ModifiedAt,
+            reference.RelevanceScore,
+            reference.RelevanceScore)).ToArray();
+        var authorizedRecords = await accessVerifier.KeepAuthorizedAsync(
+            context.OrganizationId,
+            context.ExternalTenantId!,
+            normalizedUserId,
+            groupIds,
+            sharePointGroupIds,
+            records,
+            cancellationToken);
+        var evidence = evidenceNormalizer.Normalize(
+            authorizedRecords.Select(MapCandidate).ToArray(),
+            new EvidenceNormalizationOptions(
+                options.MaximumContentLength,
+                context.RetrievalCandidateLimit));
+
+        LogAgenticRetrieval(result.Activity, records.Length, authorizedRecords.Count);
+
+        return new ConnectorResult(evidence);
+    }
+
+    private void LogAgenticRetrieval(
+        IReadOnlyCollection<AgenticRetrievalActivity> activity,
+        int recordsBeforeAccessVerification,
+        int recordsAfterAccessVerification)
+    {
+        var subqueryCount = activity.Count(item =>
+            string.Equals(item.Type, "searchIndex", StringComparison.Ordinal)
+            && !string.IsNullOrWhiteSpace(item.Search));
+
+        logger?.LogInformation(
+            "Microsoft365 agentic retrieval completed with {SubqueryCount} observed subqueries, {RecordsBeforeAccessVerification} records before access verification and {RecordsAfterAccessVerification} records after access verification.",
+            subqueryCount,
+            recordsBeforeAccessVerification,
+            recordsAfterAccessVerification);
     }
 
     private async Task<IReadOnlyCollection<Microsoft365SearchRecord>> SearchAcrossQueriesAsync(
@@ -185,6 +273,16 @@ public sealed class Microsoft365Connector(
         record.Url,
         record.ModifiedAt,
         record.RelevanceScore);
+
+    private static IReadOnlyCollection<AgenticRetrievalMessage> MapConversationHistory(
+        IReadOnlyCollection<AiConversationMessage>? conversationHistory) =>
+        conversationHistory?
+            .Where(message => !string.IsNullOrWhiteSpace(message.Content))
+            .Select(message => new AgenticRetrievalMessage(
+                message.Role,
+                message.Content))
+            .ToArray()
+        ?? [];
 
     private sealed record ExpandedSearchResult(
         IReadOnlyCollection<Microsoft365SearchRecord> Records,
