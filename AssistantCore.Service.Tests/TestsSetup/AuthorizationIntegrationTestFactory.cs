@@ -25,6 +25,7 @@ internal static class AuthorizationIntegrationTestFactory
     public const string RequiredScope = "access_as_user";
     public const string RequiredAdmissionRole = "AssistantCore.Access";
     public const string TenantAdminRole = "TenantAdmin";
+    public const string UsagePolicyManagementRole = "UsagePolicy.Manage";
 
     public static WebApplicationFactory<Program> CreateFactory(bool useTestAuthentication)
     {

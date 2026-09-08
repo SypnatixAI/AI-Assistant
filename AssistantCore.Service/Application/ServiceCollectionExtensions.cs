@@ -96,6 +96,7 @@ public static class ServiceCollectionExtensions
                 $"{UsageOptions.SectionName}:{nameof(UsageOptions.DefaultMonthlyTokenLimit)} must be greater than zero.")
             .ValidateOnStart();
         services.AddScoped<IUsageTrackingService, UsageTrackingService>();
+        services.AddScoped<IUsagePolicyManagementService, UsagePolicyManagementService>();
         services.AddScoped<ISendMessageCommandValidator, SendMessageCommandValidator>();
         services.AddSingleton<IConversationCursorCodec, ConversationCursorCodec>();
         services.AddSingleton<IConversationMessageCursorCodec, ConversationMessageCursorCodec>();
