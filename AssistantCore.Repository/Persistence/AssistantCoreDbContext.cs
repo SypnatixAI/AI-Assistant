@@ -48,6 +48,8 @@ public class AssistantCoreDbContext(DbContextOptions<AssistantCoreDbContext> opt
 
     public DbSet<TokenConsumption> TokenConsumptions => Set<TokenConsumption>();
 
+    public DbSet<AdministrativeAuditEntry> AdministrativeAuditEntries => Set<AdministrativeAuditEntry>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(AssistantCoreDbContext).Assembly);

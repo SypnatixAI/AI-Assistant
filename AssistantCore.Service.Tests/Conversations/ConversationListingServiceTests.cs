@@ -176,6 +176,7 @@ public sealed class ConversationListingServiceTests
             string? title,
             ConversationStatus? status,
             DateTimeOffset updatedAt,
+            string correlationId,
             CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();
 
@@ -185,6 +186,7 @@ public sealed class ConversationListingServiceTests
             Guid conversationId,
             DateTimeOffset deletedAt,
             DateTimeOffset purgeAfter,
+            string correlationId,
             CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();
 

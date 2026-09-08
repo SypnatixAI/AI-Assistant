@@ -108,6 +108,7 @@ public sealed class ConversationMessageListingServiceTests
             string? title,
             ConversationStatus? status,
             DateTimeOffset updatedAt,
+            string correlationId,
             CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();
 
@@ -117,6 +118,7 @@ public sealed class ConversationMessageListingServiceTests
             Guid conversationId,
             DateTimeOffset deletedAt,
             DateTimeOffset purgeAfter,
+            string correlationId,
             CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();
 

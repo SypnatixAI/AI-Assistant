@@ -1,6 +1,7 @@
 using AssistantCore.Repository.Domain.Entities;
 using AssistantCore.Repository.Domain.Enums;
 using AssistantCore.Repository.Repositories;
+using AssistantCore.Service.Application.Abstractions;
 using AssistantCore.Service.Application.Configuration;
 using AssistantCore.Service.Application.Exceptions;
 using AssistantCore.Service.Application.Models.Conversations;
@@ -14,7 +15,8 @@ public sealed class ConversationLifecycleService(
     IConversationAuditWriter auditWriter,
     IOptions<ConversationOptions> conversationOptions,
     IOptions<RetentionOptions> retentionOptions,
-    TimeProvider timeProvider) : IConversationLifecycleService
+    TimeProvider timeProvider,
+    ICorrelationIdProvider correlationIdProvider) : IConversationLifecycleService
 {
     public async Task<ConversationResponse> UpdateAsync(
         Guid organizationId,
@@ -67,6 +69,7 @@ public sealed class ConversationLifecycleService(
             renames ? desiredTitle : null,
             changesStatus ? desiredStatus : null,
             now,
+            correlationIdProvider.GetCorrelationId(),
             cancellationToken);
 
         var updated = result.Status switch
@@ -104,6 +107,7 @@ public sealed class ConversationLifecycleService(
             conversationId,
             now,
             purgeAfter,
+            correlationIdProvider.GetCorrelationId(),
             cancellationToken);
 
         if (status == ConversationDeleteStatus.NotFound)

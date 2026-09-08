@@ -655,6 +655,7 @@ public sealed class MessageProcessingLifecycleServiceTests
             string? title,
             ConversationStatus? status,
             DateTimeOffset updatedAt,
+            string correlationId,
             CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();
 
@@ -664,6 +665,7 @@ public sealed class MessageProcessingLifecycleServiceTests
             Guid conversationId,
             DateTimeOffset deletedAt,
             DateTimeOffset purgeAfter,
+            string correlationId,
             CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();
 

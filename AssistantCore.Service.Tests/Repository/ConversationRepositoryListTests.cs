@@ -24,7 +24,7 @@ public sealed class ConversationRepositoryListTests
         await using var dbContext = CreateDbContext();
         dbContext.Conversations.AddRange(ownConversation, foreignConversation);
         await dbContext.SaveChangesAsync();
-        var repository = new ConversationRepository(dbContext);
+        var repository = new ConversationRepository(dbContext, new StubAdministrativeAuditRepository());
 
         // When
         var page = await repository.ListConversationsAsync(
@@ -54,7 +54,7 @@ public sealed class ConversationRepositoryListTests
         await using var dbContext = CreateDbContext();
         dbContext.Conversations.AddRange(ownConversation, otherOwnerConversation);
         await dbContext.SaveChangesAsync();
-        var repository = new ConversationRepository(dbContext);
+        var repository = new ConversationRepository(dbContext, new StubAdministrativeAuditRepository());
 
         // When
         var page = await repository.ListConversationsAsync(
@@ -83,7 +83,7 @@ public sealed class ConversationRepositoryListTests
         await using var dbContext = CreateDbContext();
         dbContext.Conversations.AddRange(activeConversation, archivedConversation);
         await dbContext.SaveChangesAsync();
-        var repository = new ConversationRepository(dbContext);
+        var repository = new ConversationRepository(dbContext, new StubAdministrativeAuditRepository());
 
         // When
         var page = await repository.ListConversationsAsync(
@@ -110,7 +110,7 @@ public sealed class ConversationRepositoryListTests
         }
 
         await dbContext.SaveChangesAsync();
-        var repository = new ConversationRepository(dbContext);
+        var repository = new ConversationRepository(dbContext, new StubAdministrativeAuditRepository());
 
         // When
         var page = await repository.ListConversationsAsync(
@@ -137,7 +137,7 @@ public sealed class ConversationRepositoryListTests
         }
 
         await dbContext.SaveChangesAsync();
-        var repository = new ConversationRepository(dbContext);
+        var repository = new ConversationRepository(dbContext, new StubAdministrativeAuditRepository());
 
         // When
         var page = await repository.ListConversationsAsync(
@@ -162,7 +162,7 @@ public sealed class ConversationRepositoryListTests
         await using var dbContext = CreateDbContext();
         dbContext.Conversations.AddRange(oldest, newest, middle);
         await dbContext.SaveChangesAsync();
-        var repository = new ConversationRepository(dbContext);
+        var repository = new ConversationRepository(dbContext, new StubAdministrativeAuditRepository());
 
         // When
         var page = await repository.ListConversationsAsync(
@@ -185,7 +185,7 @@ public sealed class ConversationRepositoryListTests
         await using var dbContext = CreateDbContext();
         dbContext.Conversations.AddRange(lowerId, higherId);
         await dbContext.SaveChangesAsync();
-        var repository = new ConversationRepository(dbContext);
+        var repository = new ConversationRepository(dbContext, new StubAdministrativeAuditRepository());
 
         // When
         var page = await repository.ListConversationsAsync(
@@ -209,7 +209,7 @@ public sealed class ConversationRepositoryListTests
         await using var dbContext = CreateDbContext();
         dbContext.Conversations.AddRange(conversations);
         await dbContext.SaveChangesAsync();
-        var repository = new ConversationRepository(dbContext);
+        var repository = new ConversationRepository(dbContext, new StubAdministrativeAuditRepository());
 
         // When
         var firstPage = await repository.ListConversationsAsync(
@@ -254,7 +254,7 @@ public sealed class ConversationRepositoryListTests
         await using var dbContext = CreateDbContext();
         dbContext.Conversations.Add(conversation);
         await dbContext.SaveChangesAsync();
-        var repository = new ConversationRepository(dbContext);
+        var repository = new ConversationRepository(dbContext, new StubAdministrativeAuditRepository());
 
         // When
         var page = await repository.ListConversationsAsync(
@@ -278,7 +278,7 @@ public sealed class ConversationRepositoryListTests
         await using var dbContext = CreateDbContext();
         dbContext.Conversations.Add(conversation);
         await dbContext.SaveChangesAsync();
-        var repository = new ConversationRepository(dbContext);
+        var repository = new ConversationRepository(dbContext, new StubAdministrativeAuditRepository());
 
         // When
         var page = await repository.ListConversationsAsync(
@@ -322,7 +322,7 @@ public sealed class ConversationRepositoryListTests
         await using var dbContext = CreateDbContext();
         dbContext.Conversations.AddRange(activeConversation, archivedConversation);
         await dbContext.SaveChangesAsync();
-        var repository = new ConversationRepository(dbContext);
+        var repository = new ConversationRepository(dbContext, new StubAdministrativeAuditRepository());
 
         // When
         var page = await repository.ListConversationsAsync(
@@ -348,7 +348,7 @@ public sealed class ConversationRepositoryListTests
         await using var dbContext = CreateDbContext();
         dbContext.Conversations.Add(conversation);
         await dbContext.SaveChangesAsync();
-        var repository = new ConversationRepository(dbContext);
+        var repository = new ConversationRepository(dbContext, new StubAdministrativeAuditRepository());
 
         // When
         var page = await repository.ListConversationsAsync(
@@ -379,7 +379,7 @@ public sealed class ConversationRepositoryListTests
         await using var dbContext = CreateDbContext();
         dbContext.Conversations.AddRange(archivedConversation, olderActiveConversation);
         await dbContext.SaveChangesAsync();
-        var repository = new ConversationRepository(dbContext);
+        var repository = new ConversationRepository(dbContext, new StubAdministrativeAuditRepository());
 
         // When
         var page = await repository.ListConversationsAsync(

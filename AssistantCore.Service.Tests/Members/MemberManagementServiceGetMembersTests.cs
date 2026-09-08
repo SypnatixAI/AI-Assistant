@@ -35,7 +35,9 @@ public sealed class MemberManagementServiceGetMembersTests
             authenticateUserService,
             memberQueries,
             new StubCurrentIdentity(),
-            Options.Create(new OrganizationRoleOptions()));
+            Options.Create(new OrganizationRoleOptions()),
+            new StubCorrelationIdProvider(),
+            new StubTimeProvider());
 
         // When
         var result = await service.GetMembersAsync(cancellationToken);
@@ -61,7 +63,9 @@ public sealed class MemberManagementServiceGetMembersTests
             new StubAuthenticateUserService { Result = (organization, user) },
             memberQueries,
             new StubCurrentIdentity(),
-            Options.Create(new OrganizationRoleOptions()));
+            Options.Create(new OrganizationRoleOptions()),
+            new StubCorrelationIdProvider(),
+            new StubTimeProvider());
 
         // When
         var exception = await Assert.ThrowsAsync<ForbiddenException>(

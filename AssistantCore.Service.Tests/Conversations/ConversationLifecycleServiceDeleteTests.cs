@@ -124,11 +124,12 @@ public sealed class ConversationLifecycleServiceDeleteTests
         IConversationAuditWriter auditWriter,
         DateTimeOffset now) =>
         new(
-            new ConversationRepository(dbContext),
+            new ConversationRepository(dbContext, new StubAdministrativeAuditRepository()),
             auditWriter,
             Options.Create(new ConversationOptions { MaximumTitleLength = 200 }),
             Options.Create(new RetentionOptions { ConversationRecoveryDays = RecoveryDays }),
-            new StubTimeProvider(now));
+            new StubTimeProvider(now),
+            new StubCorrelationIdProvider());
 
     private sealed class RecordingAuditWriter : IConversationAuditWriter
     {

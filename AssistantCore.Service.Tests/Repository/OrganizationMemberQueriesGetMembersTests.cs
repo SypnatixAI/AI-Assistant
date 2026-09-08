@@ -44,7 +44,7 @@ public sealed class OrganizationMemberQueriesGetMembersTests
             expectedSecond,
             expectedFirst);
         await dbContext.SaveChangesAsync();
-        var queries = new OrganizationMemberQueries(dbContext);
+        var queries = new OrganizationMemberQueries(dbContext, new StubAdministrativeAuditRepository());
 
         // When
         var result = await queries.GetMembers(currentOrganizationId, CancellationToken.None);

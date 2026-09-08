@@ -192,14 +192,26 @@ internal sealed class StubOrganizationMemberQueries : IOrganizationMemberQueries
         return Task.FromResult(FoundMember);
     }
 
+    public Guid? ReceivedActorId { get; private set; }
+
+    public DateTimeOffset? ReceivedOccurredAt { get; private set; }
+
+    public string? ReceivedCorrelationId { get; private set; }
+
     public Task<OrganizationMember> UpdateRole(
         OrganizationMember member,
         OrganizationRole role,
+        Guid actorId,
+        DateTimeOffset occurredAt,
+        string correlationId,
         CancellationToken cancellationToken = default)
     {
         UpdateRoleCallCount++;
         UpdatedMember = member;
         ReceivedRole = role;
+        ReceivedActorId = actorId;
+        ReceivedOccurredAt = occurredAt;
+        ReceivedCorrelationId = correlationId;
         ReceivedCancellationToken = cancellationToken;
         member.Role = role;
         return Task.FromResult(member);
@@ -210,6 +222,9 @@ internal sealed class StubOrganizationMemberQueries : IOrganizationMemberQueries
         Guid memberId,
         RecordStatus status,
         int? expectedVersion,
+        Guid actorId,
+        DateTimeOffset occurredAt,
+        string correlationId,
         CancellationToken cancellationToken = default)
     {
         UpdateStatusCallCount++;
@@ -217,6 +232,9 @@ internal sealed class StubOrganizationMemberQueries : IOrganizationMemberQueries
         ReceivedMemberId = memberId;
         ReceivedStatus = status;
         ReceivedExpectedVersion = expectedVersion;
+        ReceivedActorId = actorId;
+        ReceivedOccurredAt = occurredAt;
+        ReceivedCorrelationId = correlationId;
         ReceivedCancellationToken = cancellationToken;
         return Task.FromResult(UpdateStatusResult);
     }

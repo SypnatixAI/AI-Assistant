@@ -8,16 +8,21 @@ namespace AssistantCore.Service.Tests.Repository;
 
 public sealed class OrganizationMemberQueriesUpdateStatusTests
 {
+    private const string CorrelationId = "request-8f812";
+
     [Fact]
     public async Task Given_AMatchingVersion_When_UpdateStatus_Then_PersistsChangesAndIncrementsVersion()
     {
         // Given
         var member = CreateMember(RecordStatus.Active, version: 3);
+        var actorId = Guid.NewGuid();
+        var occurredAt = DateTimeOffset.UtcNow;
         await using var dbContext = CreateDbContext();
         dbContext.OrganizationMembers.Add(member);
         await dbContext.SaveChangesAsync();
         dbContext.ChangeTracker.Clear();
-        var queries = new OrganizationMemberQueries(dbContext);
+        var administrativeAuditRepository = new RecordingAdministrativeAuditRepository();
+        var queries = new OrganizationMemberQueries(dbContext, administrativeAuditRepository);
 
         // When
         var result = await queries.UpdateStatus(
@@ -25,6 +30,9 @@ public sealed class OrganizationMemberQueriesUpdateStatusTests
             member.Id,
             RecordStatus.Inactive,
             expectedVersion: 3,
+            actorId,
+            occurredAt,
+            CorrelationId,
             CancellationToken.None);
 
         // Then
@@ -37,6 +45,16 @@ public sealed class OrganizationMemberQueriesUpdateStatusTests
             .SingleAsync(candidate => candidate.Id == member.Id);
         Assert.Equal(RecordStatus.Inactive, persisted.Status);
         Assert.Equal(4, persisted.Version);
+
+        var entry = Assert.Single(administrativeAuditRepository.StagedEntries);
+        Assert.Equal(member.OrganizationId, entry.OrganizationId);
+        Assert.Equal(AdministrativeAuditAction.MemberStatusChanged, entry.Action);
+        Assert.Equal(actorId, entry.ActorId);
+        Assert.Equal(member.Id, entry.TargetId);
+        Assert.Equal(occurredAt, entry.OccurredAt);
+        Assert.Equal(CorrelationId, entry.CorrelationId);
+        Assert.Contains("\"status\":\"Active\"", entry.OldValues);
+        Assert.Contains("\"status\":\"Inactive\"", entry.NewValues);
     }
 
     [Fact]
@@ -48,7 +66,8 @@ public sealed class OrganizationMemberQueriesUpdateStatusTests
         dbContext.OrganizationMembers.Add(member);
         await dbContext.SaveChangesAsync();
         dbContext.ChangeTracker.Clear();
-        var queries = new OrganizationMemberQueries(dbContext);
+        var administrativeAuditRepository = new RecordingAdministrativeAuditRepository();
+        var queries = new OrganizationMemberQueries(dbContext, administrativeAuditRepository);
 
         // When
         var result = await queries.UpdateStatus(
@@ -56,6 +75,9 @@ public sealed class OrganizationMemberQueriesUpdateStatusTests
             member.Id,
             RecordStatus.Inactive,
             expectedVersion: 4,
+            Guid.NewGuid(),
+            DateTimeOffset.UtcNow,
+            CorrelationId,
             CancellationToken.None);
 
         // Then
@@ -66,6 +88,7 @@ public sealed class OrganizationMemberQueriesUpdateStatusTests
             .SingleAsync(candidate => candidate.Id == member.Id);
         Assert.Equal(RecordStatus.Active, persisted.Status);
         Assert.Equal(5, persisted.Version);
+        Assert.Empty(administrativeAuditRepository.StagedEntries);
     }
 
     [Fact]
@@ -77,7 +100,8 @@ public sealed class OrganizationMemberQueriesUpdateStatusTests
         dbContext.OrganizationMembers.Add(member);
         await dbContext.SaveChangesAsync();
         dbContext.ChangeTracker.Clear();
-        var queries = new OrganizationMemberQueries(dbContext);
+        var administrativeAuditRepository = new RecordingAdministrativeAuditRepository();
+        var queries = new OrganizationMemberQueries(dbContext, administrativeAuditRepository);
 
         // When
         var result = await queries.UpdateStatus(
@@ -85,6 +109,9 @@ public sealed class OrganizationMemberQueriesUpdateStatusTests
             member.Id,
             RecordStatus.Inactive,
             expectedVersion: null,
+            Guid.NewGuid(),
+            DateTimeOffset.UtcNow,
+            CorrelationId,
             CancellationToken.None);
 
         // Then
@@ -94,6 +121,7 @@ public sealed class OrganizationMemberQueriesUpdateStatusTests
         var persisted = await dbContext.OrganizationMembers.AsNoTracking()
             .SingleAsync(candidate => candidate.Id == member.Id);
         Assert.Equal(2, persisted.Version);
+        Assert.Empty(administrativeAuditRepository.StagedEntries);
     }
 
     [Fact]
@@ -105,7 +133,8 @@ public sealed class OrganizationMemberQueriesUpdateStatusTests
         dbContext.OrganizationMembers.Add(member);
         await dbContext.SaveChangesAsync();
         dbContext.ChangeTracker.Clear();
-        var queries = new OrganizationMemberQueries(dbContext);
+        var administrativeAuditRepository = new RecordingAdministrativeAuditRepository();
+        var queries = new OrganizationMemberQueries(dbContext, administrativeAuditRepository);
 
         // When
         var result = await queries.UpdateStatus(
@@ -113,6 +142,9 @@ public sealed class OrganizationMemberQueriesUpdateStatusTests
             member.Id,
             RecordStatus.Inactive,
             expectedVersion: null,
+            Guid.NewGuid(),
+            DateTimeOffset.UtcNow,
+            CorrelationId,
             CancellationToken.None);
 
         // Then
@@ -129,7 +161,7 @@ public sealed class OrganizationMemberQueriesUpdateStatusTests
         dbContext.OrganizationMembers.Add(member);
         await dbContext.SaveChangesAsync();
         dbContext.ChangeTracker.Clear();
-        var queries = new OrganizationMemberQueries(dbContext);
+        var queries = new OrganizationMemberQueries(dbContext, new StubAdministrativeAuditRepository());
 
         // When
         var result = await queries.UpdateStatus(
@@ -137,6 +169,9 @@ public sealed class OrganizationMemberQueriesUpdateStatusTests
             member.Id,
             RecordStatus.Inactive,
             expectedVersion: null,
+            Guid.NewGuid(),
+            DateTimeOffset.UtcNow,
+            CorrelationId,
             CancellationToken.None);
 
         // Then
