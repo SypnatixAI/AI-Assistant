@@ -1609,6 +1609,52 @@ Chaque passage possède une clé déterministe construite à partir de :
 organisation + site + bibliothèque + document + numéro du passage
 ```
 
+### Contexte documentaire d'un passage
+
+Un passage isolé peut perdre le sens que lui donnait son en-tête. « Maximum
+remboursable : 75 $ par jour » est retrouvable sans que rien n'indique qu'il
+concerne les repas en déplacement international. Deux sections d'un même
+document peuvent ainsi contenir la même phrase avec deux sens différents.
+
+Chaque passage conserve donc le titre de sa section en **métadonnée**, à côté de
+son contenu, et non à l'intérieur. Deux représentations coexistent :
+
+| Représentation | Usage |
+| --- | --- |
+| `Content` | le texte du document, cité tel quel à l'utilisateur |
+| Texte contextualisé | assemblé au moment de l'embedding, jamais persisté |
+
+Le texte contextualisé préfixe le contenu du document et de la section :
+
+```text
+[Document] Politique de remboursement des déplacements
+[Section] Repas lors de déplacements internationaux
+
+Maximum remboursable : 75 $ par jour.
+```
+
+La construction est déterministe et n'utilise que des métadonnées réellement
+extraites : aucun contexte n'est inventé. Un document sans titre ni section est
+indexé tel quel, si bien que les formats sans structure explicite continuent de
+fonctionner. La section n'est pas répétée lorsque le passage commence déjà par
+elle.
+
+Mélanger les deux représentations aurait deux effets indésirables : le préfixe
+apparaîtrait dans les citations, et il consommerait une partie du budget de
+caractères du passage, amputant d'autant le texte réel.
+
+### Réindexation après un changement de contextualisation
+
+La clé d'un passage dérive de la version du document. Un document inchangé
+conserve donc sa clé, et son embedding n'est pas recalculé : les documents déjà
+indexés gardent leur ancienne représentation jusqu'à leur prochaine
+modification.
+
+Pour forcer une reconstruction complète, un administrateur utilise
+[la réinitialisation de la sélection](#m365-sharepoint-reset-selection) puis
+resélectionne ses sites. L'indexation initiale repart alors avec la
+contextualisation courante.
+
 <a id="m365-sharepoint-embeddings"></a>
 ## Création des embeddings
 
@@ -1617,7 +1663,7 @@ Le fournisseur d’embeddings est accessible par une interface applicative.
 Le worker lui transmet seulement :
 
 - le titre utile;
-- le texte du passage.
+- le texte contextualisé du passage.
 
 La configuration indique :
 

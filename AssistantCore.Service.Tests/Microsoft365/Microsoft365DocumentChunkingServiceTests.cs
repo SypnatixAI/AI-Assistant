@@ -76,7 +76,7 @@ public sealed class Microsoft365DocumentChunkingServiceTests
     }
 
     [Theory, AutoDomainData]
-    public void Given_ASectionSpanningSeveralChunks_When_CreateChunks_Then_RepeatsItsContext(
+    public void Given_ASectionSpanningSeveralChunks_When_CreateChunks_Then_CarriesItAsMetadata(
         Guid organizationId,
         Guid sourceId,
         string siteId,
@@ -116,8 +116,12 @@ public sealed class Microsoft365DocumentChunkingServiceTests
 
         // Then
         Assert.True(passages.Count > 1);
+        // La section voyage en metadonnee : le contenu reste le texte du document,
+        // sans prefixe artificiel, puisque c'est lui qui sera cite.
+        Assert.All(passages, passage =>
+            Assert.Equal("Accès au bâtiment", passage.SectionTitle));
         Assert.All(passages.Skip(1), passage =>
-            Assert.StartsWith("Section: Accès au bâtiment", passage.Content, StringComparison.Ordinal));
+            Assert.DoesNotContain("Section:", passage.Content, StringComparison.Ordinal));
     }
 
     private static Microsoft365DocumentChunkingService CreateService(

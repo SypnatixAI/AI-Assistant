@@ -49,10 +49,9 @@ public sealed class Microsoft365DocumentChunkingService(IOptions<Microsoft365Opt
                 }
             }
 
-            var content = AddSectionContext(
-                text.Substring(position, length).Trim(),
-                sectionPositions.LastOrDefault(section => section.Position <= position).Title,
-                maximumCharacters);
+            var content = text.Substring(position, length).Trim();
+            var sectionTitle = sectionPositions
+                .LastOrDefault(section => section.Position <= position).Title;
             if (content.Length > 0)
             {
                 var chunkNumber = chunks.Count;
@@ -66,7 +65,8 @@ public sealed class Microsoft365DocumentChunkingService(IOptions<Microsoft365Opt
                     documentVersion,
                     chunkNumber,
                     url,
-                    modifiedAt));
+                    modifiedAt,
+                    SectionTitle: string.IsNullOrWhiteSpace(sectionTitle) ? null : sectionTitle));
             }
 
             if (position + length >= text.Length)
@@ -97,26 +97,6 @@ public sealed class Microsoft365DocumentChunkingService(IOptions<Microsoft365Opt
         }
 
         return sections;
-    }
-
-    private static string AddSectionContext(
-        string content,
-        string? sectionTitle,
-        int maximumCharacters)
-    {
-        if (string.IsNullOrWhiteSpace(sectionTitle)
-            || content.StartsWith(sectionTitle, StringComparison.OrdinalIgnoreCase))
-        {
-            return content;
-        }
-
-        var prefix = $"Section: {sectionTitle}{Environment.NewLine}";
-        if (prefix.Length >= maximumCharacters)
-        {
-            return content;
-        }
-
-        return prefix + content[..Math.Min(content.Length, maximumCharacters - prefix.Length)];
     }
 
     private static string CreateChunkId(

@@ -206,7 +206,7 @@ public sealed class Microsoft365DocumentProcessingService(
     }
 
     private static string BuildEmbeddingContent(Microsoft365SearchPassage passage) =>
-        $"Document: {passage.Title}\n\n{passage.Content}";
+        Microsoft365PassageContextBuilder.BuildEmbeddingContent(passage);
 
     private async Task DeleteAsync(
         Microsoft365DocumentWork work,
