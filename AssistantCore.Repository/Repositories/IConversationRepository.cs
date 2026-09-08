@@ -96,6 +96,7 @@ public interface IConversationRepository
         string? title,
         ConversationStatus? status,
         DateTimeOffset updatedAt,
+        string correlationId,
         CancellationToken cancellationToken = default);
 
     /// <summary>
@@ -109,6 +110,7 @@ public interface IConversationRepository
         Guid conversationId,
         DateTimeOffset deletedAt,
         DateTimeOffset purgeAfter,
+        string correlationId,
         CancellationToken cancellationToken = default);
 
     Task<bool> FailMessageProcessingAsync(

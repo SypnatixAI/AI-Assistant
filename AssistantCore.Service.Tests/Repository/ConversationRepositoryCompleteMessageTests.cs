@@ -31,7 +31,7 @@ public sealed class ConversationRepositoryCompleteMessageTests
         dbContext.Messages.Add(userMessage);
         await dbContext.SaveChangesAsync();
         dbContext.ChangeTracker.Clear();
-        var repository = new ConversationRepository(dbContext);
+        var repository = new ConversationRepository(dbContext, new StubAdministrativeAuditRepository());
 
         // When
         var result = await repository.CompleteMessageWithAssistantResponseAsync(
@@ -87,7 +87,7 @@ public sealed class ConversationRepositoryCompleteMessageTests
         dbContext.Messages.Add(userMessage);
         await dbContext.SaveChangesAsync();
         dbContext.ChangeTracker.Clear();
-        var repository = new ConversationRepository(dbContext);
+        var repository = new ConversationRepository(dbContext, new StubAdministrativeAuditRepository());
 
         // When
         var result = await repository.CompleteMessageWithAssistantResponseAsync(
@@ -137,7 +137,7 @@ public sealed class ConversationRepositoryCompleteMessageTests
         dbContext.Messages.Add(userMessage);
         await dbContext.SaveChangesAsync();
         dbContext.ChangeTracker.Clear();
-        var repository = new ConversationRepository(dbContext);
+        var repository = new ConversationRepository(dbContext, new StubAdministrativeAuditRepository());
 
         // When
         var result = await repository.CompleteMessageWithAssistantResponseAsync(

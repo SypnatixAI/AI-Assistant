@@ -206,7 +206,9 @@ public sealed class MemberManagementServiceUpdateMemberRoleTests
             new StubAuthenticateUserService { Result = (organization, currentMember) },
             memberQueries,
             new StubCurrentIdentity(),
-            Options.Create(new OrganizationRoleOptions()));
+            Options.Create(new OrganizationRoleOptions()),
+            new StubCorrelationIdProvider(),
+            new StubTimeProvider());
 
         return new TestContext(service, memberQueries, organization, currentMember);
     }

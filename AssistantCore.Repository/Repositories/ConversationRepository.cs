@@ -1,11 +1,14 @@
 using AssistantCore.Repository.Domain.Entities;
 using AssistantCore.Repository.Domain.Enums;
 using AssistantCore.Repository.Persistence;
+using AssistantCore.Repository.Repositories.Audit;
 using Microsoft.EntityFrameworkCore;
 
 namespace AssistantCore.Repository.Repositories;
 
-public sealed class ConversationRepository(AssistantCoreDbContext dbContext)
+public sealed class ConversationRepository(
+    AssistantCoreDbContext dbContext,
+    IAdministrativeAuditRepository administrativeAuditRepository)
     : IConversationRepository
 {
     private const int InitialConversationVersion = 1;
@@ -427,6 +430,7 @@ public sealed class ConversationRepository(AssistantCoreDbContext dbContext)
         string? title,
         ConversationStatus? status,
         DateTimeOffset updatedAt,
+        string correlationId,
         CancellationToken cancellationToken = default)
     {
         var conversation = await dbContext.Conversations
@@ -455,7 +459,23 @@ public sealed class ConversationRepository(AssistantCoreDbContext dbContext)
 
         if (status is not null)
         {
+            var previousStatus = conversation.Status;
             conversation.Status = status.Value;
+
+            if (status.Value == ConversationStatus.Archived)
+            {
+                administrativeAuditRepository.Stage(AdministrativeAuditEntryFactory.Create(
+                    organizationId,
+                    AdministrativeAuditSubjectTypes.Member,
+                    ownerMemberId,
+                    AdministrativeAuditAction.ConversationArchived,
+                    AdministrativeAuditSubjectTypes.Conversation,
+                    conversationId,
+                    updatedAt,
+                    new Dictionary<string, object?> { ["status"] = previousStatus.ToString() },
+                    new Dictionary<string, object?> { ["status"] = status.Value.ToString() },
+                    correlationId));
+            }
         }
 
         conversation.Version += 1;
@@ -479,6 +499,7 @@ public sealed class ConversationRepository(AssistantCoreDbContext dbContext)
         Guid conversationId,
         DateTimeOffset deletedAt,
         DateTimeOffset purgeAfter,
+        string correlationId,
         CancellationToken cancellationToken = default)
     {
         var conversation = await dbContext.Conversations
@@ -509,6 +530,18 @@ public sealed class ConversationRepository(AssistantCoreDbContext dbContext)
             conversation.DeletedAt = deletedAt;
             conversation.Version += 1;
             conversation.UpdatedAt = deletedAt;
+
+            administrativeAuditRepository.Stage(AdministrativeAuditEntryFactory.Create(
+                organizationId,
+                AdministrativeAuditSubjectTypes.Member,
+                ownerMemberId,
+                AdministrativeAuditAction.ConversationDeleted,
+                AdministrativeAuditSubjectTypes.Conversation,
+                conversationId,
+                deletedAt,
+                new Dictionary<string, object?> { ["deletedAt"] = null },
+                new Dictionary<string, object?> { ["deletedAt"] = deletedAt.ToString("O") },
+                correlationId));
         }
 
         if (!alreadyRequested)

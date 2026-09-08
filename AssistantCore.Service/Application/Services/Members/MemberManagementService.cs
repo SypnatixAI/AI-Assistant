@@ -14,7 +14,9 @@ public sealed class MemberManagementService(
     IAuthenticateUserService authenticateUserService,
     IOrganizationMemberQueries organizationMemberQueries,
     ICurrentIdentity currentIdentity,
-    IOptions<OrganizationRoleOptions> organizationRoleOptions) : IMemberManagementService
+    IOptions<OrganizationRoleOptions> organizationRoleOptions,
+    ICorrelationIdProvider correlationIdProvider,
+    TimeProvider timeProvider) : IMemberManagementService
 {
     public async Task<IReadOnlyCollection<OrganizationMember>> GetMembersAsync(
         CancellationToken cancellationToken = default)
@@ -53,7 +55,13 @@ public sealed class MemberManagementService(
             throw new BadRequestException("An inactive organization member role cannot be changed.");
         }
 
-        return await organizationMemberQueries.UpdateRole(member, newRole, cancellationToken);
+        return await organizationMemberQueries.UpdateRole(
+            member,
+            newRole,
+            currentAdmin.Id,
+            timeProvider.GetUtcNow(),
+            correlationIdProvider.GetCorrelationId(),
+            cancellationToken);
     }
 
     public async Task<OrganizationMember> UpdateMemberStatusAsync(
@@ -81,6 +89,9 @@ public sealed class MemberManagementService(
             memberId,
             newStatus,
             expectedVersion,
+            currentMember.Id,
+            timeProvider.GetUtcNow(),
+            correlationIdProvider.GetCorrelationId(),
             cancellationToken);
 
         return result.Status switch

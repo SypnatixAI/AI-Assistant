@@ -184,6 +184,8 @@ public sealed class MemberManagementServiceUpdateMemberStatusTests
         Assert.Equal(targetMemberId, context.MemberQueries.ReceivedMemberId);
         Assert.Equal(expectedStatus, context.MemberQueries.ReceivedStatus);
         Assert.Equal(3, context.MemberQueries.ReceivedExpectedVersion);
+        Assert.Equal(currentMember.Id, context.MemberQueries.ReceivedActorId);
+        Assert.NotNull(context.MemberQueries.ReceivedCorrelationId);
         Assert.Equal(cancellationToken, context.MemberQueries.ReceivedCancellationToken);
     }
 
@@ -209,7 +211,9 @@ public sealed class MemberManagementServiceUpdateMemberStatusTests
             new StubAuthenticateUserService { Result = (organization, currentMember) },
             memberQueries,
             identity,
-            Options.Create(new OrganizationRoleOptions { TenantAdminRole = TenantAdminRole }));
+            Options.Create(new OrganizationRoleOptions { TenantAdminRole = TenantAdminRole }),
+            new StubCorrelationIdProvider(),
+            new StubTimeProvider());
 
         return new TestContext(service, memberQueries, organization, currentMember);
     }

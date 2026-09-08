@@ -22,7 +22,7 @@ public sealed class ConversationRepositoryFindTests
         dbContext.Conversations.AddRange(expectedConversation, otherConversation);
         await dbContext.SaveChangesAsync();
         dbContext.ChangeTracker.Clear();
-        var repository = new ConversationRepository(dbContext);
+        var repository = new ConversationRepository(dbContext, new StubAdministrativeAuditRepository());
 
         // When
         var result = await repository.FindConversationAsync(
@@ -53,7 +53,7 @@ public sealed class ConversationRepositoryFindTests
         await using var dbContext = CreateDbContext();
         dbContext.Conversations.Add(conversation);
         await dbContext.SaveChangesAsync();
-        var repository = new ConversationRepository(dbContext);
+        var repository = new ConversationRepository(dbContext, new StubAdministrativeAuditRepository());
 
         // When
         var result = await repository.FindConversationAsync(

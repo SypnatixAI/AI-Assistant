@@ -30,7 +30,7 @@ public sealed class ConversationRepositoryFailMessageTests
         dbContext.Messages.Add(userMessage);
         await dbContext.SaveChangesAsync();
         dbContext.ChangeTracker.Clear();
-        var repository = new ConversationRepository(dbContext);
+        var repository = new ConversationRepository(dbContext, new StubAdministrativeAuditRepository());
 
         // When
         var updated = await repository.FailMessageProcessingAsync(
@@ -78,7 +78,7 @@ public sealed class ConversationRepositoryFailMessageTests
         dbContext.Messages.Add(userMessage);
         await dbContext.SaveChangesAsync();
         dbContext.ChangeTracker.Clear();
-        var repository = new ConversationRepository(dbContext);
+        var repository = new ConversationRepository(dbContext, new StubAdministrativeAuditRepository());
 
         // When
         var updated = await repository.FailMessageProcessingAsync(
@@ -122,7 +122,7 @@ public sealed class ConversationRepositoryFailMessageTests
         dbContext.Messages.Add(userMessage);
         await dbContext.SaveChangesAsync();
         dbContext.ChangeTracker.Clear();
-        var repository = new ConversationRepository(dbContext);
+        var repository = new ConversationRepository(dbContext, new StubAdministrativeAuditRepository());
 
         // When
         var updated = await repository.FailMessageProcessingAsync(
@@ -154,7 +154,7 @@ public sealed class ConversationRepositoryFailMessageTests
     {
         // Given
         await using var dbContext = CreateDbContext();
-        var repository = new ConversationRepository(dbContext);
+        var repository = new ConversationRepository(dbContext, new StubAdministrativeAuditRepository());
 
         // When
         var exception = await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() =>

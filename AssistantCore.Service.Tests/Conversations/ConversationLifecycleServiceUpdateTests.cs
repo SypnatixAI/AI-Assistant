@@ -311,11 +311,12 @@ public sealed class ConversationLifecycleServiceUpdateTests
         DateTimeOffset now,
         int maximumTitleLength = 200) =>
         new(
-            new ConversationRepository(dbContext),
+            new ConversationRepository(dbContext, new StubAdministrativeAuditRepository()),
             auditWriter,
             Options.Create(new ConversationOptions { MaximumTitleLength = maximumTitleLength }),
             Options.Create(new RetentionOptions { ConversationRecoveryDays = 30 }),
-            new StubTimeProvider(now));
+            new StubTimeProvider(now),
+            new StubCorrelationIdProvider());
 
     private sealed class RecordingAuditWriter : IConversationAuditWriter
     {

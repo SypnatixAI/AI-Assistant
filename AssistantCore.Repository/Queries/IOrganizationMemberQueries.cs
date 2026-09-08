@@ -27,6 +27,9 @@ public interface IOrganizationMemberQueries
     Task<OrganizationMember> UpdateRole(
         OrganizationMember member,
         OrganizationRole role,
+        Guid actorId,
+        DateTimeOffset occurredAt,
+        string correlationId,
         CancellationToken cancellationToken = default);
 
     Task<MemberUpdateResult> UpdateStatus(
@@ -34,6 +37,9 @@ public interface IOrganizationMemberQueries
         Guid memberId,
         RecordStatus status,
         int? expectedVersion,
+        Guid actorId,
+        DateTimeOffset occurredAt,
+        string correlationId,
         CancellationToken cancellationToken = default);
 
     Task RecordSuccessfulAuthenticationAsync(

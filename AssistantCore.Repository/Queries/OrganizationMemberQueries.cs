@@ -1,11 +1,15 @@
 using AssistantCore.Repository.Domain.Entities;
 using AssistantCore.Repository.Domain.Enums;
 using AssistantCore.Repository.Persistence;
+using AssistantCore.Repository.Repositories;
+using AssistantCore.Repository.Repositories.Audit;
 using Microsoft.EntityFrameworkCore;
 
 namespace AssistantCore.Repository.Queries;
 
-public sealed class OrganizationMemberQueries(AssistantCoreDbContext dbContext) : IOrganizationMemberQueries
+public sealed class OrganizationMemberQueries(
+    AssistantCoreDbContext dbContext,
+    IAdministrativeAuditRepository administrativeAuditRepository) : IOrganizationMemberQueries
 {
     public async Task<IReadOnlyCollection<OrganizationMember>> GetMembers(
         Guid organizationId,
@@ -91,6 +95,9 @@ public sealed class OrganizationMemberQueries(AssistantCoreDbContext dbContext) 
     public async Task<OrganizationMember> UpdateRole(
         OrganizationMember member,
         OrganizationRole role,
+        Guid actorId,
+        DateTimeOffset occurredAt,
+        string correlationId,
         CancellationToken cancellationToken = default)
     {
         if (member.Role == role)
@@ -98,8 +105,22 @@ public sealed class OrganizationMemberQueries(AssistantCoreDbContext dbContext) 
             return member;
         }
 
+        var previousRole = member.Role;
         dbContext.OrganizationMembers.Attach(member);
         member.Role = role;
+
+        administrativeAuditRepository.Stage(AdministrativeAuditEntryFactory.Create(
+            member.OrganizationId,
+            AdministrativeAuditSubjectTypes.Member,
+            actorId,
+            AdministrativeAuditAction.MemberRoleChanged,
+            AdministrativeAuditSubjectTypes.Member,
+            member.Id,
+            occurredAt,
+            new Dictionary<string, object?> { ["role"] = previousRole.ToString() },
+            new Dictionary<string, object?> { ["role"] = role.ToString() },
+            correlationId));
+
         await dbContext.SaveChangesAsync(cancellationToken);
         return member;
     }
@@ -109,6 +130,9 @@ public sealed class OrganizationMemberQueries(AssistantCoreDbContext dbContext) 
         Guid memberId,
         RecordStatus status,
         int? expectedVersion,
+        Guid actorId,
+        DateTimeOffset occurredAt,
+        string correlationId,
         CancellationToken cancellationToken = default)
     {
         var member = await dbContext.OrganizationMembers
@@ -133,8 +157,21 @@ public sealed class OrganizationMemberQueries(AssistantCoreDbContext dbContext) 
             return MemberUpdateResult.Updated(member);
         }
 
+        var previousStatus = member.Status;
         member.Status = status;
         member.Version += 1;
+
+        administrativeAuditRepository.Stage(AdministrativeAuditEntryFactory.Create(
+            organizationId,
+            AdministrativeAuditSubjectTypes.Member,
+            actorId,
+            AdministrativeAuditAction.MemberStatusChanged,
+            AdministrativeAuditSubjectTypes.Member,
+            memberId,
+            occurredAt,
+            new Dictionary<string, object?> { ["status"] = previousStatus.ToString() },
+            new Dictionary<string, object?> { ["status"] = status.ToString() },
+            correlationId));
 
         try
         {

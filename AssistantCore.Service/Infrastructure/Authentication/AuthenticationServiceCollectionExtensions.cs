@@ -82,6 +82,7 @@ public static class AuthenticationServiceCollectionExtensions
         services.AddHttpContextAccessor();
         services.AddScoped<IIdentityClaimsMapper, MicrosoftEntraIdentityClaimsMapper>();
         services.AddScoped<ICurrentIdentity, HttpCurrentIdentity>();
+        services.AddScoped<ICorrelationIdProvider, HttpCorrelationIdProvider>();
 
         services.AddSingleton<IValidateOptions<ApiAccessOptions>, ApiAccessOptionsValidator>();
         services.AddOptions<ApiAccessOptions>()

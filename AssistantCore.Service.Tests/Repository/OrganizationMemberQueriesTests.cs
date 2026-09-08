@@ -31,7 +31,7 @@ public sealed class OrganizationMemberQueriesTests
             "IX_OrganizationMember_OrganizationId_IdentityProvider_ExternalUserId");
 
         await using var throwingContext = new ThrowOnceDbContext(options, identityConflict);
-        var queries = new OrganizationMemberQueries(throwingContext);
+        var queries = new OrganizationMemberQueries(throwingContext, new StubAdministrativeAuditRepository());
 
         // When
         var result = await queries.CreateMember(losingMember, CancellationToken.None);
@@ -58,7 +58,7 @@ public sealed class OrganizationMemberQueriesTests
         var emailConflict = CreateDbUpdateException("IX_OrganizationMember_OrganizationId_Email");
 
         await using var throwingContext = new ThrowOnceDbContext(options, emailConflict);
-        var queries = new OrganizationMemberQueries(throwingContext);
+        var queries = new OrganizationMemberQueries(throwingContext, new StubAdministrativeAuditRepository());
 
         // When / Then
         var thrownException = await Assert.ThrowsAsync<DbUpdateException>(
