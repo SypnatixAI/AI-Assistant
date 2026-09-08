@@ -52,6 +52,18 @@ public sealed class Microsoft365Options
 
     public int MaximumExtractedCharacters { get; init; } = 2_000_000;
 
+    public string OcrEndpoint { get; init; } = string.Empty;
+
+    public string OcrApiKey { get; init; } = string.Empty;
+
+    public int OcrTimeoutSeconds { get; init; } = 60;
+
+    public int OcrPollIntervalMilliseconds { get; init; } = 500;
+
+    public int OcrMinimumNativeCharactersPerPage { get; init; } = 20;
+
+    public int MaximumPdfPages { get; init; } = 500;
+
     public int MaximumExcelSheets { get; init; } = 100;
 
     public int MaximumExcelCells { get; init; } = 100_000;
