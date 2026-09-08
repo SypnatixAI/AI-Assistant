@@ -98,6 +98,8 @@ public sealed class AzureAiSearchKnowledgeBaseRetrievalClient
             })
             .ToArray();
 
+        var azureMaximumResults = Math.Clamp(request.MaximumResults, 50, 200);
+
         return new
         {
             messages,
@@ -106,7 +108,7 @@ public sealed class AzureAiSearchKnowledgeBaseRetrievalClient
             includeActivity = true,
             maxRuntimeInSeconds = request.MaxRuntimeInSeconds,
             maxOutputSize = request.MaxOutputSizeInTokens,
-            maxOutputDocuments = request.MaximumResults,
+            maxOutputDocuments = azureMaximumResults,
             knowledgeSourceParams = new[]
             {
                 new
@@ -117,7 +119,7 @@ public sealed class AzureAiSearchKnowledgeBaseRetrievalClient
                     includeReferences = true,
                     includeReferenceSourceData = true,
                     filterAddOn = request.Filter,
-                    maxOutputDocuments = request.MaximumResults
+                    maxOutputDocuments = azureMaximumResults
                 }
             }
         };
