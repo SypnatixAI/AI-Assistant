@@ -7,4 +7,8 @@ public static class ToolExecutionErrorCodes
     public const string ExecutorAmbiguous = "TOOL_EXECUTOR_AMBIGUOUS";
 
     public const string ArgumentMappingFailed = "TOOL_ARGUMENT_MAPPING_FAILED";
+
+    public const string MaximumToolCallsExceeded = "TOOL_MAXIMUM_CALLS_EXCEEDED";
+
+    public const string MaximumRepeatedToolCallsExceeded = "TOOL_MAXIMUM_REPEATED_CALLS_EXCEEDED";
 }

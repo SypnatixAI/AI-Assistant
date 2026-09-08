@@ -88,5 +88,12 @@ internal sealed class EnterpriseSearchAgentTool(
                 result.Evidence,
                 result.Warnings,
                 result.ErrorCode);
+
+        public static EnterpriseSearchToolResult Stopped(string errorCode) =>
+            new(
+                ToolExecutionStatus.Failed,
+                [],
+                ["EnterpriseSearch stopped because the function-call loop limit was reached."],
+                errorCode);
     }
 }

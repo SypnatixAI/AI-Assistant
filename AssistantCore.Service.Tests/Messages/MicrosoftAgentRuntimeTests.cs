@@ -10,6 +10,7 @@ using AssistantCore.Service.Application.Models.Messages.Orchestration;
 using AssistantCore.Service.Application.Models.Messages.Tools;
 using AssistantCore.Service.Application.Services.Messages.AgentRuntime;
 using AssistantCore.Service.Application.Services.Messages.AiModels;
+using AssistantCore.Service.Application.Services.Messages.Orchestration;
 using AssistantCore.Service.Application.Services.Messages.Tools;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
@@ -174,6 +175,78 @@ public sealed class MicrosoftAgentRuntimeTests
         Assert.Equal("code projet Atlas", validatedCall.Arguments.GetProperty("query").GetString());
         var routedCall = Assert.Single(router.ReceivedToolCalls);
         Assert.Equal(AiToolNames.SearchMicrosoft365, routedCall.ToolName);
+        var routedContext = Assert.Single(router.ReceivedContexts);
+        Assert.Null(routedContext.Budget);
+    }
+
+    [Theory, AutoDomainData]
+    public async Task Given_EnterpriseSearchCallsExceedMaximumToolCalls_When_RunAsync_Then_StopsFunctionCallLoop(
+        StartedMessageProcessing processing)
+    {
+        // Given
+        var selectedModel = CreateSelectedModel();
+        var provider = new SequenceAiModelProvider(
+            selectedModel.Provider,
+            [
+                CreateToolCallResponse("agent-call-1", "EnterpriseSearch", "code projet Atlas"),
+                CreateToolCallResponse("agent-call-2", "EnterpriseSearch", "code projet Orion"),
+                CreateResponse("Ce message ne devrait pas etre demande.")
+            ]);
+        var router = new RecordingToolExecutionRouter(
+            ToolExecutionResult.Succeeded("internal-call", [CreateEvidence("atlas-code")]));
+        var runtime = CreateRuntime(
+            [provider],
+            new StubToolRegistry([CreateAuthorizedEnterpriseSearchTool()]),
+            new RecordingToolCallValidator(),
+            router,
+            CreateOrchestrationOptions(
+                maximumToolCalls: 1,
+                maximumRepeatedToolCalls: 5));
+
+        // When
+        var result = await runtime.RunAsync(
+            new AgentTurnRequest(processing, CreateValidExecutionContext(), selectedModel),
+            CancellationToken.None);
+
+        // Then
+        Assert.Equal(2, provider.ReceivedRequests.Count);
+        Assert.Single(router.ReceivedToolCalls);
+        Assert.Equal(1, result.Usage.ToolCallCount);
+    }
+
+    [Theory, AutoDomainData]
+    public async Task Given_EnterpriseSearchRepeatsSameArgumentsBeyondMaximum_When_RunAsync_Then_StopsFunctionCallLoop(
+        StartedMessageProcessing processing)
+    {
+        // Given
+        var selectedModel = CreateSelectedModel();
+        var provider = new SequenceAiModelProvider(
+            selectedModel.Provider,
+            [
+                CreateToolCallResponse("agent-call-1", "EnterpriseSearch", "code projet Atlas"),
+                CreateToolCallResponse("agent-call-2", "EnterpriseSearch", "code projet Atlas"),
+                CreateResponse("Ce message ne devrait pas etre demande.")
+            ]);
+        var router = new RecordingToolExecutionRouter(
+            ToolExecutionResult.Succeeded("internal-call", [CreateEvidence("atlas-code")]));
+        var runtime = CreateRuntime(
+            [provider],
+            new StubToolRegistry([CreateAuthorizedEnterpriseSearchTool()]),
+            new RecordingToolCallValidator(),
+            router,
+            CreateOrchestrationOptions(
+                maximumToolCalls: 5,
+                maximumRepeatedToolCalls: 1));
+
+        // When
+        var result = await runtime.RunAsync(
+            new AgentTurnRequest(processing, CreateValidExecutionContext(), selectedModel),
+            CancellationToken.None);
+
+        // Then
+        Assert.Equal(2, provider.ReceivedRequests.Count);
+        Assert.Single(router.ReceivedToolCalls);
+        Assert.Equal(1, result.Usage.ToolCallCount);
     }
 
     [Theory, AutoDomainData]
@@ -299,6 +372,29 @@ public sealed class MicrosoftAgentRuntimeTests
         Assert.True(provider.ReceivedCancellationToken.IsCancellationRequested);
     }
 
+    [Theory, AutoDomainData]
+    public async Task Given_TurnExceedsMaximumExecutionTimeSeconds_When_RunAsync_Then_CancelsAgentRun(
+        StartedMessageProcessing processing,
+        ConnectorExecutionContext executionContext)
+    {
+        // Given
+        var selectedModel = CreateSelectedModel();
+        var provider = new BlockingAiModelProvider(selectedModel.Provider);
+        var runtime = CreateRuntime(
+            [provider],
+            new EmptyToolRegistry(),
+            options: CreateOrchestrationOptions(maximumExecutionTimeSeconds: 1));
+
+        // When
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(async () =>
+            await runtime.RunAsync(
+                new AgentTurnRequest(processing, executionContext, selectedModel),
+                CancellationToken.None));
+
+        // Then
+        Assert.True(provider.ReceivedCancellationToken.IsCancellationRequested);
+    }
+
     private static MicrosoftAgentRuntime CreateRuntime(
         params IAiModelProvider[] providers) =>
         CreateRuntime(providers, new EmptyToolRegistry());
@@ -307,14 +403,15 @@ public sealed class MicrosoftAgentRuntimeTests
         IReadOnlyCollection<IAiModelProvider> providers,
         IAiToolRegistry toolRegistry,
         IAiToolCallValidator? toolCallValidator = null,
-        IToolExecutionRouter? toolExecutionRouter = null) =>
+        IToolExecutionRouter? toolExecutionRouter = null,
+        MessageOrchestrationOptions? options = null) =>
         new(
             providers,
             toolRegistry,
             toolCallValidator ?? new ThrowingToolCallValidator(),
             toolExecutionRouter ?? new ThrowingToolExecutionRouter(),
-            Options.Create(CreateOrchestrationOptions()),
-            TimeProvider.System,
+            new ToolCallFingerprintGenerator(),
+            Options.Create(options ?? CreateOrchestrationOptions()),
             NullLoggerFactory.Instance);
 
     private static ConnectorExecutionContext CreateValidExecutionContext() =>
@@ -342,17 +439,20 @@ public sealed class MicrosoftAgentRuntimeTests
                 }
             }));
 
-    private static MessageOrchestrationOptions CreateOrchestrationOptions() =>
+    private static MessageOrchestrationOptions CreateOrchestrationOptions(
+        int maximumExecutionTimeSeconds = 30,
+        int maximumToolCalls = 4,
+        int maximumRepeatedToolCalls = 2) =>
         new()
         {
-            MaximumExecutionTimeSeconds = 30,
-            MaximumToolCalls = 4,
+            MaximumExecutionTimeSeconds = maximumExecutionTimeSeconds,
+            MaximumToolCalls = maximumToolCalls,
             MaximumModelTokens = 12_000,
             MaximumEstimatedCost = 1,
             RetrievalCandidateLimit = 10,
             FinalEvidenceLimit = 5,
             MaximumContextSize = 30_000,
-            MaximumRepeatedToolCalls = 2,
+            MaximumRepeatedToolCalls = maximumRepeatedToolCalls,
             MaximumParallelToolCalls = 2
         };
 
@@ -518,6 +618,29 @@ public sealed class MicrosoftAgentRuntimeTests
 
         public void CompleteFinalResponse() =>
             _completeFinalResponse.TrySetResult();
+    }
+
+    private sealed class BlockingAiModelProvider(string providerName) : IAiModelProvider
+    {
+        public string ProviderName => providerName;
+
+        public CancellationToken ReceivedCancellationToken { get; private set; }
+
+        public async Task<AiModelResponse> GetNextActionAsync(
+            AiModelRequest request,
+            CancellationToken cancellationToken)
+        {
+            ReceivedCancellationToken = cancellationToken;
+            await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+
+            throw new InvalidOperationException("The blocking provider should only complete by cancellation.");
+        }
+
+        public Task<AiModelResponse> GetNextActionStreamingAsync(
+            AiModelRequest request,
+            Func<string, CancellationToken, ValueTask> onTextDelta,
+            CancellationToken cancellationToken) =>
+            throw new NotSupportedException();
     }
 
     private sealed class EmptyToolRegistry : IAiToolRegistry
