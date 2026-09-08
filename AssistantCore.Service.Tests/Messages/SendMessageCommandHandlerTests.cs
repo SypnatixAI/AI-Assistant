@@ -387,7 +387,6 @@ public sealed class SendMessageCommandHandlerTests
             new StubUserContextService(operations, userContext),
             new StubModelSelector(operations, selectedModel),
             lifecycle,
-            new StubToolRegistry(operations),
             new StubOrchestrator(operations, orchestrationResult, expectedException),
             new StubResponseFactory(operations, response));
 
@@ -398,7 +397,7 @@ public sealed class SendMessageCommandHandlerTests
         // Then
         Assert.Same(expectedException, exception);
         Assert.Equal(
-            ["Validate", "ResolveUser", "SelectModel", "StartProcessing", "LoadTools", "Orchestrate"],
+            ["Validate", "ResolveUser", "SelectModel", "StartProcessing", "RunAgent"],
             operations);
         Assert.NotNull(lifecycle.ReceivedFailure);
         Assert.False(lifecycle.ReceivedFailure!.WasCancelled);
