@@ -8,6 +8,7 @@ public sealed record Microsoft365ExtractedContentUnit(
 
 public enum Microsoft365ExtractedContentUnitKind
 {
+    Page,
     Header,
     Title,
     Paragraph,

@@ -96,6 +96,7 @@ public static class Microsoft365ServiceCollectionExtensions
         AddProtectedHttpClient<MicrosoftSharePointListItemPermissionClient>(services);
         services.AddSingleton<MicrosoftWordContentExtractorClient>();
         services.AddSingleton<MicrosoftExcelContentExtractorClient>();
+        services.AddSingleton<MicrosoftPdfContentExtractorClient>();
         services.AddSingleton<MicrosoftCertificateIdentityClient>();
         AddProtectedHttpClient<MicrosoftSharePointUserGroupClient>(services);
         services.AddHttpClient<AzureAiSearchPassageAclClient>()
@@ -106,6 +107,8 @@ public static class Microsoft365ServiceCollectionExtensions
             .RedactLoggedHeaders(["api-key", "Authorization"]);
         services.AddHttpClient<OpenAiEmbeddingsClient>()
             .RedactLoggedHeaders(["Authorization"]);
+        services.AddHttpClient<MicrosoftVisionReadClient>()
+            .RedactLoggedHeaders(["Ocp-Apim-Subscription-Key"]);
         services.AddScoped<IMicrosoft365ConsentClient, Microsoft365ConsentClientAdapter>();
         services.AddScoped<IMicrosoft365ListItemDeltaClient, Microsoft365ListItemDeltaClientAdapter>();
         services.AddScoped<IMicrosoft365DriveItemDeltaClient, Microsoft365DriveItemDeltaClientAdapter>();
@@ -122,6 +125,7 @@ public static class Microsoft365ServiceCollectionExtensions
         services.AddScoped<IMicrosoft365PassageIndexWriter, Microsoft365PassageIndexWriterAdapter>();
         services.AddScoped<IMicrosoft365ContentExtractor, Microsoft365WordContentExtractorAdapter>();
         services.AddScoped<IMicrosoft365ContentExtractor, Microsoft365ExcelContentExtractorAdapter>();
+        services.AddScoped<IMicrosoft365ContentExtractor, Microsoft365PdfImageContentExtractorAdapter>();
         services.AddScoped<IMicrosoft365EmbeddingGenerator, Microsoft365EmbeddingGeneratorAdapter>();
         services.AddScoped<IMicrosoft365SearchIndexInitializer, Microsoft365SearchIndexInitializerAdapter>();
         services.AddSingleton<IMicrosoft365ClientStateProtector, Microsoft365ClientStateProtectorAdapter>();
