@@ -42,7 +42,8 @@ public sealed class AgenticRetrievalClientAdapter(
                     request.Filter,
                     request.MaximumResults,
                     request.MaxRuntimeInSeconds,
-                    request.MaxOutputSizeInTokens),
+                    request.MaxOutputSizeInTokens,
+                    configuration.KnowledgeBaseRetrievalReasoningEffort),
                 cancellationToken);
         }
         catch (AzureAiSearchExternalException exception)
