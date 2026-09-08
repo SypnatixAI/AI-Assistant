@@ -25,6 +25,7 @@ public sealed class Microsoft365SearchIndexInitializerAdapter(
                 ragOptions?.Value.VectorSearch.Metric ?? "cosine",
                 search.KnowledgeSourceName,
                 search.KnowledgeBaseName,
+                search.KnowledgeBaseRetrievalReasoningEffort,
                 search.KnowledgeBaseMaxRuntimeInSeconds,
                 search.KnowledgeBaseMaxOutputDocuments,
                 search.KnowledgeBaseMaxOutputSizeInTokens)
