@@ -131,12 +131,11 @@ internal sealed class AiModelProviderChatClient(
 
               Use EnterpriseSearch whenever the user's request is reasonably interpretable as
               a lookup of private, organization-specific, project-specific, or current enterprise
-              information. Prefer searching over asking for clarification when a short or terse
-              request contains an internal entity plus an information cue, for example "code atlas",
-              "budget orion", "statut phoenix", or a follow-up that can be resolved from conversation
-              history. Ask for clarification only when the request remains materially ambiguous
-              after considering the conversation history and an enterprise search would not resolve
-              that ambiguity. Answer greetings, small talk, and clearly general questions directly
+              information. Prefer searching over asking for clarification when the request can
+              reasonably be resolved from available enterprise data or conversation history.
+              Ask for clarification only when the request remains materially ambiguous and an
+              enterprise search would not reasonably help resolve that ambiguity. Answer greetings,
+              small talk, and clearly general questions directly
               without calling a tool. After EnterpriseSearch returns evidence, answer only from that
               evidence for enterprise-specific claims and cite only evidenceIds present in the
               tool result.
