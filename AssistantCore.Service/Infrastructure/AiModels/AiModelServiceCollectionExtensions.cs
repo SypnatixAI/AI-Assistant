@@ -1,6 +1,7 @@
 using AssistantCore.ExternalServices.Entities.OpenAI.Models;
 using AssistantCore.ExternalServices.Services.OpenAI;
 using AssistantCore.Service.Application.Services.Messages.AiModels;
+using AssistantCore.Service.Application.Services.Messages.AgentRuntime;
 using AssistantCore.Service.Application.Services.Messages.AiModels.Providers.OpenAI;
 using AssistantCore.Service.Infrastructure.AiModels.Configuration;
 using AssistantCore.Service.Infrastructure.AiModels.OpenAI;
