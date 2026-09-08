@@ -123,7 +123,9 @@ public sealed class ConversationsController(IDispatcher dispatcher) : Controller
 
         if (!int.TryParse(candidate, out var version) || version <= 0)
         {
-            throw new BadRequestException("The If-Match header must contain a valid version.");
+            throw new BadRequestException(
+                "The If-Match header must contain a valid version.",
+                BadRequestException.InvalidVersionHeader);
         }
 
         return version;

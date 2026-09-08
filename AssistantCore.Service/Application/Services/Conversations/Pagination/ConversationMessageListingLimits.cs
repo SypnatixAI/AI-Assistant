@@ -17,7 +17,8 @@ public static class ConversationMessageListingLimits
         if (requestedLimit < 1 || requestedLimit > MaximumLimit)
         {
             throw new BadRequestException(
-                $"limit must be between 1 and {MaximumLimit}.");
+                $"limit must be between 1 and {MaximumLimit}.",
+                BadRequestException.InvalidPagination);
         }
 
         return requestedLimit.Value;

@@ -30,7 +30,8 @@ public sealed class ConversationLifecycleService(
         if (title is null && status is null)
         {
             throw new BadRequestException(
-                "At least one of 'title' or 'status' must be provided.");
+                "At least one of 'title' or 'status' must be provided.",
+                BadRequestException.EmptyConversationPatch);
         }
 
         var desiredTitle = title is null ? null : NormalizeTitle(title);
@@ -178,7 +179,8 @@ public sealed class ConversationLifecycleService(
         if (normalized.Length is 0 || normalized.Length > maximumLength)
         {
             throw new BadRequestException(
-                $"Title must contain between 1 and {maximumLength} characters.");
+                $"Title must contain between 1 and {maximumLength} characters.",
+                BadRequestException.InvalidConversationTitle);
         }
 
         return normalized;
@@ -193,7 +195,7 @@ public sealed class ConversationLifecycleService(
             conversation.Version);
 
     private static NotFoundException CreateNotFoundException() =>
-        new("Conversation not found.");
+        new("Conversation not found.", NotFoundException.ConversationNotFound);
 
     private static ConflictException CreateVersionConflictException() =>
         new(
