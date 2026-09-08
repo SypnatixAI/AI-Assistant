@@ -154,6 +154,11 @@ public sealed class AzureAiSearchIndexClient
                 searchIndexParameters = new
                 {
                     searchIndexName = indexName,
+                    searchFields = new[]
+                    {
+                        new { name = "title" },
+                        new { name = "content" }
+                    },
                     sourceDataFields = new[]
                     {
                         new { name = "chunkId" },

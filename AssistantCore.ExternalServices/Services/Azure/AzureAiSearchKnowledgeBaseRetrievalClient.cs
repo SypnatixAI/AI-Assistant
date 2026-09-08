@@ -48,8 +48,9 @@ public sealed class AzureAiSearchKnowledgeBaseRetrievalClient
         using var response = await httpClient.SendAsync(request, cancellationToken);
         if (!response.IsSuccessStatusCode)
         {
+            var errorBody = await response.Content.ReadAsStringAsync(cancellationToken);
             throw new AzureAiSearchExternalException(
-                $"Azure AI Search rejected a knowledge base retrieval with status {(int)response.StatusCode}.");
+                $"Azure AI Search rejected a knowledge base retrieval with status {(int)response.StatusCode}: {errorBody}");
         }
 
         try
@@ -100,7 +101,7 @@ public sealed class AzureAiSearchKnowledgeBaseRetrievalClient
         return new
         {
             messages,
-            outputMode = "extractiveData",
+            outputMode = "extractedData",
             retrievalReasoningEffort = new { kind = "low" },
             includeActivity = true,
             maxRuntimeInSeconds = request.MaxRuntimeInSeconds,
