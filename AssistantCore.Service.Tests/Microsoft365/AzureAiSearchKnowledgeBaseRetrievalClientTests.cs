@@ -61,7 +61,7 @@ public sealed class AzureAiSearchKnowledgeBaseRetrievalClientTests
                         new
                         {
                             type = "searchIndex",
-                            knowledgeSourceName = "Microsoft365KnowledgeSource",
+                            knowledgeSourceName = "synaptix-m365-knowledge-source",
                             count = 2,
                             elapsedMs = 125,
                             searchIndexArguments = new
@@ -72,7 +72,7 @@ public sealed class AzureAiSearchKnowledgeBaseRetrievalClientTests
                         new
                         {
                             type = "searchIndex",
-                            knowledgeSourceName = "Microsoft365KnowledgeSource",
+                            knowledgeSourceName = "synaptix-m365-knowledge-source",
                             count = 1,
                             elapsedMs = 110,
                             searchIndexArguments = new
@@ -91,8 +91,8 @@ public sealed class AzureAiSearchKnowledgeBaseRetrievalClientTests
             "https://search.example",
             apiKey,
             new AzureAiSearchKnowledgeBaseRetrievalRequest(
-                "SynaptixKnowledgeBase",
-                "Microsoft365KnowledgeSource",
+                "synaptix-m365-knowledge-base",
+                "synaptix-m365-knowledge-source",
                 query,
                 [new AzureAiSearchKnowledgeBaseMessage("assistant", "Atlas context")],
                 filter,
@@ -103,7 +103,7 @@ public sealed class AzureAiSearchKnowledgeBaseRetrievalClientTests
 
         // Then
         using var document = JsonDocument.Parse(payload!);
-        Assert.Equal("extractiveData", document.RootElement.GetProperty("outputMode").GetString());
+        Assert.Equal("extractedData", document.RootElement.GetProperty("outputMode").GetString());
         Assert.True(document.RootElement.GetProperty("includeActivity").GetBoolean());
         Assert.Equal("low", document.RootElement.GetProperty("retrievalReasoningEffort").GetProperty("kind").GetString());
         Assert.Equal(30, document.RootElement.GetProperty("maxRuntimeInSeconds").GetInt32());

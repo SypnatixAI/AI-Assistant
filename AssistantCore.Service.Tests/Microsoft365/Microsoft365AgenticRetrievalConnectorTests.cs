@@ -70,8 +70,8 @@ public sealed class Microsoft365AgenticRetrievalConnectorTests
 
         // Then
         var request = Assert.Single(retrievalClient.ReceivedRequests);
-        Assert.Equal("SynaptixKnowledgeBase", request.KnowledgeBaseName);
-        Assert.Equal("Microsoft365KnowledgeSource", request.KnowledgeSourceName);
+        Assert.Equal("synaptix-m365-knowledge-base", request.KnowledgeBaseName);
+        Assert.Equal("synaptix-m365-knowledge-source", request.KnowledgeSourceName);
         Assert.Equal(query, request.Query);
         Assert.Equal(2, request.ConversationHistory.Count);
         Assert.Contains($"organizationId eq '{organizationId:D}'", request.Filter, StringComparison.Ordinal);
@@ -195,8 +195,8 @@ public sealed class Microsoft365AgenticRetrievalConnectorTests
         {
             Endpoint = "https://search.example",
             IndexName = "content-index",
-            KnowledgeBaseName = "SynaptixKnowledgeBase",
-            KnowledgeSourceName = "Microsoft365KnowledgeSource"
+            KnowledgeBaseName = "synaptix-m365-knowledge-base",
+            KnowledgeSourceName = "synaptix-m365-knowledge-source"
         });
 
     private static AgenticRetrievalReference CreateReference(

@@ -135,6 +135,24 @@ public sealed class MicrosoftAgentRuntimeTests
     }
 
     [Theory, AutoDomainData]
+    public void Given_AuthorizedEnterpriseSearchTool_When_CreateFunction_Then_UsesAuthorizedToolInputSchema(
+        ConnectorExecutionContext executionContext)
+    {
+        // Given
+        var enterpriseSearchTool = new EnterpriseSearchAgentTool(
+            CreateAuthorizedEnterpriseSearchTool(),
+            executionContext,
+            new ThrowingToolCallValidator(),
+            new ThrowingToolExecutionRouter());
+
+        // When
+        var function = enterpriseSearchTool.CreateFunction();
+
+        // Then
+        AssertEnterpriseSearchSchema(function.JsonSchema);
+    }
+
+    [Theory, AutoDomainData]
     public async Task Given_AuthorizedEnterpriseSearchTool_When_ModelRequestsIt_Then_ExecutesItAndReturnsFinalAnswer(
         StartedMessageProcessing processing)
     {
@@ -145,7 +163,14 @@ public sealed class MicrosoftAgentRuntimeTests
         var provider = new SequenceAiModelProvider(
             selectedModel.Provider,
             [
-                CreateToolCallResponse("agent-call-1", "EnterpriseSearch", "code projet Atlas"),
+                CreateToolCallResponse(
+                    "agent-call-1",
+                    "EnterpriseSearch",
+                    new EnterpriseSearchToolCallArguments(
+                        "code projet Atlas",
+                        ["sharepoint"],
+                        "2026-01-01",
+                        "2026-12-31")),
                 CreateResponse("Le code du projet Atlas est AT-42.")
             ]);
         var validator = new RecordingToolCallValidator();
@@ -167,12 +192,16 @@ public sealed class MicrosoftAgentRuntimeTests
         var firstRequest = provider.ReceivedRequests[0];
         var exposedTool = Assert.Single(firstRequest.AllowedTools);
         Assert.Equal("EnterpriseSearch", exposedTool.Name);
+        AssertEnterpriseSearchSchema(exposedTool.InputSchema);
         var secondRequest = provider.ReceivedRequests[1];
         var modelVisibleToolResult = Assert.Single(secondRequest.ToolResults);
         Assert.Equal([evidence], modelVisibleToolResult.Evidence);
         var validatedCall = Assert.Single(validator.ReceivedToolCalls);
         Assert.Equal(AiToolNames.SearchMicrosoft365, validatedCall.ToolName);
         Assert.Equal("code projet Atlas", validatedCall.Arguments.GetProperty("query").GetString());
+        Assert.Equal("sharepoint", validatedCall.Arguments.GetProperty("sourceTypes")[0].GetString());
+        Assert.Equal("2026-01-01", validatedCall.Arguments.GetProperty("dateFrom").GetString());
+        Assert.Equal("2026-12-31", validatedCall.Arguments.GetProperty("dateTo").GetString());
         var routedCall = Assert.Single(router.ReceivedToolCalls);
         Assert.Equal(AiToolNames.SearchMicrosoft365, routedCall.ToolName);
         var routedContext = Assert.Single(router.ReceivedContexts);
@@ -436,7 +465,9 @@ public sealed class MicrosoftAgentRuntimeTests
                     sourceTypes = new { type = "array", nullable = true },
                     dateFrom = new { type = "string", nullable = true },
                     dateTo = new { type = "string", nullable = true }
-                }
+                },
+                required = new[] { "query", "sourceTypes", "dateFrom", "dateTo" },
+                additionalProperties = false
             }));
 
     private static MessageOrchestrationOptions CreateOrchestrationOptions(
@@ -482,6 +513,19 @@ public sealed class MicrosoftAgentRuntimeTests
         string callId,
         string toolName,
         string query) =>
+        CreateToolCallResponse(
+            callId,
+            toolName,
+            new EnterpriseSearchToolCallArguments(
+                query,
+                SourceTypes: null,
+                DateFrom: null,
+                DateTo: null));
+
+    private static AiModelResponse CreateToolCallResponse(
+        string callId,
+        string toolName,
+        EnterpriseSearchToolCallArguments arguments) =>
         new(
             new AiModelDecision(
                 AiModelDecisionType.UseTools,
@@ -491,7 +535,13 @@ public sealed class MicrosoftAgentRuntimeTests
                     new AiRequestedToolCall(
                         callId,
                         toolName,
-                        JsonSerializer.SerializeToElement(new { query }))
+                        JsonSerializer.SerializeToElement(new
+                        {
+                            query = arguments.Query,
+                            sourceTypes = arguments.SourceTypes,
+                            dateFrom = arguments.DateFrom,
+                            dateTo = arguments.DateTo
+                        }))
                 ],
                 Answer: null,
                 CitedEvidenceIds: []),
@@ -511,6 +561,29 @@ public sealed class MicrosoftAgentRuntimeTests
             "sharepoint://atlas",
             Url: null,
             OccurredAt: null);
+
+    private static void AssertEnterpriseSearchSchema(JsonElement schema)
+    {
+        Assert.Equal(JsonValueKind.False, schema.GetProperty("additionalProperties").ValueKind);
+
+        var properties = schema.GetProperty("properties");
+        Assert.True(properties.TryGetProperty("query", out _));
+        Assert.True(properties.TryGetProperty("sourceTypes", out _));
+        Assert.True(properties.TryGetProperty("dateFrom", out _));
+        Assert.True(properties.TryGetProperty("dateTo", out _));
+
+        var required = schema.GetProperty("required")
+            .EnumerateArray()
+            .Select(property => property.GetString())
+            .ToArray();
+        Assert.Equal(["query", "sourceTypes", "dateFrom", "dateTo"], required!);
+    }
+
+    private sealed record EnterpriseSearchToolCallArguments(
+        string Query,
+        IReadOnlyCollection<string>? SourceTypes,
+        string? DateFrom,
+        string? DateTo);
 
     private sealed class RecordingAiModelProvider(
         string providerName,

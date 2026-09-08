@@ -23,13 +23,14 @@ internal sealed class EnterpriseSearchAgentTool(
     private readonly object _executedResultsLock = new();
 
     public AIFunction CreateFunction() =>
-        AIFunctionFactory.Create(
-            (Func<string, CancellationToken, Task<EnterpriseSearchToolResult>>)SearchAsync,
+        new EnterpriseSearchFunction(AIFunctionFactory.Create(
+            (Func<AIFunctionArguments, CancellationToken, Task<EnterpriseSearchToolResult>>)SearchAsync,
             new AIFunctionFactoryOptions
             {
                 Name = "EnterpriseSearch",
                 Description = "Search authorized internal enterprise documents when the answer depends on organization-specific information."
-            });
+            }),
+            authorizedTool.InputSchema);
 
     public IReadOnlyCollection<ToolExecutionResult> ExecutedResults
     {
@@ -43,17 +44,12 @@ internal sealed class EnterpriseSearchAgentTool(
     }
 
     private async Task<EnterpriseSearchToolResult> SearchAsync(
-        string query,
+        AIFunctionArguments functionArguments,
         CancellationToken cancellationToken)
     {
+        var enterpriseSearchArguments = DeserializeArguments(functionArguments);
         var arguments = JsonSerializer.SerializeToElement(
-            new
-            {
-                query,
-                sourceTypes = (IReadOnlyCollection<string>?)null,
-                dateFrom = (string?)null,
-                dateTo = (string?)null
-            },
+            enterpriseSearchArguments,
             SerializerOptions);
         var requestedToolCall = new AiRequestedToolCall(
             $"enterprise-search-{Guid.NewGuid():N}",
@@ -76,6 +72,27 @@ internal sealed class EnterpriseSearchAgentTool(
         return EnterpriseSearchToolResult.From(result);
     }
 
+    private static EnterpriseSearchArguments DeserializeArguments(
+        AIFunctionArguments functionArguments)
+    {
+        var argumentValues = functionArguments.ToDictionary(
+            argument => argument.Key,
+            argument => argument.Value,
+            StringComparer.Ordinal);
+        var argumentsJson = JsonSerializer.SerializeToElement(
+            argumentValues,
+            SerializerOptions);
+
+        return argumentsJson.Deserialize<EnterpriseSearchArguments>(SerializerOptions)
+            ?? throw new InvalidOperationException("The enterprise search arguments are invalid.");
+    }
+
+    internal sealed record EnterpriseSearchArguments(
+        string Query,
+        IReadOnlyCollection<string>? SourceTypes,
+        string? DateFrom,
+        string? DateTo);
+
     internal sealed record EnterpriseSearchToolResult(
         ToolExecutionStatus Status,
         IReadOnlyCollection<RetrievedEvidence> Evidence,
@@ -95,5 +112,12 @@ internal sealed class EnterpriseSearchAgentTool(
                 [],
                 ["EnterpriseSearch stopped because the function-call loop limit was reached."],
                 errorCode);
+    }
+
+    private sealed class EnterpriseSearchFunction(
+        AIFunction innerFunction,
+        JsonElement inputSchema) : DelegatingAIFunction(innerFunction)
+    {
+        public override JsonElement JsonSchema => inputSchema;
     }
 }

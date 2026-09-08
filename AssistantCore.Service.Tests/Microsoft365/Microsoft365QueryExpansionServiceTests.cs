@@ -102,7 +102,7 @@ public sealed class Microsoft365QueryExpansionServiceTests
         Assert.Equal(0, client.CallCount);
     }
 
-    [Theory, AutoDomainData]
+    [Fact]
     public void Given_QueryBelowMinimumWordCount_When_ShouldExpand_Then_ReturnsFalse()
     {
         // Given
@@ -115,7 +115,7 @@ public sealed class Microsoft365QueryExpansionServiceTests
         Assert.False(shouldExpand);
     }
 
-    [Theory, AutoDomainData]
+    [Fact]
     public void Given_TwoWordQuery_When_ShouldExpand_Then_ReturnsTrue()
     {
         // Given
