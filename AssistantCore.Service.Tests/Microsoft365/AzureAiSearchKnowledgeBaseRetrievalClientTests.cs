@@ -103,7 +103,7 @@ public sealed class AzureAiSearchKnowledgeBaseRetrievalClientTests
 
         // Then
         using var document = JsonDocument.Parse(payload!);
-        Assert.Equal("extractedData", document.RootElement.GetProperty("outputMode").GetString());
+        Assert.Equal("extractiveData", document.RootElement.GetProperty("outputMode").GetString());
         Assert.True(document.RootElement.GetProperty("includeActivity").GetBoolean());
         Assert.Equal("low", document.RootElement.GetProperty("retrievalReasoningEffort").GetProperty("kind").GetString());
         Assert.Equal(30, document.RootElement.GetProperty("maxRuntimeInSeconds").GetInt32());
