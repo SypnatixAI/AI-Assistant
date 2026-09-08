@@ -649,8 +649,11 @@ public sealed class MicrosoftAgentRuntimeTests
 
         public Task<AiModelResponse> GetNextActionAsync(
             AiModelRequest request,
-            CancellationToken cancellationToken) =>
-            throw new NotSupportedException();
+            CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            return Task.FromResult(response);
+        }
 
         public async Task<AiModelResponse> GetNextActionStreamingAsync(
             AiModelRequest request,
