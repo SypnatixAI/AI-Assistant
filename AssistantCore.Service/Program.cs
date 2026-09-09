@@ -6,6 +6,7 @@ using AssistantCore.Service.Infrastructure.Connectors;
 using AssistantCore.Service.Infrastructure.Cors;
 using AssistantCore.Service.Infrastructure.Microsoft365;
 using AssistantCore.Service.Infrastructure.Health;
+using AssistantCore.Service.Infrastructure.Foundry;
 using AssistantCore.Service.Middleware;
 using AssistantCore.Repository.Persistence;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
@@ -44,6 +45,7 @@ builder.Services.AddSwaggerGen(options =>
 builder.Services.AddApplication(builder.Configuration);
 builder.Services.AddAuthenticationInfrastructure(builder.Configuration);
 builder.Services.AddAiModelInfrastructure(builder.Configuration);
+builder.Services.AddFoundryAgentInfrastructure(builder.Configuration);
 builder.Services.AddConnectorInfrastructure(builder.Configuration);
 builder.Services.AddMicrosoft365Infrastructure(builder.Configuration);
 builder.Services.AddDispatcher(Assembly.GetExecutingAssembly());
