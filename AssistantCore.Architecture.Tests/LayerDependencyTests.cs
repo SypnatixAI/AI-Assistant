@@ -7,6 +7,9 @@ using AssistantCore.Service.Application.Services.Messages.AiModels.Providers.Ope
 using AssistantCore.Service.Controllers;
 using AssistantCore.Service.Infrastructure.AiModels.OpenAI;
 using AssistantCore.Service.Infrastructure.Microsoft365;
+using AssistantCore.Service.Infrastructure.Foundry;
+using AssistantCore.Service.Application.Services.Messages.AgentRuntime;
+using AssistantCore.ExternalServices.Services.Foundry;
 using AssistantCore.Service.Application.Services.Microsoft365;
 using NetArchTest.Rules;
 using Xunit;
@@ -114,6 +117,36 @@ public sealed class LayerDependencyTests
 
         // When
         var violations = ValidateExternalSdkAccess(externalServicesAssembly);
+
+        // Then
+        Assert.Empty(violations);
+    }
+
+    [Fact]
+    public void Given_FoundryAgentRuntime_When_ValidateFoundryExternalCallChain_Then_RuntimeUsesAdapterAndExternalClient()
+    {
+        // Given
+        var runtimeType = typeof(FoundryAgentRuntime);
+        var applicationClientType = typeof(IFoundryAgentClient);
+        var adapterType = typeof(FoundryAgentClientAdapter);
+        var externalClientType = typeof(FoundryAgentExternalClient);
+
+        // When
+        var violations = new List<string>();
+        if (!HasConstructorParameter(runtimeType, applicationClientType))
+        {
+            violations.Add($"{runtimeType.FullName} must depend on {applicationClientType.FullName}.");
+        }
+
+        if (!applicationClientType.IsAssignableFrom(adapterType))
+        {
+            violations.Add($"{adapterType.FullName} must implement {applicationClientType.FullName}.");
+        }
+
+        if (!HasConstructorParameter(adapterType, externalClientType))
+        {
+            violations.Add($"{adapterType.FullName} must depend on {externalClientType.FullName}.");
+        }
 
         // Then
         Assert.Empty(violations);
