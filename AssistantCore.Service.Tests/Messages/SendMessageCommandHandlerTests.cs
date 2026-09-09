@@ -4,12 +4,14 @@ using AssistantCore.Service.Application.Models.Conversations;
 using AssistantCore.Service.Application.Commands.SendMessage.Models;
 using AssistantCore.Service.Application.Exceptions;
 using AssistantCore.Service.Application.Models.Messages;
+using AssistantCore.Service.Application.Models.Messages.AgentRuntime;
 using AssistantCore.Service.Application.Models.Messages.AiModels;
 using AssistantCore.Service.Application.Models.Messages.Connectors;
 using AssistantCore.Service.Application.Models.Messages.Lifecycle;
 using AssistantCore.Service.Application.Models.Messages.Orchestration;
 using AssistantCore.Service.Application.Models.Messages.Tools;
 using AssistantCore.Service.Application.Services.Messages.AiModels;
+using AssistantCore.Service.Application.Services.Messages.AgentRuntime;
 using AssistantCore.Service.Application.Services.Messages.Authorization;
 using AssistantCore.Service.Application.Services.Messages.Lifecycle;
 using AssistantCore.Service.Application.Services.Messages.Orchestration;
@@ -49,7 +51,6 @@ public sealed class SendMessageCommandHandlerTests
             new StubUserContextService(operations, userContext),
             new StubModelSelector(operations, selectedModel),
             lifecycle,
-            new StubToolRegistry(operations),
             orchestrator,
             new StubResponseFactory(operations, expectedResponse));
 
@@ -64,16 +65,15 @@ public sealed class SendMessageCommandHandlerTests
                 "ResolveUser",
                 "SelectModel",
                 "StartProcessing",
-                "LoadTools",
-                "Orchestrate",
+                "RunAgent",
                 "CompleteProcessing",
                 "BuildResponse"
             ],
             operations);
-        Assert.Equal([historyMessage], orchestrator.ReceivedConversationHistory);
-        Assert.Equal(userContext.Organization.Id, orchestrator.ReceivedExecutionContext!.OrganizationId);
-        Assert.Equal(userContext.Member.Id, orchestrator.ReceivedExecutionContext.MemberId);
-        Assert.Equal(userContext.Organization.ExternalTenantId, orchestrator.ReceivedExecutionContext.ExternalTenantId);
+        Assert.Equal([historyMessage], orchestrator.ReceivedRequest!.Processing.ConversationHistory);
+        Assert.Equal(userContext.Organization.Id, orchestrator.ReceivedRequest.ExecutionContext.OrganizationId);
+        Assert.Equal(userContext.Member.Id, orchestrator.ReceivedRequest.ExecutionContext.MemberId);
+        Assert.Equal(userContext.Organization.ExternalTenantId, orchestrator.ReceivedRequest.ExecutionContext.ExternalTenantId);
         Assert.Same(processing, lifecycle.ReceivedCompletionProcessing);
         Assert.Same(orchestrationResult, lifecycle.ReceivedOrchestrationResult);
     }
@@ -98,7 +98,6 @@ public sealed class SendMessageCommandHandlerTests
             new StubUserContextService(operations, userContext),
             new StubModelSelector(operations, selectedModel),
             new StubLifecycleService(operations, processing, completedProcessing),
-            new StubToolRegistry(operations),
             orchestrator,
             new StubResponseFactory(operations, response),
             new StubMessageStreamErrorReporter());
@@ -112,12 +111,12 @@ public sealed class SendMessageCommandHandlerTests
         }
 
         // Then
-        Assert.Equal([historyMessage], orchestrator.ReceivedConversationHistory);
-        Assert.Equal(userContext.Organization.Id, orchestrator.ReceivedExecutionContext!.OrganizationId);
-        Assert.Equal(userContext.Member.Id, orchestrator.ReceivedExecutionContext.MemberId);
+        Assert.Equal([historyMessage], orchestrator.ReceivedRequest!.Processing.ConversationHistory);
+        Assert.Equal(userContext.Organization.Id, orchestrator.ReceivedRequest.ExecutionContext.OrganizationId);
+        Assert.Equal(userContext.Member.Id, orchestrator.ReceivedRequest.ExecutionContext.MemberId);
         Assert.Equal(
             userContext.Organization.ExternalTenantId,
-            orchestrator.ReceivedExecutionContext.ExternalTenantId);
+            orchestrator.ReceivedRequest.ExecutionContext.ExternalTenantId);
     }
 
     [Theory, AutoDomainData]
@@ -138,7 +137,6 @@ public sealed class SendMessageCommandHandlerTests
             new StubUserContextService(operations, userContext),
             new StubModelSelector(operations, selectedModel),
             new StubLifecycleService(operations, processing, completedProcessing),
-            new StubToolRegistry(operations),
             new StubOrchestrator(operations, orchestrationResult, progressMessage: progressMessage),
             new StubResponseFactory(operations, response),
             new StubMessageStreamErrorReporter());
@@ -238,7 +236,6 @@ public sealed class SendMessageCommandHandlerTests
             new StubUserContextService(operations, userContext),
             new StubModelSelector(operations, selectedModel),
             new StubLifecycleService(operations, processing, completedProcessing),
-            new StubToolRegistry(operations),
             new StubOrchestrator(operations, orchestrationResult),
             new StubResponseFactory(operations, response),
             new StubMessageStreamErrorReporter());
@@ -279,7 +276,6 @@ public sealed class SendMessageCommandHandlerTests
             new StubUserContextService(operations, userContext),
             new StubModelSelector(operations, selectedModel),
             lifecycle,
-            new StubToolRegistry(operations),
             new StubOrchestrator(
                 operations,
                 orchestrationResult,
@@ -391,7 +387,6 @@ public sealed class SendMessageCommandHandlerTests
             new StubUserContextService(operations, userContext),
             new StubModelSelector(operations, selectedModel),
             lifecycle,
-            new StubToolRegistry(operations),
             new StubOrchestrator(operations, orchestrationResult, expectedException),
             new StubResponseFactory(operations, response));
 
@@ -402,7 +397,7 @@ public sealed class SendMessageCommandHandlerTests
         // Then
         Assert.Same(expectedException, exception);
         Assert.Equal(
-            ["Validate", "ResolveUser", "SelectModel", "StartProcessing", "LoadTools", "Orchestrate"],
+            ["Validate", "ResolveUser", "SelectModel", "StartProcessing", "RunAgent"],
             operations);
         Assert.NotNull(lifecycle.ReceivedFailure);
         Assert.False(lifecycle.ReceivedFailure!.WasCancelled);
@@ -424,7 +419,6 @@ public sealed class SendMessageCommandHandlerTests
             new StubUserContextService(operations, userContext, authorizationException),
             new StubModelSelector(operations, selectedModel),
             new StubLifecycleService(operations, processing, completedProcessing),
-            new StubToolRegistry(operations),
             new StubOrchestrator(operations, orchestrationResult),
             new StubResponseFactory(operations, response));
 
@@ -522,67 +516,58 @@ public sealed class SendMessageCommandHandlerTests
         }
     }
 
-    private sealed class StubToolRegistry(List<string> operations) : IAiToolRegistry
-    {
-        public Task<IReadOnlyCollection<AiToolDefinition>> GetAvailableToolsAsync(
-            Guid organizationId,
-            CancellationToken cancellationToken)
-        {
-            operations.Add("LoadTools");
-            return Task.FromResult<IReadOnlyCollection<AiToolDefinition>>([]);
-        }
-    }
-
     private sealed class StubOrchestrator(
         List<string> operations,
         MessageOrchestrationResult result,
         Exception? exception = null,
-        string? progressMessage = null) : IMessageToolOrchestrator
+        string? progressMessage = null) : IAgentRuntime
     {
-        public IReadOnlyCollection<AiConversationMessage> ReceivedConversationHistory { get; private set; }
-            = [];
+        public AgentTurnRequest? ReceivedRequest { get; private set; }
 
-        public ConnectorExecutionContext? ReceivedExecutionContext { get; private set; }
-
-        public Task<MessageOrchestrationResult> OrchestrateAsync(
-            StartedMessageProcessing processing,
-            ConnectorExecutionContext executionContext,
-            SelectedAiModel selectedModel,
-            IReadOnlyCollection<AiConversationMessage> conversationHistory,
-            IReadOnlyCollection<AiToolDefinition> availableTools,
+        public Task<AgentTurnResult> RunAsync(
+            AgentTurnRequest request,
             CancellationToken cancellationToken)
         {
-            operations.Add("Orchestrate");
-            ReceivedExecutionContext = executionContext;
-            ReceivedConversationHistory = conversationHistory;
+            operations.Add("RunAgent");
+            ReceivedRequest = request;
             return exception is null
-                ? Task.FromResult(result)
-                : Task.FromException<MessageOrchestrationResult>(exception);
+                ? Task.FromResult(CreateAgentTurnResult())
+                : Task.FromException<AgentTurnResult>(exception);
         }
 
-        public async Task<MessageOrchestrationResult> OrchestrateStreamingAsync(
-            StartedMessageProcessing processing,
-            ConnectorExecutionContext executionContext,
-            SelectedAiModel selectedModel,
-            IReadOnlyCollection<AiConversationMessage> conversationHistory,
-            IReadOnlyCollection<AiToolDefinition> availableTools,
-            Func<string, CancellationToken, ValueTask> onProgress,
-            Func<string, CancellationToken, ValueTask> onAnswerDelta,
+        public async Task<AgentTurnResult> RunStreamingAsync(
+            AgentTurnRequest request,
+            AgentTurnStreamingCallbacks callbacks,
             CancellationToken cancellationToken)
         {
+            operations.Add("RunAgent");
+            ReceivedRequest = request;
+
             if (progressMessage is not null)
             {
-                await onProgress(progressMessage, cancellationToken);
+                await callbacks.OnProgress(progressMessage, cancellationToken);
             }
 
-            return await OrchestrateAsync(
-                processing,
-                executionContext,
-                selectedModel,
-                conversationHistory,
-                availableTools,
-                cancellationToken);
+            return exception is null
+                ? CreateAgentTurnResult()
+                : await Task.FromException<AgentTurnResult>(exception);
         }
+
+        private AgentTurnResult CreateAgentTurnResult() =>
+            new(
+                result.Answer,
+                result.ModelName,
+                result.CitedEvidence,
+                result.Warnings,
+                new AgentTurnUsage(
+                    result.Usage.ExecutionTime,
+                    result.Usage.InputTokens,
+                    result.Usage.OutputTokens,
+                    result.Usage.ModelCallCount,
+                    result.Usage.ToolCallCount,
+                    result.Usage.EstimatedCost,
+                    result.Usage.ContextSize,
+                    result.Usage.RepeatedToolCallCount));
     }
 
     private sealed class StubMessageStreamErrorReporter : IMessageStreamErrorReporter

@@ -1,12 +1,12 @@
 using AssistantCore.Service.Application.Abstractions;
 using AssistantCore.Service.Application.Commands.SendMessage.Models;
+using AssistantCore.Service.Application.Models.Messages.AgentRuntime;
+using AssistantCore.Service.Application.Models.Messages.Lifecycle;
 using AssistantCore.Service.Application.Services.Messages.AiModels;
+using AssistantCore.Service.Application.Services.Messages.AgentRuntime;
 using AssistantCore.Service.Application.Services.Messages.Authorization;
 using AssistantCore.Service.Application.Services.Messages.Lifecycle;
-using AssistantCore.Service.Application.Models.Messages.Lifecycle;
-using AssistantCore.Service.Application.Services.Messages.Orchestration;
 using AssistantCore.Service.Application.Services.Messages.Responses;
-using AssistantCore.Service.Application.Services.Messages.Tools;
 using AssistantCore.Service.Application.Services.Messages.Validation;
 using System.Diagnostics;
 
@@ -17,8 +17,7 @@ public sealed class SendMessageCommandHandler(
     IMessageUserContextService userContextService,
     IAuthorizedAiModelSelector modelSelector,
     IMessageProcessingLifecycleService lifecycleService,
-    IAiToolRegistry toolRegistry,
-    IMessageToolOrchestrator orchestrator,
+    IAgentRuntime agentRuntime,
     ISendMessageResponseFactory responseFactory)
     : IRequestHandler<SendMessageCommand, SendMessageResponse>
 {
@@ -46,16 +45,13 @@ public sealed class SendMessageCommandHandler(
                 userContext.Member,
                 cancellationToken);
             processing.SelectedModel = selectedModel;
-            var availableTools = await toolRegistry.GetAvailableToolsAsync(
-                userContext.Organization.Id,
+            var agentTurnResult = await agentRuntime.RunAsync(
+                new AgentTurnRequest(
+                    processing,
+                    userContext.CreateConnectorExecutionContext(),
+                    selectedModel),
                 cancellationToken);
-            var orchestrationResult = await orchestrator.OrchestrateAsync(
-                processing,
-                userContext.CreateConnectorExecutionContext(),
-                selectedModel,
-                processing.ConversationHistory,
-                availableTools,
-                cancellationToken);
+            var orchestrationResult = AgentTurnResultAdapter.ToMessageOrchestrationResult(agentTurnResult);
             var completedProcessing = await lifecycleService.CompleteAsync(
                 processing,
                 orchestrationResult,

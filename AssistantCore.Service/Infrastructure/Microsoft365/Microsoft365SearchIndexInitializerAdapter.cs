@@ -22,7 +22,13 @@ public sealed class Microsoft365SearchIndexInitializerAdapter(
                 microsoft365Options.Value.EmbeddingDimensions,
                 search.SemanticConfigurationName,
                 cancellationToken,
-                ragOptions?.Value.VectorSearch.Metric ?? "cosine")
+                ragOptions?.Value.VectorSearch.Metric ?? "cosine",
+                search.KnowledgeSourceName,
+                search.KnowledgeBaseName,
+                search.KnowledgeBaseRetrievalReasoningEffort,
+                search.KnowledgeBaseMaxRuntimeInSeconds,
+                search.KnowledgeBaseMaxOutputDocuments,
+                search.KnowledgeBaseMaxOutputSizeInTokens)
             : Task.CompletedTask;
     }
 }

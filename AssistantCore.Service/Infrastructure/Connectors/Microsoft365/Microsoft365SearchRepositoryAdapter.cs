@@ -112,6 +112,8 @@ public sealed class Microsoft365SearchRepositoryAdapter(
 
     internal static string BuildFilter(Microsoft365SearchParameters parameters)
     {
+        ValidateParameters(parameters);
+
         var clauses = new List<string>
         {
             BuildSecurityFilter(parameters.SecurityContext)

@@ -43,6 +43,7 @@ public static class ConnectorServiceCollectionExtensions
         services.AddScoped<IMicrosoft365QueryExpansionClient, Microsoft365QueryExpansionClientAdapter>();
         services.AddScoped<IMicrosoft365SearchRepository, Microsoft365SearchRepositoryAdapter>();
         services.AddScoped<IMicrosoft365SearchAccessVerifier, Microsoft365SearchAccessVerifierAdapter>();
+        services.AddScoped<IAgenticRetrievalClient, AgenticRetrievalClientAdapter>();
         services.AddScoped<IMicrosoft365Connector, Microsoft365Connector>();
         services.AddScoped<IAiToolExecutionHandler, Microsoft365SearchToolExecutionHandler>();
 
@@ -58,6 +59,7 @@ public static class ConnectorServiceCollectionExtensions
         var maximumContentLength = section.GetValue<int?>(
             nameof(Microsoft365ConnectorOptions.MaximumContentLength)) ?? 4000;
         var queryExpansionOptions = CreateMicrosoft365QueryExpansionOptions(configuration);
+        var agenticRetrievalOptions = CreateMicrosoft365AgenticRetrievalOptions(configuration);
 
         if (maximumResults is <= 0 or > MaximumAllowedResults)
         {
@@ -76,7 +78,42 @@ public static class ConnectorServiceCollectionExtensions
         return new Microsoft365ConnectorOptions(
             maximumResults,
             maximumContentLength,
-            queryExpansionOptions);
+            queryExpansionOptions,
+            agenticRetrievalOptions);
+    }
+
+    private static Microsoft365AgenticRetrievalOptions CreateMicrosoft365AgenticRetrievalOptions(
+        IConfiguration configuration)
+    {
+        var section = configuration.GetSection($"{Microsoft365SectionName}:AgenticRetrieval");
+        var enabled = section.GetValue<bool?>(
+            nameof(Microsoft365AgenticRetrievalOptions.Enabled))
+            ?? Microsoft365AgenticRetrievalOptions.Default.Enabled;
+        var maxRuntimeInSeconds = section.GetValue<int?>(
+            nameof(Microsoft365AgenticRetrievalOptions.MaxRuntimeInSeconds))
+            ?? Microsoft365AgenticRetrievalOptions.Default.MaxRuntimeInSeconds;
+        var maxOutputSizeInTokens = section.GetValue<int?>(
+            nameof(Microsoft365AgenticRetrievalOptions.MaxOutputSizeInTokens))
+            ?? Microsoft365AgenticRetrievalOptions.Default.MaxOutputSizeInTokens;
+
+        if (maxRuntimeInSeconds <= 0)
+        {
+            throw new InvalidOperationException(
+                $"Invalid configuration '{Microsoft365SectionName}:AgenticRetrieval': "
+                + $"{nameof(Microsoft365AgenticRetrievalOptions.MaxRuntimeInSeconds)} must be greater than zero.");
+        }
+
+        if (maxOutputSizeInTokens <= 0)
+        {
+            throw new InvalidOperationException(
+                $"Invalid configuration '{Microsoft365SectionName}:AgenticRetrieval': "
+                + $"{nameof(Microsoft365AgenticRetrievalOptions.MaxOutputSizeInTokens)} must be greater than zero.");
+        }
+
+        return new Microsoft365AgenticRetrievalOptions(
+            enabled,
+            maxRuntimeInSeconds,
+            maxOutputSizeInTokens);
     }
 
     private static Microsoft365QueryExpansionOptions CreateMicrosoft365QueryExpansionOptions(

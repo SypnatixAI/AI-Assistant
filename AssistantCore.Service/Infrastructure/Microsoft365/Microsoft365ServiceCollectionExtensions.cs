@@ -5,6 +5,7 @@ using AssistantCore.Service.Application.Configuration;
 using AssistantCore.Service.Application.Services.Microsoft365;
 using AssistantCore.Service.Application.Services.Messages.Connectors.Microsoft365;
 using Microsoft.Extensions.Options;
+using System.Text.RegularExpressions;
 
 namespace AssistantCore.Service.Infrastructure.Microsoft365;
 
@@ -76,8 +77,13 @@ public static class Microsoft365ServiceCollectionExtensions
             .Bind(configuration.GetSection(AzureAiSearchOptions.SectionName))
             .Validate(options =>
                     double.IsFinite(options.MinimumSemanticRelevanceScore)
-                    && options.MinimumSemanticRelevanceScore is >= 0d and <= 4d,
-                "AzureSearch minimum semantic relevance score must be between 0 and 4.")
+                    && options.MinimumSemanticRelevanceScore is >= 0d and <= 4d
+                    && options.KnowledgeBaseMaxRuntimeInSeconds > 0
+                    && (options.KnowledgeBaseMaxOutputDocuments is null or > 0)
+                    && (options.KnowledgeBaseMaxOutputSizeInTokens is null or > 0)
+                    && IsAzureSearchKnowledgeResourceName(options.KnowledgeSourceName)
+                    && IsAzureSearchKnowledgeResourceName(options.KnowledgeBaseName),
+                "AzureSearch requires valid semantic relevance, knowledge base limits and knowledge resource names.")
             .ValidateOnStart();
 
         services.AddDataProtection();
@@ -102,6 +108,8 @@ public static class Microsoft365ServiceCollectionExtensions
         services.AddHttpClient<AzureAiSearchPassageAclClient>()
             .RedactLoggedHeaders(["api-key", "Authorization"]);
         services.AddHttpClient<AzureAiSearchPassageSearchClient>()
+            .RedactLoggedHeaders(["api-key", "Authorization"]);
+        services.AddHttpClient<AzureAiSearchKnowledgeBaseRetrievalClient>()
             .RedactLoggedHeaders(["api-key", "Authorization"]);
         services.AddHttpClient<AzureAiSearchIndexClient>()
             .RedactLoggedHeaders(["api-key", "Authorization"]);
@@ -164,6 +172,11 @@ public static class Microsoft365ServiceCollectionExtensions
     private static bool IsServiceBusNamespace(string value) =>
         Uri.CheckHostName(value) == UriHostNameType.Dns
         && !value.Contains("://", StringComparison.Ordinal);
+
+    private static bool IsAzureSearchKnowledgeResourceName(string value) =>
+        !string.IsNullOrWhiteSpace(value)
+        && value.Length is >= 2 and <= 100
+        && Regex.IsMatch(value, "^[a-z0-9](?:[a-z0-9-]*[a-z0-9])$", RegexOptions.CultureInvariant);
 
     private static bool HasValidSharePointCertificateConfiguration(Microsoft365Options options)
     {

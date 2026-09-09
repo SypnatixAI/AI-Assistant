@@ -1,6 +1,7 @@
 using AssistantCore.ExternalServices.Entities.OpenAI.Models;
 using AssistantCore.ExternalServices.Services.OpenAI;
 using AssistantCore.Service.Application.Services.Messages.AiModels;
+using AssistantCore.Service.Application.Services.Messages.AgentRuntime;
 using AssistantCore.Service.Application.Services.Messages.AiModels.Providers.OpenAI;
 using AssistantCore.Service.Infrastructure.AiModels.Configuration;
 using AssistantCore.Service.Infrastructure.AiModels.OpenAI;
@@ -29,6 +30,7 @@ public static class AiModelServiceCollectionExtensions
             return new OpenAiResponsesClient(
                 new OpenAiClientSettings(openAiOptions.Endpoint, openAiOptions.ApiKey));
         });
+        services.AddSingleton<IAgentChatClientFactory, OpenAiAgentChatClientFactory>();
         services.AddSingleton<OpenAiResponsesRequestAdapter>();
         services.AddSingleton<IOpenAiResponsesClient, OpenAiResponsesClientAdapter>();
         services.AddSingleton<OpenAiResponseMapper>();
