@@ -6,6 +6,7 @@ using Azure.Identity;
 using Microsoft.Agents.AI;
 using Microsoft.Agents.AI.Foundry;
 using Microsoft.Extensions.AI;
+using Microsoft.Extensions.Logging;
 
 namespace AssistantCore.ExternalServices.Services.Foundry;
 
@@ -13,12 +14,16 @@ public sealed class FoundryAgentExternalClient
 {
     private readonly FoundryAgentClientSettings _settings;
     private readonly AIProjectClient _projectClient;
+    private readonly ILogger<FoundryAgentExternalClient> _logger;
 
-    public FoundryAgentExternalClient(FoundryAgentClientSettings settings)
+    public FoundryAgentExternalClient(
+        FoundryAgentClientSettings settings,
+        ILogger<FoundryAgentExternalClient> logger)
     {
         ArgumentNullException.ThrowIfNull(settings);
 
         _settings = settings;
+        _logger = logger;
         _projectClient = new AIProjectClient(
             new Uri(settings.ProjectEndpoint),
             new DefaultAzureCredential());
@@ -98,12 +103,23 @@ public sealed class FoundryAgentExternalClient
             .Cast<AITool>()
             .ToArray();
 
+        _logger.LogInformation(
+            "Resolving Foundry agent {AgentName} version {AgentVersion} from {ProjectEndpoint}.",
+            _settings.AgentName,
+            _settings.AgentVersion,
+            _settings.ProjectEndpoint);
+
         ProjectsAgentVersion agentVersion = await _projectClient
             .AgentAdministrationClient
             .GetAgentVersionAsync(
                 _settings.AgentName,
                 _settings.AgentVersion,
                 cancellationToken);
+
+        _logger.LogInformation(
+            "Foundry agent {AgentName} version {AgentVersion} resolved successfully.",
+            _settings.AgentName,
+            _settings.AgentVersion);
 
         return _projectClient.AsAIAgent(
             agentVersion,
