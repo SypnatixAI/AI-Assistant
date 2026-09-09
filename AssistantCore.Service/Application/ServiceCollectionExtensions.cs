@@ -114,7 +114,7 @@ public static class ServiceCollectionExtensions
         services.AddMicrosoft365Application();
         services.AddScoped<IMessageProcessingLifecycleService, MessageProcessingLifecycleService>();
         services.AddScoped<IConversationMemorySummaryService, ConversationMemorySummaryService>();
-        services.AddScoped<IAgentRuntime, MicrosoftAgentRuntime>();
+        services.AddScoped<IAgentRuntime, FoundryAgentRuntime>();
         services.AddSingleton<ISendMessageResponseFactory, SendMessageResponseFactory>();
         services.AddScoped<IMessageStreamErrorReporter, MessageStreamErrorReporter>();
         services.AddSingleton<IEvidenceCitationResolver, EvidenceCitationResolver>();
