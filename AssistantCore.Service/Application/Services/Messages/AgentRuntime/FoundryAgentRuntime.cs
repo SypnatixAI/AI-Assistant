@@ -54,6 +54,10 @@ public sealed class FoundryAgentRuntime(
         using var timeoutSource = CreateTurnTimeoutSource(cancellationToken);
         var context = await CreateExecutionContextAsync(request, timeoutSource.Token);
 
+        await callbacks.OnProgress(
+            "Connexion à l’agent Foundry…",
+            timeoutSource.Token);
+
         var response = await foundryAgentClient.RunStreamingAsync(
             context.ClientRequest,
             context.ExecuteToolAsync,
