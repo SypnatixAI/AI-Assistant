@@ -7,6 +7,7 @@ using AssistantCore.Service.Application.Models.Messages.Connectors;
 using AssistantCore.Service.Application.Models.Messages.Rag;
 using AssistantCore.Service.Application.Models.Messages.Tools;
 using AssistantCore.Service.Application.Services.Messages.Tools;
+using AssistantCore.Service.Application.Services.Messages.Orchestration;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
