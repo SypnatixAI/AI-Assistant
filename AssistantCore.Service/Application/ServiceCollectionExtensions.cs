@@ -16,6 +16,7 @@ using AssistantCore.Service.Application.Services.Messages.Streaming;
 using AssistantCore.Service.Application.Services.Messages.Tools;
 using AssistantCore.Service.Application.Services.Messages.Validation;
 using AssistantCore.Service.Application.Services.Microsoft365;
+using AssistantCore.Service.Application.Services.Models;
 using AssistantCore.Service.Application.Services.Organizations;
 using AssistantCore.Service.Application.Services.TenantAdmission;
 using AssistantCore.Service.Application.Services.Usage;
@@ -97,6 +98,7 @@ public static class ServiceCollectionExtensions
                 $"{UsageOptions.SectionName}:{nameof(UsageOptions.DefaultMonthlyTokenLimit)} must be greater than zero.")
             .ValidateOnStart();
         services.AddScoped<IUsageTrackingService, UsageTrackingService>();
+        services.AddScoped<IModelCatalogService, ModelCatalogService>();
         services.AddScoped<IUsagePolicyManagementService, UsagePolicyManagementService>();
         services.AddScoped<ISendMessageCommandValidator, SendMessageCommandValidator>();
         services.AddSingleton<IConversationCursorCodec, ConversationCursorCodec>();
