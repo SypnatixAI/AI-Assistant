@@ -351,7 +351,9 @@ public sealed class LayerDependencyTests
             .HaveDependencyOnAny(
                 "AssistantCore.ExternalServices",
                 "Azure.Identity",
+                "Azure.AI.Projects",
                 "Azure.Messaging.ServiceBus",
+                "Microsoft.Agents.AI.Foundry",
                 "OpenAI.Responses",
                 "System.ClientModel")
             .GetResult();
@@ -382,7 +384,9 @@ public sealed class LayerDependencyTests
             .HaveDependencyOnAny(
                 "AssistantCore.ExternalServices.Services",
                 "Azure.Identity",
+                "Azure.AI.Projects",
                 "Azure.Messaging.ServiceBus",
+                "Microsoft.Agents.AI.Foundry",
                 "OpenAI.Responses",
                 "System.ClientModel")
             .GetResult();
