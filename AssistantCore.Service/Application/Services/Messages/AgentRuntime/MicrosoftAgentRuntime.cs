@@ -47,6 +47,17 @@ public sealed class MicrosoftAgentRuntime(
         the search failed. Explain that the internal information could not be
         consulted. Ask for clarification only when missing user input would materially
         change what should be searched or answered.
+
+        Do not ask the user to manually search a source that an available authorized
+        tool can search. If the current enterprise results are insufficient and another
+        materially different search can reasonably resolve the request, perform that
+        search yourself before answering. If the available authorized searches still
+        do not provide enough evidence, state plainly that the available internal
+        information does not allow the answer to be confirmed.
+
+        Do not recommend contacting a specific person, team, department, or support
+        channel unless the retrieved enterprise evidence explicitly identifies that
+        person or group as responsible for the requested matter.
         """;
 
     public async Task<AgentTurnResult> RunAsync(
