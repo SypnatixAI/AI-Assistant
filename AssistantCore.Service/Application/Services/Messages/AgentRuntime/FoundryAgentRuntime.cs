@@ -1,0 +1,210 @@
+using System.Diagnostics;
+using System.Text.Json;
+using AssistantCore.Repository.Domain.Enums;
+using AssistantCore.Service.Application.Configuration;
+using AssistantCore.Service.Application.Models.Messages.AgentRuntime;
+using AssistantCore.Service.Application.Models.Messages.Connectors;
+using AssistantCore.Service.Application.Models.Messages.Rag;
+using AssistantCore.Service.Application.Models.Messages.Tools;
+using AssistantCore.Service.Application.Services.Messages.Tools;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
+
+namespace AssistantCore.Service.Application.Services.Messages.AgentRuntime;
+
+public sealed class FoundryAgentRuntime(
+    IFoundryAgentClient foundryAgentClient,
+    IAiToolRegistry toolRegistry,
+    IAiToolCallValidator toolCallValidator,
+    IToolExecutionRouter toolExecutionRouter,
+    IOptions<MessageOrchestrationOptions> options,
+    ILogger<FoundryAgentRuntime> logger) : IAgentRuntime
+{
+    private readonly MessageOrchestrationOptions _options = options.Value;
+
+    public async Task<AgentTurnResult> RunAsync(
+        AgentTurnRequest request,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        var stopwatch = Stopwatch.StartNew();
+        using var timeoutSource = CreateTurnTimeoutSource(cancellationToken);
+        var context = await CreateExecutionContextAsync(request, timeoutSource.Token);
+
+        var response = await foundryAgentClient.RunAsync(
+            context.ClientRequest,
+            context.ExecuteToolAsync,
+            timeoutSource.Token);
+
+        stopwatch.Stop();
+        return CreateResult(response, context.ExecutedToolResults, stopwatch.Elapsed);
+    }
+
+    public async Task<AgentTurnResult> RunStreamingAsync(
+        AgentTurnRequest request,
+        AgentTurnStreamingCallbacks callbacks,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        ArgumentNullException.ThrowIfNull(callbacks);
+
+        var stopwatch = Stopwatch.StartNew();
+        using var timeoutSource = CreateTurnTimeoutSource(cancellationToken);
+        var context = await CreateExecutionContextAsync(request, timeoutSource.Token);
+
+        var response = await foundryAgentClient.RunStreamingAsync(
+            context.ClientRequest,
+            context.ExecuteToolAsync,
+            callbacks.OnAnswerDelta,
+            timeoutSource.Token);
+
+        stopwatch.Stop();
+        return CreateResult(response, context.ExecutedToolResults, stopwatch.Elapsed);
+    }
+
+    private async Task<RuntimeExecutionContext> CreateExecutionContextAsync(
+        AgentTurnRequest request,
+        CancellationToken cancellationToken)
+    {
+        var availableTools = await toolRegistry.GetAvailableToolsAsync(
+            request.Processing.OrganizationId,
+            cancellationToken);
+
+        var enterpriseSearch = availableTools.SingleOrDefault(tool =>
+            string.Equals(tool.Name, AiToolNames.SearchMicrosoft365, StringComparison.Ordinal));
+
+        var authorizedTools = enterpriseSearch is not null
+            && CanUseEnterpriseSearch(request.ExecutionContext)
+                ? new[]
+                {
+                    new FoundryAgentToolDefinition(
+                        "EnterpriseSearch",
+                        "Search authorized internal enterprise information when the answer depends on organization-specific data.",
+                        enterpriseSearch.InputSchema)
+                }
+                : [];
+
+        var executedResults = new List<ToolExecutionResult>();
+        var executedResultsLock = new object();
+        var executionContext = CreateToolExecutionContext(request);
+
+        async Task<string> ExecuteToolAsync(
+            FoundryAgentToolCall toolCall,
+            CancellationToken token)
+        {
+            if (enterpriseSearch is null
+                || !string.Equals(toolCall.Name, "EnterpriseSearch", StringComparison.Ordinal))
+            {
+                throw new InvalidOperationException($"Foundry requested an unauthorized tool '{toolCall.Name}'.");
+            }
+
+            var requestedCall = new AiRequestedToolCall(
+                $"foundry-{Guid.NewGuid():N}",
+                enterpriseSearch.Name,
+                toolCall.Arguments);
+            var validatedCall = await toolCallValidator.ValidateAsync(
+                requestedCall,
+                [enterpriseSearch],
+                token);
+            var result = await toolExecutionRouter.ExecuteAsync(
+                validatedCall,
+                executionContext,
+                token);
+
+            lock (executedResultsLock)
+            {
+                executedResults.Add(result);
+            }
+
+            return JsonSerializer.Serialize(new
+            {
+                status = result.Status,
+                evidence = result.Evidence,
+                warnings = result.Warnings,
+                errorCode = result.ErrorCode
+            });
+        }
+
+        var clientRequest = new FoundryAgentClientRequest(
+            request.Processing.ConversationHistory,
+            request.Processing.UserMessage,
+            authorizedTools);
+
+        return new RuntimeExecutionContext(
+            clientRequest,
+            ExecuteToolAsync,
+            executedResults);
+    }
+
+    private ConnectorExecutionContext CreateToolExecutionContext(AgentTurnRequest request) =>
+        request.ExecutionContext with
+        {
+            RetrievalCandidateLimit = _options.RetrievalCandidateLimit,
+            Budget = null,
+            RagStatus = new RagExecutionStatus(),
+            ConversationHistory = request.Processing.ConversationHistory
+        };
+
+    private static bool CanUseEnterpriseSearch(ConnectorExecutionContext context) =>
+        context.OrganizationId != Guid.Empty
+        && context.MemberId != Guid.Empty
+        && context.IdentityProvider == IdentityProvider.MicrosoftEntraId
+        && !string.IsNullOrWhiteSpace(context.ExternalTenantId)
+        && context.EntraUserId is not null
+        && context.EntraUserId != Guid.Empty
+        && !string.IsNullOrWhiteSpace(context.UserEmail);
+
+    private CancellationTokenSource CreateTurnTimeoutSource(CancellationToken cancellationToken)
+    {
+        var timeoutSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeoutSource.CancelAfter(TimeSpan.FromSeconds(_options.MaximumExecutionTimeSeconds));
+        return timeoutSource;
+    }
+
+    private AgentTurnResult CreateResult(
+        FoundryAgentClientResult response,
+        IReadOnlyCollection<ToolExecutionResult> executedToolResults,
+        TimeSpan executionTime)
+    {
+        var citations = executedToolResults
+            .SelectMany(result => result.Evidence)
+            .Where(evidence => !string.IsNullOrWhiteSpace(evidence.EvidenceId))
+            .GroupBy(evidence => evidence.EvidenceId, StringComparer.Ordinal)
+            .Select(group => group.First())
+            .Take(_options.FinalEvidenceLimit)
+            .ToArray();
+        var warnings = executedToolResults
+            .SelectMany(result => result.Warnings)
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+
+        logger.LogInformation(
+            "Foundry agent turn completed in {ElapsedMilliseconds} ms with {ModelCallCount} model calls, {ToolCallCount} tool calls, {InputTokens} input tokens and {OutputTokens} output tokens.",
+            executionTime.TotalMilliseconds,
+            response.ModelCallCount,
+            executedToolResults.Count,
+            response.InputTokens,
+            response.OutputTokens);
+
+        return new AgentTurnResult(
+            response.Content,
+            response.AgentIdentifier,
+            citations,
+            warnings,
+            new AgentTurnUsage(
+                executionTime,
+                response.InputTokens,
+                response.OutputTokens,
+                response.ModelCallCount,
+                executedToolResults.Count,
+                EstimatedCost: 0,
+                ContextSize: response.InputTokens,
+                RepeatedToolCallCount: 0));
+    }
+
+    private sealed record RuntimeExecutionContext(
+        FoundryAgentClientRequest ClientRequest,
+        FoundryAgentToolExecutor ExecuteToolAsync,
+        IReadOnlyCollection<ToolExecutionResult> ExecutedToolResults);
+}
