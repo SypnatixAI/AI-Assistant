@@ -1,7 +1,7 @@
 using System.Text.Json;
 using AssistantCore.ExternalServices.Entities.Foundry;
+using Azure.AI.Extensions.OpenAI;
 using Azure.AI.Projects;
-using Azure.AI.Projects.Agents;
 using Azure.Identity;
 using Microsoft.Agents.AI;
 using Microsoft.Agents.AI.Foundry;
@@ -37,7 +37,7 @@ public sealed class FoundryAgentExternalClient
         ArgumentNullException.ThrowIfNull(request);
         ArgumentNullException.ThrowIfNull(toolExecutor);
 
-        var agent = await CreateAgentAsync(request.Tools, toolExecutor, cancellationToken);
+        var agent = CreateAgent(request.Tools, toolExecutor);
         var response = await agent.RunAsync(
             CreateMessages(request),
             cancellationToken: cancellationToken);
@@ -60,7 +60,7 @@ public sealed class FoundryAgentExternalClient
         ArgumentNullException.ThrowIfNull(toolExecutor);
         ArgumentNullException.ThrowIfNull(onAnswerDelta);
 
-        var agent = await CreateAgentAsync(request.Tools, toolExecutor, cancellationToken);
+        var agent = CreateAgent(request.Tools, toolExecutor);
         var responseText = new List<string>();
         UsageDetails? usage = null;
 
@@ -93,10 +93,9 @@ public sealed class FoundryAgentExternalClient
             ModelCallCount: 1);
     }
 
-    private async Task<AIAgent> CreateAgentAsync(
+    private AIAgent CreateAgent(
         IReadOnlyCollection<FoundryAgentExternalToolDefinition> toolDefinitions,
-        Func<FoundryAgentExternalToolCall, CancellationToken, Task<string>> toolExecutor,
-        CancellationToken cancellationToken)
+        Func<FoundryAgentExternalToolCall, CancellationToken, Task<string>> toolExecutor)
     {
         var tools = toolDefinitions
             .Select(definition => CreateTool(definition, toolExecutor))
@@ -104,25 +103,15 @@ public sealed class FoundryAgentExternalClient
             .ToArray();
 
         _logger.LogInformation(
-            "Resolving Foundry agent {AgentName} version {AgentVersion} from {ProjectEndpoint}.",
+            "Using Foundry agent {AgentName} version {AgentVersion} from {ProjectEndpoint}.",
             _settings.AgentName,
             _settings.AgentVersion,
             _settings.ProjectEndpoint);
 
-        ProjectsAgentVersion agentVersion = await _projectClient
-            .AgentAdministrationClient
-            .GetAgentVersionAsync(
-                _settings.AgentName,
-                _settings.AgentVersion,
-                cancellationToken);
-
-        _logger.LogInformation(
-            "Foundry agent {AgentName} version {AgentVersion} resolved successfully.",
-            _settings.AgentName,
-            _settings.AgentVersion);
-
         return _projectClient.AsAIAgent(
-            agentVersion,
+            new AgentReference(
+                _settings.AgentName,
+                _settings.AgentVersion),
             tools: tools);
     }
 

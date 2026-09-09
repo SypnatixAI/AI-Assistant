@@ -1,6 +1,7 @@
 using System.ClientModel;
 using System.Text;
 using AssistantCore.ExternalServices.Entities.OpenAI.Models;
+using OpenAI;
 using OpenAI.Responses;
 using Microsoft.Extensions.AI;
 
@@ -45,7 +46,7 @@ public sealed class OpenAiResponsesClient
     {
         _client = new ResponsesClient(
             new ApiKeyCredential(settings.ApiKey),
-            new ResponsesClientOptions
+            new OpenAIClientOptions
             {
                 Endpoint = new Uri(settings.Endpoint, UriKind.Absolute)
             });
