@@ -32,7 +32,7 @@ public sealed class FoundryAgentExternalClient
         ArgumentNullException.ThrowIfNull(request);
         ArgumentNullException.ThrowIfNull(toolExecutor);
 
-        var agent = CreateAgent(request.Tools, toolExecutor);
+        var agent = await CreateAgentAsync(request.Tools, toolExecutor, cancellationToken);
         var response = await agent.RunAsync(
             CreateMessages(request),
             cancellationToken: cancellationToken);
@@ -55,7 +55,7 @@ public sealed class FoundryAgentExternalClient
         ArgumentNullException.ThrowIfNull(toolExecutor);
         ArgumentNullException.ThrowIfNull(onAnswerDelta);
 
-        var agent = CreateAgent(request.Tools, toolExecutor);
+        var agent = await CreateAgentAsync(request.Tools, toolExecutor, cancellationToken);
         var responseText = new List<string>();
         UsageDetails? usage = null;
 
@@ -88,17 +88,25 @@ public sealed class FoundryAgentExternalClient
             ModelCallCount: 1);
     }
 
-    private AIAgent CreateAgent(
+    private async Task<AIAgent> CreateAgentAsync(
         IReadOnlyCollection<FoundryAgentExternalToolDefinition> toolDefinitions,
-        Func<FoundryAgentExternalToolCall, CancellationToken, Task<string>> toolExecutor)
+        Func<FoundryAgentExternalToolCall, CancellationToken, Task<string>> toolExecutor,
+        CancellationToken cancellationToken)
     {
         var tools = toolDefinitions
             .Select(definition => CreateTool(definition, toolExecutor))
             .Cast<AITool>()
             .ToArray();
 
+        ProjectsAgentVersion agentVersion = await _projectClient
+            .AgentAdministrationClient
+            .GetAgentVersionAsync(
+                _settings.AgentName,
+                _settings.AgentVersion,
+                cancellationToken);
+
         return _projectClient.AsAIAgent(
-            new AgentReference(_settings.AgentName, _settings.AgentVersion),
+            agentVersion,
             tools: tools);
     }
 
