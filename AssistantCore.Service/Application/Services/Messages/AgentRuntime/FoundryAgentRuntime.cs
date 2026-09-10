@@ -66,6 +66,7 @@ public sealed class FoundryAgentRuntime(
         AgentTurnRequest request,
         CancellationToken cancellationToken)
     {
+        var contextStartedAt = Stopwatch.GetTimestamp();
         var availableTools = await toolRegistry.GetAvailableToolsAsync(
             request.Processing.OrganizationId,
             cancellationToken);
@@ -81,7 +82,8 @@ public sealed class FoundryAgentRuntime(
             .ToArray();
 
         logger.LogInformation(
-            "Foundry turn exposes {ToolCount} authorized tools: {ToolNames}.",
+            "Foundry execution context prepared in {ElapsedMilliseconds} ms with {ToolCount} authorized tools: {ToolNames}.",
+            Stopwatch.GetElapsedTime(contextStartedAt).TotalMilliseconds,
             authorizedTools.Length,
             string.Join(", ", authorizedTools.Select(tool => tool.Name)));
 
