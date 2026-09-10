@@ -8,7 +8,6 @@ internal static class IntegrationTestConfigurationExtensions
         this IConfigurationBuilder configuration) =>
         configuration.AddInMemoryCollection(new Dictionary<string, string?>
         {
-            ["AiModels:Providers:OpenAI:ApiKey"] = "integration-test-secret",
             ["Microsoft365:ClientSecret"] = "integration-test-secret",
             ["Microsoft365:ClientStateHmacKey"] = "integration-test-client-state-hmac-key",
             ["Microsoft365:ConsentCallbackUrl"] =

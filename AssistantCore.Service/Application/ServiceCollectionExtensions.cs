@@ -1,5 +1,4 @@
 using AssistantCore.Service.Application.Configuration;
-using AssistantCore.Service.Application.Services.Messages.Rag;
 using AssistantCore.Service.Application.Services.AuthenticateUser;
 using AssistantCore.Service.Application.Services.Conversations;
 using AssistantCore.Service.Application.Services.Conversations.Audit;
@@ -8,10 +7,7 @@ using AssistantCore.Service.Application.Services.Members;
 using AssistantCore.Service.Application.Services.Messages;
 using AssistantCore.Service.Application.Services.Messages.AgentRuntime;
 using AssistantCore.Service.Application.Services.Messages.Authorization;
-using AssistantCore.Service.Application.Services.Messages.Evidence;
 using AssistantCore.Service.Application.Services.Messages.Lifecycle;
-using AssistantCore.Service.Application.Services.Messages.Memory;
-using AssistantCore.Service.Application.Services.Messages.Orchestration;
 using AssistantCore.Service.Application.Services.Messages.Responses;
 using AssistantCore.Service.Application.Services.Messages.Streaming;
 using AssistantCore.Service.Application.Services.Messages.Tools;
@@ -37,33 +33,20 @@ public static class ServiceCollectionExtensions
         this IServiceCollection services,
         IConfiguration configuration)
     {
-        services.AddOptions<RagOptions>().Bind(configuration.GetSection(RagOptions.SectionName))
-            .Validate(options => options.IsValid(), "Invalid Rag configuration.").ValidateOnStart();
-        services.AddScoped<IRetrievalQualityEvaluator, RetrievalQualityEvaluator>();
-        services.AddScoped<IRagReranker, SemanticOnlyRagReranker>();
-        services.AddScoped<AdaptiveRagReranker>();
-        services.AddScoped<ICorrectiveRetrievalService, CorrectiveRetrievalService>();
-        services.AddScoped<IAnswerGroundednessEvaluator, ExtractiveAnswerGroundednessEvaluator>();
-        services.AddScoped<IAnswerGroundednessGuard, AnswerGroundednessGuard>();
         services.AddOptions<MessagesOptions>()
             .Bind(configuration.GetSection(MessagesOptions.SectionName))
             .Validate(
                 options => options.MaximumMessageLength > 0,
                 $"{MessagesOptions.SectionName}:{nameof(MessagesOptions.MaximumMessageLength)} must be greater than zero.")
             .ValidateOnStart();
-        services.AddOptions<MessageOrchestrationOptions>()
-            .Bind(configuration.GetSection(MessageOrchestrationOptions.SectionName))
+        services.AddOptions<AgentRuntimeOptions>()
+            .Bind(configuration.GetSection(AgentRuntimeOptions.SectionName))
             .Validate(
                 options => options.MaximumExecutionTimeSeconds > 0
-                    && options.MaximumToolCalls > 0
-                    && options.MaximumModelTokens > 0
-                    && options.MaximumEstimatedCost > 0
-                    && options.RetrievalCandidateLimit > 0
-                    && options.FinalEvidenceLimit > 0
-                    && options.MaximumContextSize > 0
-                    && options.MaximumRepeatedToolCalls > 0
-                    && options.MaximumParallelToolCalls > 0,
-                $"Every value in {MessageOrchestrationOptions.SectionName} must be greater than zero.")
+                    && options.RetrievalCandidateLimit is >= 50 and <= 200
+                    && options.FinalEvidenceLimit is >= 1 and <= 50
+                    && options.FinalEvidenceLimit <= options.RetrievalCandidateLimit,
+                $"{AgentRuntimeOptions.SectionName} requires a candidate limit from 50 to 200 and a final evidence limit from 1 to 50 that does not exceed it.")
             .ValidateOnStart();
         services.AddOptions<ConversationListingOptions>()
             .Bind(configuration.GetSection(ConversationListingOptions.SectionName))
@@ -113,13 +96,9 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IOrganizationManagementService, OrganizationManagementService>();
         services.AddMicrosoft365Application();
         services.AddScoped<IMessageProcessingLifecycleService, MessageProcessingLifecycleService>();
-        services.AddScoped<IConversationMemorySummaryService, ConversationMemorySummaryService>();
         services.AddScoped<IAgentRuntime, FoundryAgentRuntime>();
         services.AddSingleton<ISendMessageResponseFactory, SendMessageResponseFactory>();
         services.AddScoped<IMessageStreamErrorReporter, MessageStreamErrorReporter>();
-        services.AddSingleton<IEvidenceCitationResolver, EvidenceCitationResolver>();
-        services.AddSingleton<IToolCallFingerprintGenerator, ToolCallFingerprintGenerator>();
-        services.AddSingleton<IAiToolFailureWarningFactory, AiToolFailureWarningFactory>();
         services.AddScoped<IAiToolRegistry, AiToolRegistry>();
         services.AddScoped<IAiToolArgumentSchemaValidator, AiToolArgumentSchemaValidator>();
         services.AddScoped<IAiToolArgumentSecurityValidator, AiToolArgumentSecurityValidator>();

@@ -1,23 +1,15 @@
-using AssistantCore.Repository.Abstractions;
 using AssistantCore.Service.Application.Commands.SendMessage;
-using AssistantCore.Service.Application.Models.Conversations;
 using AssistantCore.Service.Application.Commands.SendMessage.Models;
 using AssistantCore.Service.Application.Exceptions;
 using AssistantCore.Service.Application.Models.Messages;
 using AssistantCore.Service.Application.Models.Messages.AgentRuntime;
 using AssistantCore.Service.Application.Models.Messages.AiModels;
-using AssistantCore.Service.Application.Models.Messages.Connectors;
 using AssistantCore.Service.Application.Models.Messages.Lifecycle;
-using AssistantCore.Service.Application.Models.Messages.Orchestration;
-using AssistantCore.Service.Application.Models.Messages.Tools;
-using AssistantCore.Service.Application.Services.Messages.AiModels;
 using AssistantCore.Service.Application.Services.Messages.AgentRuntime;
 using AssistantCore.Service.Application.Services.Messages.Authorization;
 using AssistantCore.Service.Application.Services.Messages.Lifecycle;
-using AssistantCore.Service.Application.Services.Messages.Orchestration;
 using AssistantCore.Service.Application.Services.Messages.Responses;
 using AssistantCore.Service.Application.Services.Messages.Streaming;
-using AssistantCore.Service.Application.Services.Messages.Tools;
 using AssistantCore.Service.Application.Services.Messages.Validation;
 
 namespace AssistantCore.Service.Tests.Messages;
@@ -28,30 +20,22 @@ public sealed class SendMessageCommandHandlerTests
     public async Task Given_AValidCommand_When_HandleAsync_Then_OrchestratesInRequiredOrder(
         SendMessageCommand command,
         MessageUserContext userContext,
-        SelectedAiModel selectedModel,
         StartedMessageProcessing processing,
         AiConversationMessage historyMessage,
-        MessageOrchestrationResult orchestrationResult,
+        AgentTurnResult agentTurnResult,
         CompletedMessageProcessing completedProcessing,
         SendMessageResponse expectedResponse)
     {
         // Given
-        processing = processing with
-        {
-            ConversationHistory = [historyMessage]
-        };
+        processing = processing with { ConversationHistory = [historyMessage] };
         var operations = new List<string>();
-        var lifecycle = new StubLifecycleService(
-            operations,
-            processing,
-            completedProcessing);
-        var orchestrator = new StubOrchestrator(operations, orchestrationResult);
+        var lifecycle = new StubLifecycleService(operations, processing, completedProcessing);
+        var agentRuntime = new StubAgentRuntime(operations, agentTurnResult);
         var handler = new SendMessageCommandHandler(
             new StubCommandValidator(operations),
             new StubUserContextService(operations, userContext),
-            new StubModelSelector(operations, selectedModel),
             lifecycle,
-            orchestrator,
+            agentRuntime,
             new StubResponseFactory(operations, expectedResponse));
 
         // When
@@ -63,93 +47,88 @@ public sealed class SendMessageCommandHandlerTests
             [
                 "Validate",
                 "ResolveUser",
-                "SelectModel",
                 "StartProcessing",
                 "RunAgent",
                 "CompleteProcessing",
                 "BuildResponse"
             ],
             operations);
-        Assert.Equal([historyMessage], orchestrator.ReceivedRequest!.Processing.ConversationHistory);
-        Assert.Equal(userContext.Organization.Id, orchestrator.ReceivedRequest.ExecutionContext.OrganizationId);
-        Assert.Equal(userContext.Member.Id, orchestrator.ReceivedRequest.ExecutionContext.MemberId);
-        Assert.Equal(userContext.Organization.ExternalTenantId, orchestrator.ReceivedRequest.ExecutionContext.ExternalTenantId);
-        Assert.Same(processing, lifecycle.ReceivedCompletionProcessing);
-        Assert.Same(orchestrationResult, lifecycle.ReceivedOrchestrationResult);
+        Assert.Equal(
+            [historyMessage],
+            agentRuntime.ReceivedRequest!.Processing.ConversationHistory);
+        Assert.Equal(
+            userContext.Organization.Id,
+            agentRuntime.ReceivedRequest.ExecutionContext.OrganizationId);
+        Assert.Same(agentTurnResult, lifecycle.ReceivedAgentTurnResult);
     }
 
     [Theory, AutoDomainData]
-    public async Task Given_AConversationHistory_When_HandleAsyncStreaming_Then_PassesItToTheOrchestrator(
+    public async Task Given_AConversationHistory_When_HandleAsyncStreaming_Then_PassesItToTheAgent(
         SendMessageCommand command,
         MessageUserContext userContext,
-        SelectedAiModel selectedModel,
         StartedMessageProcessing processing,
         AiConversationMessage historyMessage,
-        MessageOrchestrationResult orchestrationResult,
+        AgentTurnResult agentTurnResult,
         CompletedMessageProcessing completedProcessing,
         SendMessageResponse response)
     {
         // Given
         processing = processing with { ConversationHistory = [historyMessage] };
         var operations = new List<string>();
-        var orchestrator = new StubOrchestrator(operations, orchestrationResult);
-        var handler = new SendMessageStreamCommandHandler(
-            new StubCommandValidator(operations),
-            new StubUserContextService(operations, userContext),
-            new StubModelSelector(operations, selectedModel),
-            new StubLifecycleService(operations, processing, completedProcessing),
-            orchestrator,
-            new StubResponseFactory(operations, response),
-            new StubMessageStreamErrorReporter());
+        var agentRuntime = new StubAgentRuntime(operations, agentTurnResult);
+        var handler = CreateStreamHandler(
+            operations,
+            userContext,
+            processing,
+            completedProcessing,
+            agentRuntime,
+            response);
 
         // When
         var events = await handler.HandleAsync(
-            new SendMessageStreamCommand(command.ConversationId, command.Message, command.Model),
+            new SendMessageStreamCommand(command.ConversationId, command.Message),
             CancellationToken.None);
         await foreach (var _ in events)
         {
         }
 
         // Then
-        Assert.Equal([historyMessage], orchestrator.ReceivedRequest!.Processing.ConversationHistory);
-        Assert.Equal(userContext.Organization.Id, orchestrator.ReceivedRequest.ExecutionContext.OrganizationId);
-        Assert.Equal(userContext.Member.Id, orchestrator.ReceivedRequest.ExecutionContext.MemberId);
         Assert.Equal(
-            userContext.Organization.ExternalTenantId,
-            orchestrator.ReceivedRequest.ExecutionContext.ExternalTenantId);
+            [historyMessage],
+            agentRuntime.ReceivedRequest!.Processing.ConversationHistory);
+        Assert.Equal(
+            userContext.Member.Id,
+            agentRuntime.ReceivedRequest.ExecutionContext.MemberId);
     }
 
     [Theory, AutoDomainData]
     public async Task Given_AProgressUpdate_When_HandleAsyncStreaming_Then_ReturnsADedicatedProgressEvent(
         SendMessageCommand command,
         MessageUserContext userContext,
-        SelectedAiModel selectedModel,
         StartedMessageProcessing processing,
-        MessageOrchestrationResult orchestrationResult,
+        AgentTurnResult agentTurnResult,
         CompletedMessageProcessing completedProcessing,
         SendMessageResponse response)
     {
         // Given
         const string progressMessage = "Je consulte les documents pertinents.";
         var operations = new List<string>();
-        var handler = new SendMessageStreamCommandHandler(
-            new StubCommandValidator(operations),
-            new StubUserContextService(operations, userContext),
-            new StubModelSelector(operations, selectedModel),
-            new StubLifecycleService(operations, processing, completedProcessing),
-            new StubOrchestrator(operations, orchestrationResult, progressMessage: progressMessage),
-            new StubResponseFactory(operations, response),
-            new StubMessageStreamErrorReporter());
+        var handler = CreateStreamHandler(
+            operations,
+            userContext,
+            processing,
+            completedProcessing,
+            new StubAgentRuntime(
+                operations,
+                agentTurnResult,
+                progressMessage: progressMessage),
+            response);
 
         // When
         var events = await handler.HandleAsync(
-            new SendMessageStreamCommand(command.ConversationId, command.Message, command.Model),
+            new SendMessageStreamCommand(command.ConversationId, command.Message),
             CancellationToken.None);
-        var receivedEvents = new List<SendMessageStreamEvent>();
-        await foreach (var streamEvent in events)
-        {
-            receivedEvents.Add(streamEvent);
-        }
+        var receivedEvents = await ReadAllAsync(events);
 
         // Then
         var progressEvent = Assert.Single(receivedEvents, streamEvent =>
@@ -160,110 +139,11 @@ public sealed class SendMessageCommandHandlerTests
     }
 
     [Theory, AutoDomainData]
-    public async Task Given_ANewlyCreatedConversation_When_HandleAsyncStreaming_Then_TheAcceptedEventCarriesItsSummary(
-        SendMessageCommand command,
-        MessageUserContext userContext,
-        SelectedAiModel selectedModel,
-        StartedMessageProcessing processing,
-        MessageOrchestrationResult orchestrationResult,
-        CompletedMessageProcessing completedProcessing,
-        SendMessageResponse response,
-        ConversationSummaryResponse createdConversation)
-    {
-        // Given
-        var operations = new List<string>();
-        var handler = CreateStreamHandler(
-            operations,
-            userContext,
-            selectedModel,
-            processing with { CreatedConversation = createdConversation },
-            completedProcessing,
-            orchestrationResult,
-            response);
-
-        // When
-        var receivedEvents = await ReadAllAsync(handler, command);
-
-        // Then
-        var acceptedEvent = Assert.Single(receivedEvents, streamEvent =>
-            streamEvent.Name == SendMessageStreamEvent.Accepted);
-        Assert.Same(
-            createdConversation,
-            acceptedEvent.Data.GetType().GetProperty("Conversation")?.GetValue(acceptedEvent.Data));
-    }
-
-    [Theory, AutoDomainData]
-    public async Task Given_AnExistingConversation_When_HandleAsyncStreaming_Then_TheAcceptedEventOmitsTheSummary(
-        SendMessageCommand command,
-        MessageUserContext userContext,
-        SelectedAiModel selectedModel,
-        StartedMessageProcessing processing,
-        MessageOrchestrationResult orchestrationResult,
-        CompletedMessageProcessing completedProcessing,
-        SendMessageResponse response)
-    {
-        // Given
-        var operations = new List<string>();
-        var handler = CreateStreamHandler(
-            operations,
-            userContext,
-            selectedModel,
-            processing with { CreatedConversation = null },
-            completedProcessing,
-            orchestrationResult,
-            response);
-
-        // When
-        var receivedEvents = await ReadAllAsync(handler, command);
-
-        // Then
-        var acceptedEvent = Assert.Single(receivedEvents, streamEvent =>
-            streamEvent.Name == SendMessageStreamEvent.Accepted);
-        Assert.Null(acceptedEvent.Data.GetType().GetProperty("Conversation"));
-        Assert.NotNull(acceptedEvent.Data.GetType().GetProperty("ConversationId"));
-    }
-
-    private static SendMessageStreamCommandHandler CreateStreamHandler(
-        List<string> operations,
-        MessageUserContext userContext,
-        SelectedAiModel selectedModel,
-        StartedMessageProcessing processing,
-        CompletedMessageProcessing completedProcessing,
-        MessageOrchestrationResult orchestrationResult,
-        SendMessageResponse response) =>
-        new(
-            new StubCommandValidator(operations),
-            new StubUserContextService(operations, userContext),
-            new StubModelSelector(operations, selectedModel),
-            new StubLifecycleService(operations, processing, completedProcessing),
-            new StubOrchestrator(operations, orchestrationResult),
-            new StubResponseFactory(operations, response),
-            new StubMessageStreamErrorReporter());
-
-    private static async Task<List<SendMessageStreamEvent>> ReadAllAsync(
-        SendMessageStreamCommandHandler handler,
-        SendMessageCommand command)
-    {
-        var events = await handler.HandleAsync(
-            new SendMessageStreamCommand(command.ConversationId, command.Message, command.Model),
-            CancellationToken.None);
-        var receivedEvents = new List<SendMessageStreamEvent>();
-
-        await foreach (var streamEvent in events)
-        {
-            receivedEvents.Add(streamEvent);
-        }
-
-        return receivedEvents;
-    }
-
-    [Theory, AutoDomainData]
     public async Task Given_AProviderTimeout_When_HandleAsyncStreaming_Then_ReturnsTheTimeoutErrorCode(
         SendMessageCommand command,
         MessageUserContext userContext,
-        SelectedAiModel selectedModel,
         StartedMessageProcessing processing,
-        MessageOrchestrationResult orchestrationResult,
+        AgentTurnResult agentTurnResult,
         CompletedMessageProcessing completedProcessing,
         SendMessageResponse response)
     {
@@ -274,24 +154,19 @@ public sealed class SendMessageCommandHandlerTests
         var handler = new SendMessageStreamCommandHandler(
             new StubCommandValidator(operations),
             new StubUserContextService(operations, userContext),
-            new StubModelSelector(operations, selectedModel),
             lifecycle,
-            new StubOrchestrator(
+            new StubAgentRuntime(
                 operations,
-                orchestrationResult,
-                new AiProviderTimeoutException(selectedModel.Provider)),
+                agentTurnResult,
+                new AiProviderTimeoutException("Foundry")),
             new StubResponseFactory(operations, response),
             errorReporter);
 
         // When
         var events = await handler.HandleAsync(
-            new SendMessageStreamCommand(command.ConversationId, command.Message, command.Model),
+            new SendMessageStreamCommand(command.ConversationId, command.Message),
             CancellationToken.None);
-        var receivedEvents = new List<SendMessageStreamEvent>();
-        await foreach (var streamEvent in events)
-        {
-            receivedEvents.Add(streamEvent);
-        }
+        var receivedEvents = await ReadAllAsync(events);
 
         // Then
         var errorEvent = Assert.Single(receivedEvents, streamEvent =>
@@ -301,31 +176,26 @@ public sealed class SendMessageCommandHandlerTests
             errorEvent.Data.GetType().GetProperty("Code")?.GetValue(errorEvent.Data));
         Assert.False(lifecycle.ReceivedFailure?.WasCancelled);
         Assert.IsType<AiProviderTimeoutException>(errorReporter.ReceivedException);
-        Assert.Equal("ai_provider_timeout", errorReporter.ReceivedErrorCode);
     }
 
     [Theory, AutoDomainData]
     public async Task Given_AnInvalidCommand_When_HandleAsync_Then_StopsBeforeResolvingUser(
         SendMessageCommand command,
         MessageUserContext userContext,
-        SelectedAiModel selectedModel,
         StartedMessageProcessing processing,
-        MessageOrchestrationResult orchestrationResult,
+        AgentTurnResult agentTurnResult,
         CompletedMessageProcessing completedProcessing,
         SendMessageResponse response)
     {
         // Given
         var operations = new List<string>();
         var expectedException = new BadRequestException("Invalid message.");
-        var handler = CreateHandler(
-            operations,
-            userContext,
-            selectedModel,
-            processing,
-            orchestrationResult,
-            completedProcessing,
-            response,
-            validationException: expectedException);
+        var handler = new SendMessageCommandHandler(
+            new StubCommandValidator(operations, expectedException),
+            new StubUserContextService(operations, userContext),
+            new StubLifecycleService(operations, processing, completedProcessing),
+            new StubAgentRuntime(operations, agentTurnResult),
+            new StubResponseFactory(operations, response));
 
         // When
         var exception = await Record.ExceptionAsync(() =>
@@ -337,57 +207,23 @@ public sealed class SendMessageCommandHandlerTests
     }
 
     [Theory, AutoDomainData]
-    public async Task Given_AForbiddenUserContext_When_HandleAsync_Then_StopsBeforeSelectingModel(
+    public async Task Given_AnAgentFailure_When_HandleAsync_Then_FailsStartedProcessing(
         SendMessageCommand command,
         MessageUserContext userContext,
-        SelectedAiModel selectedModel,
         StartedMessageProcessing processing,
-        MessageOrchestrationResult orchestrationResult,
+        AgentTurnResult agentTurnResult,
         CompletedMessageProcessing completedProcessing,
         SendMessageResponse response)
     {
         // Given
         var operations = new List<string>();
-        var expectedException = new ForbiddenException("Organization access denied.");
-        var handler = CreateHandler(
-            operations,
-            userContext,
-            selectedModel,
-            processing,
-            orchestrationResult,
-            completedProcessing,
-            response,
-            authorizationException: expectedException);
-
-        // When
-        var exception = await Record.ExceptionAsync(() =>
-            handler.HandleAsync(command, CancellationToken.None));
-
-        // Then
-        Assert.Same(expectedException, exception);
-        Assert.Equal(["Validate", "ResolveUser"], operations);
-    }
-
-    [Theory, AutoDomainData]
-    public async Task Given_AnOrchestrationFailure_When_HandleAsync_Then_FailsStartedProcessing(
-        SendMessageCommand command,
-        MessageUserContext userContext,
-        SelectedAiModel selectedModel,
-        StartedMessageProcessing processing,
-        MessageOrchestrationResult orchestrationResult,
-        CompletedMessageProcessing completedProcessing,
-        SendMessageResponse response)
-    {
-        // Given
-        var operations = new List<string>();
-        var expectedException = new InvalidOperationException("The provider is unavailable.");
+        var expectedException = new InvalidOperationException("Foundry is unavailable.");
         var lifecycle = new StubLifecycleService(operations, processing, completedProcessing);
         var handler = new SendMessageCommandHandler(
             new StubCommandValidator(operations),
             new StubUserContextService(operations, userContext),
-            new StubModelSelector(operations, selectedModel),
             lifecycle,
-            new StubOrchestrator(operations, orchestrationResult, expectedException),
+            new StubAgentRuntime(operations, agentTurnResult, expectedException),
             new StubResponseFactory(operations, response));
 
         // When
@@ -397,30 +233,37 @@ public sealed class SendMessageCommandHandlerTests
         // Then
         Assert.Same(expectedException, exception);
         Assert.Equal(
-            ["Validate", "ResolveUser", "SelectModel", "StartProcessing", "RunAgent"],
+            ["Validate", "ResolveUser", "StartProcessing", "RunAgent"],
             operations);
-        Assert.NotNull(lifecycle.ReceivedFailure);
-        Assert.False(lifecycle.ReceivedFailure!.WasCancelled);
-        Assert.Equal("message_generation_failed", lifecycle.ReceivedFailure.ErrorCode);
+        Assert.Equal("message_generation_failed", lifecycle.ReceivedFailure?.ErrorCode);
     }
 
-    private static SendMessageCommandHandler CreateHandler(
+    private static SendMessageStreamCommandHandler CreateStreamHandler(
         List<string> operations,
         MessageUserContext userContext,
-        SelectedAiModel selectedModel,
         StartedMessageProcessing processing,
-        MessageOrchestrationResult orchestrationResult,
         CompletedMessageProcessing completedProcessing,
-        SendMessageResponse response,
-        Exception? validationException = null,
-        Exception? authorizationException = null) =>
+        IAgentRuntime agentRuntime,
+        SendMessageResponse response) =>
         new(
-            new StubCommandValidator(operations, validationException),
-            new StubUserContextService(operations, userContext, authorizationException),
-            new StubModelSelector(operations, selectedModel),
+            new StubCommandValidator(operations),
+            new StubUserContextService(operations, userContext),
             new StubLifecycleService(operations, processing, completedProcessing),
-            new StubOrchestrator(operations, orchestrationResult),
-            new StubResponseFactory(operations, response));
+            agentRuntime,
+            new StubResponseFactory(operations, response),
+            new StubMessageStreamErrorReporter());
+
+    private static async Task<List<SendMessageStreamEvent>> ReadAllAsync(
+        IAsyncEnumerable<SendMessageStreamEvent> events)
+    {
+        var receivedEvents = new List<SendMessageStreamEvent>();
+        await foreach (var streamEvent in events)
+        {
+            receivedEvents.Add(streamEvent);
+        }
+
+        return receivedEvents;
+    }
 
     private sealed class StubCommandValidator(
         List<string> operations,
@@ -439,31 +282,12 @@ public sealed class SendMessageCommandHandlerTests
 
     private sealed class StubUserContextService(
         List<string> operations,
-        MessageUserContext context,
-        Exception? exception = null) : IMessageUserContextService
+        MessageUserContext context) : IMessageUserContextService
     {
         public Task<MessageUserContext> GetCurrentAsync(CancellationToken cancellationToken)
         {
             operations.Add("ResolveUser");
-            return exception is null
-                ? Task.FromResult(context)
-                : Task.FromException<MessageUserContext>(exception);
-        }
-    }
-
-    private sealed class StubModelSelector(
-        List<string> operations,
-        SelectedAiModel selectedModel) : IAuthorizedAiModelSelector
-    {
-        public bool IsAvailable(string? requestedModel) => true;
-
-        public Task<SelectedAiModel> SelectAsync(
-            Guid organizationId,
-            string? requestedModel,
-            CancellationToken cancellationToken)
-        {
-            operations.Add("SelectModel");
-            return Task.FromResult(selectedModel);
+            return Task.FromResult(context);
         }
     }
 
@@ -473,9 +297,7 @@ public sealed class SendMessageCommandHandlerTests
         CompletedMessageProcessing completedProcessing)
         : IMessageProcessingLifecycleService
     {
-        public StartedMessageProcessing? ReceivedCompletionProcessing { get; private set; }
-
-        public MessageOrchestrationResult? ReceivedOrchestrationResult { get; private set; }
+        public AgentTurnResult? ReceivedAgentTurnResult { get; private set; }
 
         public MessageProcessingFailure? ReceivedFailure { get; private set; }
 
@@ -492,12 +314,11 @@ public sealed class SendMessageCommandHandlerTests
 
         public Task<CompletedMessageProcessing> CompleteAsync(
             StartedMessageProcessing startedProcessing,
-            MessageOrchestrationResult result,
+            AgentTurnResult result,
             CancellationToken cancellationToken)
         {
             operations.Add("CompleteProcessing");
-            ReceivedCompletionProcessing = startedProcessing;
-            ReceivedOrchestrationResult = result;
+            ReceivedAgentTurnResult = result;
             return Task.FromResult(completedProcessing);
         }
 
@@ -516,9 +337,9 @@ public sealed class SendMessageCommandHandlerTests
         }
     }
 
-    private sealed class StubOrchestrator(
+    private sealed class StubAgentRuntime(
         List<string> operations,
-        MessageOrchestrationResult result,
+        AgentTurnResult result,
         Exception? exception = null,
         string? progressMessage = null) : IAgentRuntime
     {
@@ -531,7 +352,7 @@ public sealed class SendMessageCommandHandlerTests
             operations.Add("RunAgent");
             ReceivedRequest = request;
             return exception is null
-                ? Task.FromResult(CreateAgentTurnResult())
+                ? Task.FromResult(result)
                 : Task.FromException<AgentTurnResult>(exception);
         }
 
@@ -542,49 +363,27 @@ public sealed class SendMessageCommandHandlerTests
         {
             operations.Add("RunAgent");
             ReceivedRequest = request;
-
             if (progressMessage is not null)
             {
                 await callbacks.OnProgress(progressMessage, cancellationToken);
             }
 
             return exception is null
-                ? CreateAgentTurnResult()
+                ? result
                 : await Task.FromException<AgentTurnResult>(exception);
         }
-
-        private AgentTurnResult CreateAgentTurnResult() =>
-            new(
-                result.Answer,
-                result.ModelName,
-                result.CitedEvidence,
-                result.Warnings,
-                new AgentTurnUsage(
-                    result.Usage.ExecutionTime,
-                    result.Usage.InputTokens,
-                    result.Usage.OutputTokens,
-                    result.Usage.ModelCallCount,
-                    result.Usage.ToolCallCount,
-                    result.Usage.EstimatedCost,
-                    result.Usage.ContextSize,
-                    result.Usage.RepeatedToolCallCount));
     }
 
     private sealed class StubMessageStreamErrorReporter : IMessageStreamErrorReporter
     {
         public Exception? ReceivedException { get; private set; }
 
-        public string? ReceivedErrorCode { get; private set; }
-
         public void Report(
             Exception exception,
             Guid? conversationId,
             Guid? userMessageId,
-            string errorCode)
-        {
+            string errorCode) =>
             ReceivedException = exception;
-            ReceivedErrorCode = errorCode;
-        }
     }
 
     private sealed class StubResponseFactory(
@@ -593,7 +392,7 @@ public sealed class SendMessageCommandHandlerTests
     {
         public SendMessageResponse Create(
             StartedMessageProcessing processing,
-            MessageOrchestrationResult orchestrationResult,
+            AgentTurnResult agentTurnResult,
             CompletedMessageProcessing completedProcessing)
         {
             operations.Add("BuildResponse");

@@ -71,7 +71,8 @@ public sealed class AzureAiSearchKnowledgeBaseRetrievalClient
     private static object CreatePayload(
         AzureAiSearchKnowledgeBaseRetrievalRequest request)
     {
-        var azureMaximumResults = Math.Clamp(request.MaximumResults, 50, 200);
+        var retrievalCandidateLimit = Math.Clamp(request.RetrievalCandidateLimit, 50, 200);
+        var finalEvidenceLimit = Math.Clamp(request.FinalEvidenceLimit, 1, 50);
         var reasoningEffort = NormalizeReasoningEffort(request.RetrievalReasoningEffort);
 
         var payload = new Dictionary<string, object?>
@@ -81,7 +82,7 @@ public sealed class AzureAiSearchKnowledgeBaseRetrievalClient
             ["includeActivity"] = true,
             ["maxRuntimeInSeconds"] = request.MaxRuntimeInSeconds,
             ["maxOutputSize"] = request.MaxOutputSizeInTokens,
-            ["maxOutputDocuments"] = azureMaximumResults,
+            ["maxOutputDocuments"] = finalEvidenceLimit,
             ["knowledgeSourceParams"] = new[]
             {
                 new
@@ -92,7 +93,7 @@ public sealed class AzureAiSearchKnowledgeBaseRetrievalClient
                     includeReferences = true,
                     includeReferenceSourceData = true,
                     filterAddOn = request.Filter,
-                    maxOutputDocuments = azureMaximumResults
+                    maxOutputDocuments = retrievalCandidateLimit
                 }
             }
         };
@@ -426,7 +427,12 @@ public sealed class AzureAiSearchKnowledgeBaseRetrievalClient
         ArgumentException.ThrowIfNullOrWhiteSpace(request.Query);
         ArgumentException.ThrowIfNullOrWhiteSpace(request.Filter);
         ArgumentNullException.ThrowIfNull(request.ConversationHistory);
-        if (request.MaximumResults <= 0)
+        if (request.RetrievalCandidateLimit <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(request));
+        }
+
+        if (request.FinalEvidenceLimit <= 0)
         {
             throw new ArgumentOutOfRangeException(nameof(request));
         }

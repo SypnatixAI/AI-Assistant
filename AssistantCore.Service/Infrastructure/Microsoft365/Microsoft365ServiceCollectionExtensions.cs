@@ -18,8 +18,6 @@ public static class Microsoft365ServiceCollectionExtensions
         this IServiceCollection services,
         IConfiguration configuration)
     {
-        services.AddOptions<RagOptions>().Bind(configuration.GetSection(RagOptions.SectionName))
-            .Validate(options => options.IsValid(), "Invalid Rag configuration.").ValidateOnStart();
         services.AddOptions<Microsoft365Options>()
             .Bind(configuration.GetSection(Microsoft365Options.SectionName))
             .Validate(options =>
@@ -76,14 +74,15 @@ public static class Microsoft365ServiceCollectionExtensions
         services.AddOptions<AzureAiSearchOptions>()
             .Bind(configuration.GetSection(AzureAiSearchOptions.SectionName))
             .Validate(options =>
-                    double.IsFinite(options.MinimumSemanticRelevanceScore)
+                    options.VectorSearchMetric == "cosine"
+                    && options.KnowledgeBaseRetrievalReasoningEffort == "minimal"
+                    && double.IsFinite(options.MinimumSemanticRelevanceScore)
                     && options.MinimumSemanticRelevanceScore is >= 0d and <= 4d
                     && options.KnowledgeBaseMaxRuntimeInSeconds > 0
-                    && (options.KnowledgeBaseMaxOutputDocuments is null or > 0)
                     && (options.KnowledgeBaseMaxOutputSizeInTokens is null or > 0)
                     && IsAzureSearchKnowledgeResourceName(options.KnowledgeSourceName)
                     && IsAzureSearchKnowledgeResourceName(options.KnowledgeBaseName),
-                "AzureSearch requires valid semantic relevance, knowledge base limits and knowledge resource names.")
+                "AzureSearch requires cosine similarity, minimal retrieval reasoning, valid semantic relevance, knowledge base limits and knowledge resource names.")
             .ValidateOnStart();
 
         services.AddDataProtection();
@@ -106,8 +105,6 @@ public static class Microsoft365ServiceCollectionExtensions
         services.AddSingleton<MicrosoftCertificateIdentityClient>();
         AddProtectedHttpClient<MicrosoftSharePointUserGroupClient>(services);
         services.AddHttpClient<AzureAiSearchPassageAclClient>()
-            .RedactLoggedHeaders(["api-key", "Authorization"]);
-        services.AddHttpClient<AzureAiSearchPassageSearchClient>()
             .RedactLoggedHeaders(["api-key", "Authorization"]);
         services.AddHttpClient<AzureAiSearchKnowledgeBaseRetrievalClient>()
             .RedactLoggedHeaders(["api-key", "Authorization"]);

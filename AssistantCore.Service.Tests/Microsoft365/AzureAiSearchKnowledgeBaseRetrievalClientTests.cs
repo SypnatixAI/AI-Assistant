@@ -96,6 +96,7 @@ public sealed class AzureAiSearchKnowledgeBaseRetrievalClientTests
                 query,
                 [new AzureAiSearchKnowledgeBaseMessage("assistant", "Atlas context")],
                 filter,
+                50,
                 10,
                 30,
                 6000,
@@ -114,7 +115,7 @@ public sealed class AzureAiSearchKnowledgeBaseRetrievalClientTests
         Assert.Equal(query, intents[0].GetProperty("search").GetString());
         Assert.Equal(30, document.RootElement.GetProperty("maxRuntimeInSeconds").GetInt32());
         Assert.Equal(6000, document.RootElement.GetProperty("maxOutputSize").GetInt32());
-        Assert.Equal(50, document.RootElement.GetProperty("maxOutputDocuments").GetInt32());
+        Assert.Equal(10, document.RootElement.GetProperty("maxOutputDocuments").GetInt32());
         var sourceParams = document.RootElement.GetProperty("knowledgeSourceParams")[0];
         Assert.Equal("searchIndex", sourceParams.GetProperty("kind").GetString());
         Assert.Equal(50, sourceParams.GetProperty("maxOutputDocuments").GetInt32());
@@ -156,6 +157,7 @@ public sealed class AzureAiSearchKnowledgeBaseRetrievalClientTests
                 query,
                 [new AzureAiSearchKnowledgeBaseMessage("assistant", assistantContext)],
                 filter,
+                50,
                 10,
                 30,
                 6000,

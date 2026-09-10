@@ -7,7 +7,6 @@ using AssistantCore.Service.Application.Models.Messages.Connectors.Microsoft365;
 using AssistantCore.Service.Application.Models.Messages.Tools.Arguments;
 using AssistantCore.Service.Application.Services.Messages.Connectors.Microsoft365;
 using AssistantCore.Service.Application.Services.Messages.Evidence;
-using AssistantCore.Service.Application.Services.Messages.Rag;
 using AssistantCore.Service.Infrastructure.Connectors.Microsoft365;
 using Microsoft.Extensions.Options;
 
@@ -16,7 +15,7 @@ namespace AssistantCore.Service.Tests.Microsoft365;
 public sealed class Microsoft365AgenticRetrievalConnectorTests
 {
     [Theory, InlineAutoDomainData("code projet Atlas")]
-    public async Task Given_AgenticRetrievalEnabled_When_SearchAsync_Then_RetrievesWithConversationAndAclFilter(
+    public async Task Given_AValidRequest_When_SearchAsync_Then_RetrievesWithConversationAndAclFilter(
         string query,
         Guid organizationId,
         Guid memberId,
@@ -41,7 +40,6 @@ public sealed class Microsoft365AgenticRetrievalConnectorTests
                 new DateTimeOffset(2026, 1, 2, 0, 0, 0, TimeSpan.Zero),
                 3.1d));
         var connector = CreateConnector(
-            organizationId,
             entraGroupId,
             sharePointGroupId,
             retrievalClient);
@@ -73,6 +71,8 @@ public sealed class Microsoft365AgenticRetrievalConnectorTests
         Assert.Equal("synaptix-m365-knowledge-base", request.KnowledgeBaseName);
         Assert.Equal("synaptix-m365-knowledge-source", request.KnowledgeSourceName);
         Assert.Equal(query, request.Query);
+        Assert.Equal(50, request.RetrievalCandidateLimit);
+        Assert.Equal(10, request.FinalEvidenceLimit);
         Assert.Equal(2, request.ConversationHistory.Count);
         Assert.Contains($"organizationId eq '{organizationId:D}'", request.Filter, StringComparison.Ordinal);
         Assert.Contains($"allowedUserIds/any(id: id eq '{entraUserId:D}')", request.Filter, StringComparison.Ordinal);
@@ -87,7 +87,7 @@ public sealed class Microsoft365AgenticRetrievalConnectorTests
     }
 
     [Theory, InlineAutoDomainData("compare les risques financiers d'Atlas et MécanoPlus")]
-    public async Task Given_AgenticRetrievalEnabled_When_SearchAsync_Then_BypassesCustomMultiQueryAndCorrectiveRetrieval(
+    public async Task Given_AValidRequest_When_SearchAsync_Then_UsesKnowledgeBaseRetrieval(
         string query,
         Guid organizationId,
         Guid memberId,
@@ -96,21 +96,17 @@ public sealed class Microsoft365AgenticRetrievalConnectorTests
         string userEmail)
     {
         // Given
-        var searchRepository = new RecordingMicrosoft365SearchRepository();
         var retrievalClient = new RecordingAgenticRetrievalClient(
             CreateReference("0", "chunk-atlas", "Atlas", "Atlas risk content."));
         var connector = new Microsoft365Connector(
             new StaticMicrosoft365UserGroupResolver([entraGroupId.ToString("D")]),
             new StaticMicrosoft365SharePointGroupResolver([]),
-            searchRepository,
             new PassThroughMicrosoft365SearchAccessVerifier(),
+            retrievalClient,
             CreateOptions(),
+            CreateSearchOptions(),
             new EvidenceNormalizer(),
-            new FailingMicrosoft365QueryExpansionService(),
-            new Microsoft365SearchResultFusionService(),
-            correctiveRetrieval: new FailingCorrectiveRetrievalService(),
-            agenticRetrievalClient: retrievalClient,
-            searchOptions: CreateSearchOptions());
+            logger: null);
 
         // When
         var result = await connector.SearchAsync(
@@ -119,7 +115,6 @@ public sealed class Microsoft365AgenticRetrievalConnectorTests
             CancellationToken.None);
 
         // Then
-        Assert.Equal(0, searchRepository.SearchCallCount);
         Assert.Single(retrievalClient.ReceivedRequests);
         Assert.Single(result.Evidence);
     }
@@ -137,13 +132,13 @@ public sealed class Microsoft365AgenticRetrievalConnectorTests
         var connector = new Microsoft365Connector(
             new StaticMicrosoft365UserGroupResolver([entraGroupId.ToString("D")]),
             new StaticMicrosoft365SharePointGroupResolver([]),
-            new RecordingMicrosoft365SearchRepository(),
             new RejectingMicrosoft365SearchAccessVerifier(),
-            CreateOptions(),
-            new EvidenceNormalizer(),
-            agenticRetrievalClient: new RecordingAgenticRetrievalClient(
+            new RecordingAgenticRetrievalClient(
                 CreateReference("0", "chunk-secret", "Secret", "Restricted content.")),
-            searchOptions: CreateSearchOptions());
+            CreateOptions(),
+            CreateSearchOptions(),
+            new EvidenceNormalizer(),
+            logger: null);
 
         // When
         var result = await connector.SearchAsync(
@@ -156,19 +151,18 @@ public sealed class Microsoft365AgenticRetrievalConnectorTests
     }
 
     private static Microsoft365Connector CreateConnector(
-        Guid organizationId,
         Guid entraGroupId,
         string sharePointGroupId,
         IAgenticRetrievalClient retrievalClient) =>
         new(
             new StaticMicrosoft365UserGroupResolver([entraGroupId.ToString("D")]),
             new StaticMicrosoft365SharePointGroupResolver([sharePointGroupId]),
-            new RecordingMicrosoft365SearchRepository(),
             new PassThroughMicrosoft365SearchAccessVerifier(),
+            retrievalClient,
             CreateOptions(),
+            CreateSearchOptions(),
             new EvidenceNormalizer(),
-            agenticRetrievalClient: retrievalClient,
-            searchOptions: CreateSearchOptions());
+            logger: null);
 
     private static ConnectorExecutionContext CreateContext(
         Guid organizationId,
@@ -181,14 +175,11 @@ public sealed class Microsoft365AgenticRetrievalConnectorTests
             Guid.NewGuid().ToString("D"),
             entraUserId,
             IdentityProvider.MicrosoftEntraId,
+            RetrievalCandidateLimit: 50,
             UserEmail: userEmail);
 
     private static Microsoft365ConnectorOptions CreateOptions() =>
-        new(
-            10,
-            4000,
-            Microsoft365QueryExpansionOptions.Disabled,
-            new Microsoft365AgenticRetrievalOptions(true, 30, 6000));
+        new(10, 4000);
 
     private static IOptions<AzureAiSearchOptions> CreateSearchOptions() =>
         Options.Create(new AzureAiSearchOptions
@@ -196,7 +187,8 @@ public sealed class Microsoft365AgenticRetrievalConnectorTests
             Endpoint = "https://search.example",
             IndexName = "content-index",
             KnowledgeBaseName = "synaptix-m365-knowledge-base",
-            KnowledgeSourceName = "synaptix-m365-knowledge-source"
+            KnowledgeSourceName = "synaptix-m365-knowledge-source",
+            KnowledgeBaseMaxOutputSizeInTokens = 6000
         });
 
     private static AgenticRetrievalReference CreateReference(
@@ -244,37 +236,6 @@ public sealed class Microsoft365AgenticRetrievalConnectorTests
                         100)
                 ]));
         }
-    }
-
-    private sealed class RecordingMicrosoft365SearchRepository : IMicrosoft365SearchRepository
-    {
-        public int SearchCallCount { get; private set; }
-
-        public Task<IReadOnlyCollection<Microsoft365SearchRecord>> SearchAsync(
-            Microsoft365SearchParameters parameters,
-            CancellationToken cancellationToken)
-        {
-            SearchCallCount++;
-            return Task.FromResult<IReadOnlyCollection<Microsoft365SearchRecord>>([]);
-        }
-    }
-
-    private sealed class FailingMicrosoft365QueryExpansionService : IMicrosoft365QueryExpansionService
-    {
-        public Task<IReadOnlyCollection<string>> ExpandAsync(
-            string query,
-            CancellationToken cancellationToken) =>
-            throw new InvalidOperationException("Query expansion should be bypassed.");
-    }
-
-    private sealed class FailingCorrectiveRetrievalService : ICorrectiveRetrievalService
-    {
-        public Task<IReadOnlyCollection<Microsoft365SearchRecord>> RetrieveAsync(
-            Microsoft365SearchParameters parameters,
-            ConnectorExecutionContext context,
-            Func<Microsoft365SearchParameters, CancellationToken, Task<IReadOnlyCollection<Microsoft365SearchRecord>>> authorizedSearch,
-            CancellationToken cancellationToken) =>
-            throw new InvalidOperationException("Corrective retrieval should be bypassed.");
     }
 
     private sealed class StaticMicrosoft365UserGroupResolver(

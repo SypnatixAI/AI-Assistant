@@ -37,10 +37,7 @@ public sealed class AzureAiSearchIndexClient
         string vectorMetric = "cosine",
         string? knowledgeSourceName = null,
         string? knowledgeBaseName = null,
-        string retrievalReasoningEffort = "minimal",
-        int? retrievalMaxRuntimeInSeconds = null,
-        int? retrievalMaxOutputDocuments = null,
-        int? retrievalMaxOutputSizeInTokens = null)
+        string retrievalReasoningEffort = "minimal")
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(semanticConfigurationName);
         if (vectorMetric != "cosine") throw new ArgumentException("The configured embedding strategy requires cosine.", nameof(vectorMetric));

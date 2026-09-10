@@ -4,10 +4,8 @@ using AssistantCore.Repository.Domain.Enums;
 using AssistantCore.Service.Application.Configuration;
 using AssistantCore.Service.Application.Models.Messages.AgentRuntime;
 using AssistantCore.Service.Application.Models.Messages.Connectors;
-using AssistantCore.Service.Application.Models.Messages.Rag;
 using AssistantCore.Service.Application.Models.Messages.Tools;
 using AssistantCore.Service.Application.Services.Messages.Tools;
-using AssistantCore.Service.Application.Services.Messages.Orchestration;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
@@ -18,10 +16,10 @@ public sealed class FoundryAgentRuntime(
     IAiToolRegistry toolRegistry,
     IAiToolCallValidator toolCallValidator,
     IToolExecutionRouter toolExecutionRouter,
-    IOptions<MessageOrchestrationOptions> options,
+    IOptions<AgentRuntimeOptions> options,
     ILogger<FoundryAgentRuntime> logger) : IAgentRuntime
 {
-    private readonly MessageOrchestrationOptions _options = options.Value;
+    private readonly AgentRuntimeOptions _options = options.Value;
 
     public async Task<AgentTurnResult> RunAsync(
         AgentTurnRequest request,
@@ -104,6 +102,11 @@ public sealed class FoundryAgentRuntime(
                 throw new InvalidOperationException($"Foundry requested an unauthorized tool '{toolCall.Name}'.");
             }
 
+            var toolStopwatch = Stopwatch.StartNew();
+            logger.LogInformation(
+                "Foundry requested tool {ToolName}.",
+                toolCall.Name);
+
             var requestedCall = new AiRequestedToolCall(
                 $"foundry-{Guid.NewGuid():N}",
                 enterpriseSearch.Name,
@@ -121,6 +124,13 @@ public sealed class FoundryAgentRuntime(
             {
                 executedResults.Add(result);
             }
+
+            toolStopwatch.Stop();
+            logger.LogInformation(
+                "Foundry tool {ToolName} completed in {ElapsedMilliseconds} ms with status {ToolStatus}.",
+                toolCall.Name,
+                toolStopwatch.Elapsed.TotalMilliseconds,
+                result.Status);
 
             return JsonSerializer.Serialize(new
             {
@@ -146,8 +156,6 @@ public sealed class FoundryAgentRuntime(
         request.ExecutionContext with
         {
             RetrievalCandidateLimit = _options.RetrievalCandidateLimit,
-            Budget = null,
-            RagStatus = new RagExecutionStatus(),
             ConversationHistory = request.Processing.ConversationHistory
         };
 
@@ -202,10 +210,7 @@ public sealed class FoundryAgentRuntime(
                 response.InputTokens,
                 response.OutputTokens,
                 response.ModelCallCount,
-                executedToolResults.Count,
-                EstimatedCost: 0,
-                ContextSize: response.InputTokens,
-                RepeatedToolCallCount: 0));
+                executedToolResults.Count));
     }
 
     private sealed record RuntimeExecutionContext(

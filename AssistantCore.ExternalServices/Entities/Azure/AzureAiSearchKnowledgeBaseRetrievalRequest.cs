@@ -6,7 +6,8 @@ public sealed record AzureAiSearchKnowledgeBaseRetrievalRequest(
     string Query,
     IReadOnlyCollection<AzureAiSearchKnowledgeBaseMessage> ConversationHistory,
     string Filter,
-    int MaximumResults,
+    int RetrievalCandidateLimit,
+    int FinalEvidenceLimit,
     int MaxRuntimeInSeconds,
     int MaxOutputSizeInTokens,
     string RetrievalReasoningEffort);

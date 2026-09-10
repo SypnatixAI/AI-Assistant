@@ -2,7 +2,6 @@ using AssistantCore.Service.Application.Abstractions;
 using AssistantCore.Service.Application.Commands.SendMessage.Models;
 using AssistantCore.Service.Application.Models.Messages.AgentRuntime;
 using AssistantCore.Service.Application.Models.Messages.Lifecycle;
-using AssistantCore.Service.Application.Services.Messages.AiModels;
 using AssistantCore.Service.Application.Services.Messages.AgentRuntime;
 using AssistantCore.Service.Application.Services.Messages.Authorization;
 using AssistantCore.Service.Application.Services.Messages.Lifecycle;
@@ -15,7 +14,6 @@ namespace AssistantCore.Service.Application.Commands.SendMessage;
 public sealed class SendMessageCommandHandler(
     ISendMessageCommandValidator validator,
     IMessageUserContextService userContextService,
-    IAuthorizedAiModelSelector modelSelector,
     IMessageProcessingLifecycleService lifecycleService,
     IAgentRuntime agentRuntime,
     ISendMessageResponseFactory responseFactory)
@@ -34,33 +32,26 @@ public sealed class SendMessageCommandHandler(
         {
             var validatedCommand = await validator.ValidateAsync(request, cancellationToken);
             var userContext = await userContextService.GetCurrentAsync(cancellationToken);
-            var selectedModel = await modelSelector.SelectAsync(
-                userContext.Organization.Id,
-                validatedCommand.Model,
-                cancellationToken);
             processing = await lifecycleService.StartAsync(
                 validatedCommand.ConversationId,
                 validatedCommand.Message,
                 userContext.Organization,
                 userContext.Member,
                 cancellationToken);
-            processing.SelectedModel = selectedModel;
             var agentTurnResult = await agentRuntime.RunAsync(
                 new AgentTurnRequest(
                     processing,
-                    userContext.CreateConnectorExecutionContext(),
-                    selectedModel),
+                    userContext.CreateConnectorExecutionContext()),
                 cancellationToken);
-            var orchestrationResult = AgentTurnResultAdapter.ToMessageOrchestrationResult(agentTurnResult);
             var completedProcessing = await lifecycleService.CompleteAsync(
                 processing,
-                orchestrationResult,
+                agentTurnResult,
                 cancellationToken);
 
             activity?.SetTag("messages.outcome", "completed");
             return responseFactory.Create(
                 processing,
-                orchestrationResult,
+                agentTurnResult,
                 completedProcessing);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)

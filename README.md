@@ -184,7 +184,6 @@ dotnet user-secrets --project AssistantCore.Service set "Microsoft365:OcrApiKey"
 dotnet user-secrets --project AssistantCore.Service set "AzureSearch:Endpoint" "https://<service>.search.windows.net"
 dotnet user-secrets --project AssistantCore.Service set "AzureSearch:IndexName" "microsoft-content-dev"
 dotnet user-secrets --project AssistantCore.Service set "AzureSearch:ApiKey" "<azure-search-api-key>"
-dotnet user-secrets --project AssistantCore.Service set "AiModels:Providers:OpenAI:ApiKey" "<openai-api-key>"
 ```
 
 La connexion SQL n'a pas besoin d'être ajoutée aux `user-secrets`. Le script
@@ -197,7 +196,7 @@ synchronisation sont persistées dans SQL, puis réclamées directement par le
 Worker. En environnement Azure, activer `ServiceBus:Enabled` uniquement
 lorsque le namespace, les files et leurs consommateurs sont déployés.
 
-Le modèle défini par `AiModels:DefaultModel` doit être réellement accessible
+La définition `FoundryAgent` doit pointer vers une version d’agent réellement accessible
 avec la clé configurée. L'App Registration Microsoft 365 doit aussi accepter
 exactement ce callback `Web` :
 

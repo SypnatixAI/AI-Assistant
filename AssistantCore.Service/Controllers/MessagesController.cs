@@ -25,8 +25,7 @@ public sealed class MessagesController(IDispatcher dispatcher) : ControllerBase
         var result = await dispatcher.SendAsync(
             new SendMessageCommand(
                 request.ConversationId,
-                request.Message,
-                request.Model),
+                request.Message),
             cancellationToken);
 
         return Ok(result);
@@ -59,8 +58,7 @@ public sealed class MessagesController(IDispatcher dispatcher) : ControllerBase
         var events = await dispatcher.SendAsync(
             new SendMessageStreamCommand(
                 request.ConversationId,
-                request.Message,
-                request.Model),
+                request.Message),
             cancellationToken);
 
         await foreach (var streamEvent in events.WithCancellation(cancellationToken))

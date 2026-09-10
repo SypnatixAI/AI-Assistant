@@ -1,11 +1,8 @@
 using AssistantCore.ExternalServices;
-using AssistantCore.ExternalServices.Services.OpenAI;
 using AssistantCore.ExternalServices.Services.Microsoft;
 using AssistantCore.ExternalServices.Services.Azure;
 using AssistantCore.Repository.Domain.Entities;
-using AssistantCore.Service.Application.Services.Messages.AiModels.Providers.OpenAI;
 using AssistantCore.Service.Controllers;
-using AssistantCore.Service.Infrastructure.AiModels.OpenAI;
 using AssistantCore.Service.Infrastructure.Microsoft365;
 using AssistantCore.Service.Infrastructure.Foundry;
 using AssistantCore.Service.Application.Services.Messages.AgentRuntime;
@@ -147,26 +144,6 @@ public sealed class LayerDependencyTests
         {
             violations.Add($"{adapterType.FullName} must depend on {externalClientType.FullName}.");
         }
-
-        // Then
-        Assert.Empty(violations);
-    }
-
-    [Fact]
-    public void Given_OpenAiProvider_When_ValidateOpenAiExternalCallChain_Then_ProviderUsesAdapterAndExternalClient()
-    {
-        // Given
-        var providerType = typeof(OpenAiModelProvider);
-        var applicationClientType = typeof(IOpenAiResponsesClient);
-        var adapterType = typeof(OpenAiResponsesClientAdapter);
-        var externalClientType = typeof(OpenAiResponsesClient);
-
-        // When
-        var violations = ValidateOpenAiExternalCallChain(
-            providerType,
-            applicationClientType,
-            adapterType,
-            externalClientType);
 
         // Then
         Assert.Empty(violations);
@@ -442,32 +419,6 @@ public sealed class LayerDependencyTests
             .GetResult();
 
         return result.FailingTypeNames ?? [];
-    }
-
-    private static IReadOnlyCollection<string> ValidateOpenAiExternalCallChain(
-        Type providerType,
-        Type applicationClientType,
-        Type adapterType,
-        Type externalClientType)
-    {
-        var violations = new List<string>();
-
-        if (!HasConstructorParameter(providerType, applicationClientType))
-        {
-            violations.Add($"{providerType.FullName} must depend on {applicationClientType.FullName}.");
-        }
-
-        if (!applicationClientType.IsAssignableFrom(adapterType))
-        {
-            violations.Add($"{adapterType.FullName} must implement {applicationClientType.FullName}.");
-        }
-
-        if (!HasConstructorParameter(adapterType, externalClientType))
-        {
-            violations.Add($"{adapterType.FullName} must depend on {externalClientType.FullName}.");
-        }
-
-        return violations;
     }
 
     private static bool HasConstructorParameter(Type type, Type parameterType) =>

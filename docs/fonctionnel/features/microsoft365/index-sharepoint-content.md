@@ -2589,7 +2589,7 @@ l'ancien index pour revenir à l'ancienne configuration en cas de problème. Ne 
 supprimer qu'après validation opérationnelle. La migration et le basculement Azure
 restent des opérations explicites de déploiement ; le démarrage ne les effectue pas.
 
-Voir [Corrective RAG et comparaison des variantes](../../../recherche/rag-agentique/evaluation-automatisee.md#corrective-rag).
+Voir [Évaluation automatisée de l’agent et de la recherche](../../../recherche/rag-agentique/evaluation-automatisee.md#flow).
 ### PDF et images
 
 Les PDF sont d'abord lus avec leur couche de texte native. L'OCR Azure AI Vision Read est utilise uniquement lorsqu'une page est vide ou contient moins de texte que le seuil configure. Pour un PDF mixte, les pages lisibles restent natives et seules les pages insuffisantes sont remplacees par leur resultat OCR.

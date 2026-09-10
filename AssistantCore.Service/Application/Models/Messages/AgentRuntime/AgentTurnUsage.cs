@@ -5,10 +5,4 @@ public sealed record AgentTurnUsage(
     int InputTokens,
     int OutputTokens,
     int ModelCallCount,
-    int ToolCallCount,
-    decimal EstimatedCost,
-    int ContextSize,
-    int RepeatedToolCallCount)
-{
-    public int ModelTokenCount => InputTokens + OutputTokens;
-}
+    int ToolCallCount);

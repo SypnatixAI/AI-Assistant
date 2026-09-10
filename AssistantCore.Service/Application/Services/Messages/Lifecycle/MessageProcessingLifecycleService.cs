@@ -4,34 +4,20 @@ using AssistantCore.Repository.Repositories;
 using AssistantCore.Service.Application.Exceptions;
 using AssistantCore.Service.Application.Models.Conversations;
 using AssistantCore.Service.Application.Models.Messages;
+using AssistantCore.Service.Application.Models.Messages.AgentRuntime;
 using AssistantCore.Service.Application.Models.Messages.AiModels;
 using AssistantCore.Service.Application.Models.Messages.Lifecycle;
-using AssistantCore.Service.Application.Models.Messages.Orchestration;
 using AssistantCore.Service.Application.Services.Conversations;
-using AssistantCore.Service.Application.Services.Messages.Memory;
 using AssistantCore.Service.Application.Services.Usage;
 
 namespace AssistantCore.Service.Application.Services.Messages.Lifecycle;
 
 public sealed class MessageProcessingLifecycleService(
     IConversationRepository conversationRepository,
-    IConversationMemorySummaryService conversationMemorySummaryService,
     IUsageTrackingService usageTrackingService,
     TimeProvider timeProvider) : IMessageProcessingLifecycleService
 {
     private const int MaximumProcessingErrorCodeLength = 100;
-
-    public MessageProcessingLifecycleService(
-        IConversationRepository conversationRepository,
-        IUsageTrackingService usageTrackingService,
-        TimeProvider timeProvider)
-        : this(
-            conversationRepository,
-            new DeterministicConversationMemorySummaryService(),
-            usageTrackingService,
-            timeProvider)
-    {
-    }
 
     public async Task<StartedMessageProcessing> StartAsync(
         Guid? conversationId,
@@ -195,12 +181,12 @@ public sealed class MessageProcessingLifecycleService(
 
     public async Task<CompletedMessageProcessing> CompleteAsync(
         StartedMessageProcessing processing,
-        MessageOrchestrationResult result,
+        AgentTurnResult result,
         CancellationToken cancellationToken)
     {
         var completedAt = timeProvider.GetUtcNow();
         var assistantMessage = CreateAssistantMessage(result, completedAt);
-        var sources = CreateSources(result.CitedEvidence);
+        var sources = CreateSources(result.Citations);
         var warnings = CreateWarnings(result.Warnings);
 
         var completedMessage = await conversationRepository
@@ -215,28 +201,6 @@ public sealed class MessageProcessingLifecycleService(
                 completedAt,
                 cancellationToken)
             ?? throw CreateConversationNotFoundException();
-
-        var containsMicrosoft365Evidence = result.CitedEvidence.Any(evidence =>
-            string.Equals(evidence.SourceType, "Microsoft365", StringComparison.Ordinal));
-        var summary = containsMicrosoft365Evidence
-            ? string.Empty
-            : processing.SelectedModel is { } selectedModel
-                ? await conversationMemorySummaryService.CreateAsync(
-                    selectedModel,
-                    processing.ConversationHistory,
-                    processing.UserMessage,
-                    result.Answer,
-                    cancellationToken)
-                : null;
-        summary ??= CreateContextSummaryEntry(processing.UserMessage, result.Answer);
-
-        await conversationRepository.UpdateConversationContextSummaryAsync(
-            processing.OrganizationId,
-            processing.OwnerMemberId,
-            processing.ConversationId,
-            summary,
-            completedAt,
-            cancellationToken);
 
         var usage = await usageTrackingService.RecordConsumptionAsync(
             processing.OrganizationId,
@@ -308,13 +272,13 @@ public sealed class MessageProcessingLifecycleService(
         };
 
     private static Message CreateAssistantMessage(
-        MessageOrchestrationResult result,
+        AgentTurnResult result,
         DateTimeOffset completedAt) =>
         new()
         {
             Id = Guid.NewGuid(),
             Role = MessageRole.Assistant,
-            Content = result.Answer,
+            Content = result.Content,
             ProcessingStatus = MessageProcessingStatus.Completed,
             Model = result.ModelName,
             CreatedAt = completedAt,
@@ -345,21 +309,6 @@ public sealed class MessageProcessingLifecycleService(
                 Content = warning.Trim()
             })
             .ToArray();
-
-    private static string CreateContextSummaryEntry(string userMessage, string answer) =>
-        $"User: {userMessage}\nAssistant: {answer}";
-
-    private sealed class DeterministicConversationMemorySummaryService
-        : IConversationMemorySummaryService
-    {
-        public Task<string?> CreateAsync(
-            SelectedAiModel model,
-            IReadOnlyCollection<AiConversationMessage> conversationHistory,
-            string currentUserMessage,
-            string currentAssistantMessage,
-            CancellationToken cancellationToken) =>
-            Task.FromResult<string?>(null);
-    }
 
     private static string ValidateErrorCode(string errorCode)
     {

@@ -6,6 +6,7 @@ public sealed record AgenticRetrievalRequest(
     string KnowledgeBaseName,
     string KnowledgeSourceName,
     string Filter,
-    int MaximumResults,
+    int RetrievalCandidateLimit,
+    int FinalEvidenceLimit,
     int MaxRuntimeInSeconds,
     int MaxOutputSizeInTokens);

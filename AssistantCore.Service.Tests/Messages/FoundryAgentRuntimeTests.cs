@@ -36,7 +36,7 @@ public sealed class FoundryAgentRuntimeTests
 
         // When
         var result = await runtime.RunAsync(
-            new AgentTurnRequest(processing, CreateValidExecutionContext(), CreateSelectedModel()),
+            new AgentTurnRequest(processing, CreateValidExecutionContext()),
             CancellationToken.None);
 
         // Then
@@ -74,7 +74,7 @@ public sealed class FoundryAgentRuntimeTests
 
         // When
         var result = await runtime.RunAsync(
-            new AgentTurnRequest(processing, CreateValidExecutionContext(), CreateSelectedModel()),
+            new AgentTurnRequest(processing, CreateValidExecutionContext()),
             CancellationToken.None);
 
         // Then
@@ -103,7 +103,7 @@ public sealed class FoundryAgentRuntimeTests
 
         // When
         await runtime.RunAsync(
-            new AgentTurnRequest(processing, unauthorizedContext, CreateSelectedModel()),
+            new AgentTurnRequest(processing, unauthorizedContext),
             CancellationToken.None);
 
         // Then
@@ -130,7 +130,7 @@ public sealed class FoundryAgentRuntimeTests
 
         // When
         var result = await runtime.RunStreamingAsync(
-            new AgentTurnRequest(processing, CreateValidExecutionContext(), CreateSelectedModel()),
+            new AgentTurnRequest(processing, CreateValidExecutionContext()),
             callbacks,
             CancellationToken.None);
 
@@ -152,21 +152,13 @@ public sealed class FoundryAgentRuntimeTests
             Options.Create(CreateOptions()),
             NullLogger<FoundryAgentRuntime>.Instance);
 
-    private static MessageOrchestrationOptions CreateOptions() =>
+    private static AgentRuntimeOptions CreateOptions() =>
         new()
         {
             MaximumExecutionTimeSeconds = 30,
-            MaximumToolCalls = 8,
-            MaximumModelTokens = 12_000,
-            MaximumEstimatedCost = 1,
             RetrievalCandidateLimit = 10,
-            FinalEvidenceLimit = 5,
-            MaximumContextSize = 30_000,
-            MaximumRepeatedToolCalls = 2,
-            MaximumParallelToolCalls = 2
+            FinalEvidenceLimit = 5
         };
-
-    private static SelectedAiModel CreateSelectedModel() => new("OpenAI", "legacy-model");
 
     private static ConnectorExecutionContext CreateValidExecutionContext() =>
         new(

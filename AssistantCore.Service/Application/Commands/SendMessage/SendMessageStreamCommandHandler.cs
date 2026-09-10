@@ -4,9 +4,7 @@ using AssistantCore.Service.Application.Commands.SendMessage.Models;
 using AssistantCore.Service.Application.Exceptions;
 using AssistantCore.Service.Application.Models.Messages;
 using AssistantCore.Service.Application.Models.Messages.AgentRuntime;
-using AssistantCore.Service.Application.Models.Messages.AiModels;
 using AssistantCore.Service.Application.Models.Messages.Lifecycle;
-using AssistantCore.Service.Application.Services.Messages.AiModels;
 using AssistantCore.Service.Application.Services.Messages.AgentRuntime;
 using AssistantCore.Service.Application.Services.Messages.Authorization;
 using AssistantCore.Service.Application.Services.Messages.Lifecycle;
@@ -19,7 +17,6 @@ namespace AssistantCore.Service.Application.Commands.SendMessage;
 public sealed class SendMessageStreamCommandHandler(
     ISendMessageCommandValidator validator,
     IMessageUserContextService userContextService,
-    IAuthorizedAiModelSelector modelSelector,
     IMessageProcessingLifecycleService lifecycleService,
     IAgentRuntime agentRuntime,
     ISendMessageResponseFactory responseFactory,
@@ -47,20 +44,15 @@ public sealed class SendMessageStreamCommandHandler(
         try
         {
             var validatedCommand = await validator.ValidateAsync(
-                new SendMessageCommand(request.ConversationId, request.Message, request.Model),
+                new SendMessageCommand(request.ConversationId, request.Message),
                 cancellationToken);
             var userContext = await userContextService.GetCurrentAsync(cancellationToken);
-            var selectedModel = await modelSelector.SelectAsync(
-                userContext.Organization.Id,
-                validatedCommand.Model,
-                cancellationToken);
             processing = await lifecycleService.StartAsync(
                 validatedCommand.ConversationId,
                 validatedCommand.Message,
                 userContext.Organization,
                 userContext.Member,
                 cancellationToken);
-            processing.SelectedModel = selectedModel;
             await writer.WriteAsync(
                 new SendMessageStreamEvent(
                     SendMessageStreamEvent.Accepted,
@@ -68,17 +60,16 @@ public sealed class SendMessageStreamCommandHandler(
                 cancellationToken);
 
             var agentTurnResult = await agentRuntime.RunStreamingAsync(
-                CreateAgentTurnRequest(processing, userContext, selectedModel),
+                CreateAgentTurnRequest(processing, userContext),
                 CreateStreamingCallbacks(writer),
                 cancellationToken);
-            var orchestrationResult = AgentTurnResultAdapter.ToMessageOrchestrationResult(agentTurnResult);
             var completedProcessing = await lifecycleService.CompleteAsync(
                 processing,
-                orchestrationResult,
+                agentTurnResult,
                 cancellationToken);
             var response = responseFactory.Create(
                 processing,
-                orchestrationResult,
+                agentTurnResult,
                 completedProcessing);
             await writer.WriteAsync(
                 new SendMessageStreamEvent(SendMessageStreamEvent.AnswerCompleted, response),
@@ -108,12 +99,10 @@ public sealed class SendMessageStreamCommandHandler(
 
     private static AgentTurnRequest CreateAgentTurnRequest(
         StartedMessageProcessing processing,
-        MessageUserContext userContext,
-        SelectedAiModel selectedModel) =>
+        MessageUserContext userContext) =>
         new(
             processing,
-            userContext.CreateConnectorExecutionContext(),
-            selectedModel);
+            userContext.CreateConnectorExecutionContext());
 
     private static AgentTurnStreamingCallbacks CreateStreamingCallbacks(
         ChannelWriter<SendMessageStreamEvent> writer) =>

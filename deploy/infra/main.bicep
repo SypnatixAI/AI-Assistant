@@ -274,10 +274,6 @@ var devApiEnvironmentVariables = [
     name: 'AzureSearch__Endpoint'
     value: '${wiremockPublicBaseUrl}/azure-search'
   }
-  {
-    name: 'AiModels__Providers__OpenAI__Endpoint'
-    value: '${wiremockPublicBaseUrl}/openai/v1'
-  }
 ]
 
 var certifApiEnvironmentVariables = [
@@ -328,10 +324,6 @@ var certifApiEnvironmentVariables = [
   {
     name: 'AzureSearch__ApiKey'
     secretRef: 'azure-search-api-key'
-  }
-  {
-    name: 'AiModels__Providers__OpenAI__ApiKey'
-    secretRef: 'openai-api-key'
   }
 ]
 

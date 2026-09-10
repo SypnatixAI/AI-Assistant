@@ -5,5 +5,4 @@ namespace AssistantCore.Service.Application.Commands.SendMessage;
 
 public sealed record SendMessageStreamCommand(
     Guid? ConversationId,
-    string Message,
-    string? Model) : IRequest<IAsyncEnumerable<SendMessageStreamEvent>>;
+    string Message) : IRequest<IAsyncEnumerable<SendMessageStreamEvent>>;

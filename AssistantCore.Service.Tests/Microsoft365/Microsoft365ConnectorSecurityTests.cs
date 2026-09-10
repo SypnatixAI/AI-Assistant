@@ -1,10 +1,13 @@
 using AssistantCore.Repository.Domain.Enums;
+using AssistantCore.Service.Application.Configuration;
+using AssistantCore.Service.Application.Models.Messages.AgenticRetrieval;
 using AssistantCore.Service.Application.Models.Messages.Connectors;
 using AssistantCore.Service.Application.Models.Messages.Connectors.Microsoft365;
 using AssistantCore.Service.Application.Models.Messages.Tools.Arguments;
 using AssistantCore.Service.Application.Services.Messages.Connectors.Microsoft365;
 using AssistantCore.Service.Application.Services.Messages.Evidence;
 using AssistantCore.Service.Infrastructure.Connectors.Microsoft365;
+using Microsoft.Extensions.Options;
 
 namespace AssistantCore.Service.Tests.Microsoft365;
 
@@ -19,13 +22,14 @@ public sealed class Microsoft365ConnectorSecurityTests
     {
         // Given
         var tenantId = Guid.NewGuid().ToString("D");
-        var searchRepository = new RecordingMicrosoft365SearchRepository();
+        var retrievalClient = new RecordingAgenticRetrievalClient();
         var connector = new Microsoft365Connector(
             new FailingMicrosoft365UserGroupResolver(),
             new EmptyMicrosoft365SharePointGroupResolver(),
-            searchRepository,
             new PassThroughMicrosoft365SearchAccessVerifier(),
+            retrievalClient,
             new Microsoft365ConnectorOptions(10, 4000),
+            CreateSearchOptions(),
             new EvidenceNormalizer());
         var request = new SearchMicrosoft365ToolArguments(query, null, null, null);
 
@@ -43,7 +47,7 @@ public sealed class Microsoft365ConnectorSecurityTests
 
         // Then
         await Assert.ThrowsAsync<InvalidOperationException>(action);
-        Assert.Equal(0, searchRepository.SearchCallCount);
+        Assert.Equal(0, retrievalClient.CallCount);
     }
 
     [Theory, AutoDomainData]
@@ -54,13 +58,14 @@ public sealed class Microsoft365ConnectorSecurityTests
     {
         // Given
         var groupResolver = new RecordingMicrosoft365UserGroupResolver();
-        var searchRepository = new RecordingMicrosoft365SearchRepository();
+        var retrievalClient = new RecordingAgenticRetrievalClient();
         var connector = new Microsoft365Connector(
             groupResolver,
             new EmptyMicrosoft365SharePointGroupResolver(),
-            searchRepository,
             new PassThroughMicrosoft365SearchAccessVerifier(),
+            retrievalClient,
             new Microsoft365ConnectorOptions(10, 4000),
+            CreateSearchOptions(),
             new EvidenceNormalizer());
         var request = new SearchMicrosoft365ToolArguments(query, null, null, null);
         var context = new ConnectorExecutionContext(
@@ -79,7 +84,7 @@ public sealed class Microsoft365ConnectorSecurityTests
         // Then
         await Assert.ThrowsAsync<InvalidOperationException>(action);
         Assert.Equal(0, groupResolver.CallCount);
-        Assert.Equal(0, searchRepository.SearchCallCount);
+        Assert.Equal(0, retrievalClient.CallCount);
     }
 
     [Theory, AutoDomainData]
@@ -91,13 +96,14 @@ public sealed class Microsoft365ConnectorSecurityTests
         string userEmail)
     {
         // Given
-        var searchRepository = new RecordingMicrosoft365SearchRepository();
+        var retrievalClient = new RecordingAgenticRetrievalClient();
         var connector = new Microsoft365Connector(
             new RecordingMicrosoft365UserGroupResolver(),
             new FailingMicrosoft365SharePointGroupResolver(),
-            searchRepository,
             new PassThroughMicrosoft365SearchAccessVerifier(),
+            retrievalClient,
             new Microsoft365ConnectorOptions(10, 4000),
+            CreateSearchOptions(),
             new EvidenceNormalizer());
         var request = new SearchMicrosoft365ToolArguments(query, null, null, null);
 
@@ -115,7 +121,7 @@ public sealed class Microsoft365ConnectorSecurityTests
 
         // Then
         await Assert.ThrowsAsync<InvalidOperationException>(action);
-        Assert.Equal(0, searchRepository.SearchCallCount);
+        Assert.Equal(0, retrievalClient.CallCount);
     }
 
     private sealed class FailingMicrosoft365UserGroupResolver : IMicrosoft365UserGroupResolver
@@ -127,16 +133,26 @@ public sealed class Microsoft365ConnectorSecurityTests
             throw new InvalidOperationException("Group resolution failed.");
     }
 
-    private sealed class RecordingMicrosoft365SearchRepository : IMicrosoft365SearchRepository
-    {
-        public int SearchCallCount { get; private set; }
+    private static IOptions<AzureAiSearchOptions> CreateSearchOptions() =>
+        Options.Create(new AzureAiSearchOptions
+        {
+            Endpoint = "https://search.example",
+            IndexName = "content-index",
+            KnowledgeBaseName = "synaptix-m365-knowledge-base",
+            KnowledgeSourceName = "synaptix-m365-knowledge-source",
+            KnowledgeBaseMaxOutputSizeInTokens = 6000
+        });
 
-        public Task<IReadOnlyCollection<Microsoft365SearchRecord>> SearchAsync(
-            Microsoft365SearchParameters parameters,
+    private sealed class RecordingAgenticRetrievalClient : IAgenticRetrievalClient
+    {
+        public int CallCount { get; private set; }
+
+        public Task<AgenticRetrievalResult> RetrieveAsync(
+            AgenticRetrievalRequest request,
             CancellationToken cancellationToken)
         {
-            SearchCallCount++;
-            return Task.FromResult<IReadOnlyCollection<Microsoft365SearchRecord>>([]);
+            CallCount++;
+            return Task.FromResult(new AgenticRetrievalResult(string.Empty, [], []));
         }
     }
 

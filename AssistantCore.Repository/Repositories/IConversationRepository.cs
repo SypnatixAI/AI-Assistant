@@ -31,14 +31,6 @@ public interface IConversationRepository
         Guid conversationId,
         CancellationToken cancellationToken = default);
 
-    Task<bool> UpdateConversationContextSummaryAsync(
-        Guid organizationId,
-        Guid ownerMemberId,
-        Guid conversationId,
-        string summary,
-        DateTimeOffset updatedAt,
-        CancellationToken cancellationToken = default);
-
     /// <summary>
     /// Retourne une page de resumes de conversations visibles portant le statut
     /// demande, triees par UpdatedAt puis Id decroissants. Une conversation

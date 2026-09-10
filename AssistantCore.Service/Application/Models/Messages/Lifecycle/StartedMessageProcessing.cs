@@ -12,8 +12,6 @@ public sealed record StartedMessageProcessing(
 {
     public IReadOnlyCollection<AiConversationMessage> ConversationHistory { get; init; } = [];
 
-    public SelectedAiModel? SelectedModel { get; set; }
-
     /// <summary>
     /// Resume de la conversation lorsque cet envoi vient de la creer. Reste null
     /// lorsque le message rejoint une conversation existante : le client la

@@ -3,14 +3,11 @@ using AssistantCore.Repository.Domain.Entities;
 using AssistantCore.Repository.Domain.Enums;
 using AssistantCore.Repository.Queries;
 using AssistantCore.Service.Application.Models.Messages.Tools;
-using AssistantCore.Service.Application.Services.Messages.Connectors;
 
 namespace AssistantCore.Service.Application.Services.Messages.Tools;
 
 public sealed class AiToolRegistry(
     IOrganizationConnectorQueries organizationConnectorQueries,
-    IEnumerable<IErpConnector> erpConnectors,
-    IEnumerable<ICrmConnector> crmConnectors,
     IEnumerable<IAiToolExecutionHandler> toolHandlers) : IAiToolRegistry
 {
     public async Task<IReadOnlyCollection<AiToolDefinition>> GetAvailableToolsAsync(
@@ -41,17 +38,6 @@ public sealed class AiToolRegistry(
             ConnectorType.Microsoft365
                 when executableTools.Contains(AiToolNames.SearchMicrosoft365) =>
                 CreateMicrosoft365Tool(connector),
-            ConnectorType.Erp
-                when erpConnectors.Any()
-                    && executableTools.Contains(AiToolNames.QueryErp) =>
-                CreateErpTool(),
-            ConnectorType.Crm
-                when crmConnectors.Any()
-                    && executableTools.Contains(AiToolNames.QueryCrm) =>
-                CreateCrmTool(),
-            ConnectorType.InternalData
-                when executableTools.Contains(AiToolNames.SearchInternalData) =>
-                CreateInternalDataTool(),
             _ => null
         };
 
@@ -94,50 +80,6 @@ public sealed class AiToolRegistry(
                         "Date maximale de modification des fichiers. Ne filtre pas les dates mentionnees dans leur contenu.")
                 }));
     }
-
-    private static AiToolDefinition CreateErpTool() => new(
-        AiToolNames.QueryErp,
-        "Lire les ventes, commandes, factures ou stocks dans l'ERP.",
-        CreateObjectSchema(
-            new Dictionary<string, object>
-            {
-                ["metric"] = new
-                {
-                    type = "string",
-                    @enum = new[] { "sales", "orders", "invoices", "inventory" },
-                    description = "Categorie de donnees ERP a lire."
-                },
-                ["dateFrom"] = NullableDateProperty("Date minimale de la periode."),
-                ["dateTo"] = NullableDateProperty("Date maximale de la periode.")
-            }));
-
-    private static AiToolDefinition CreateCrmTool() => new(
-        AiToolNames.QueryCrm,
-        "Rechercher des clients, contacts ou opportunites dans le CRM.",
-        CreateObjectSchema(
-            new Dictionary<string, object>
-            {
-                ["query"] = StringProperty("Termes a rechercher dans le CRM."),
-                ["entityTypes"] = NullableProperty(new
-                {
-                    type = "array",
-                    items = new
-                    {
-                        type = "string",
-                        @enum = new[] { "customers", "contacts", "opportunities" }
-                    },
-                    description = "Types d'entites a limiter, ou null pour tous les types autorises."
-                })
-            }));
-
-    private static AiToolDefinition CreateInternalDataTool() => new(
-        AiToolNames.SearchInternalData,
-        "Rechercher dans les donnees internes autorisees.",
-        CreateObjectSchema(
-            new Dictionary<string, object>
-            {
-                ["query"] = StringProperty("Termes a rechercher dans les donnees internes.")
-            }));
 
     private static JsonElement CreateObjectSchema(IReadOnlyDictionary<string, object> properties) =>
         JsonSerializer.SerializeToElement(new
