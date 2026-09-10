@@ -92,7 +92,9 @@ public sealed class FoundryAgentExternalClient
                 ?.Details
                 ?? usage;
 
-            if (string.IsNullOrWhiteSpace(update.Text)
+            // A streaming update can contain only a space or a line break. Those
+            // fragments are part of the answer and must not be discarded.
+            if (!HasStreamableText(update.Text)
                 || update.Contents.OfType<FunctionCallContent>().Any()
                 || update.Contents.OfType<FunctionResultContent>().Any())
             {
@@ -232,6 +234,9 @@ public sealed class FoundryAgentExternalClient
 
     private string CreateAgentIdentifier() =>
         $"{_settings.AgentName}@{_settings.AgentVersion}";
+
+    internal static bool HasStreamableText(string? text) =>
+        !string.IsNullOrEmpty(text);
 
     private static int ToTokenCount(long? tokenCount) =>
         tokenCount is null ? 0 : checked((int)tokenCount.Value);
