@@ -95,6 +95,43 @@ public sealed class MicrosoftExcelContentExtractorClientTests
             unit.Text == "A3 : Intérêts payés | Janvier : 100 | Février : 200 | Mars : 300");
     }
 
+    [Theory, AutoDomainData]
+    public async Task Given_AFinancialTable_When_ReadAsync_Then_ReturnsEveryStructuredRow(
+        string fileName)
+    {
+        // Given
+        await using var package = CreateWorkbook(
+            "<workbook xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\" xmlns:r=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships\"><sheets><sheet name=\"Transactions\" sheetId=\"1\" r:id=\"rId1\"/></sheets></workbook>",
+            new Dictionary<string, string>
+            {
+                ["xl/worksheets/sheet1.xml"] =
+                    "<worksheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\"><sheetData>"
+                    + "<row r=\"1\"><c r=\"A1\" t=\"inlineStr\"><is><t>Transaction ID</t></is></c><c r=\"B1\" t=\"inlineStr\"><is><t>Transaction Amount</t></is></c></row>"
+                    + "<row r=\"2\"><c r=\"A2\"><v>159</v></c><c r=\"B2\"><v>3100.50</v></c></row>"
+                    + "<row r=\"3\"><c r=\"A3\"><v>308</v></c><c r=\"B3\"><v>4200.75</v></c></row>"
+                    + "</sheetData></worksheet>",
+                ["xl/_rels/workbook.xml.rels"] =
+                    "<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\"><Relationship Id=\"rId1\" Target=\"worksheets/sheet1.xml\"/></Relationships>"
+            });
+        var content = package.ToArray();
+        var client = new MicrosoftExcelTableReaderClient();
+
+        // When
+        var workbook = await client.ReadAsync(
+            $"{fileName}.xlsx",
+            content,
+            2_000_000,
+            10,
+            100,
+            CancellationToken.None);
+
+        // Then
+        var worksheet = Assert.Single(workbook.Worksheets);
+        Assert.Equal(2, worksheet.Rows.Count);
+        Assert.Equal("3100.50", worksheet.Rows[0]["Transaction Amount"]);
+        Assert.Equal("308", worksheet.Rows[1]["Transaction ID"]);
+    }
+
     private static MicrosoftExcelExtractionLimits Limits => new(1_000_000, 2_000_000, 100_000, 10, 100);
 
     private static MemoryStream CreateWorkbook(string workbook, Dictionary<string, string> entries)

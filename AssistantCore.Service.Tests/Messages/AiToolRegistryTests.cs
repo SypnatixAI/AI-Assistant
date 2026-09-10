@@ -94,6 +94,30 @@ public sealed class AiToolRegistryTests
         Assert.Empty(tools);
     }
 
+    [Theory, AutoDomainData]
+    public async Task Given_Microsoft365SpreadsheetHandler_When_GetAvailableToolsAsync_Then_ReturnsAnalysisTool(
+        Organization organization)
+    {
+        // Given
+        var connectorQueries = new StubOrganizationConnectorQueries
+        {
+            Connectors = [CreateConnector(ConnectorType.Microsoft365, Microsoft365SourceType.SharePoint)]
+        };
+        var registry = new AiToolRegistry(
+            connectorQueries,
+            [new FakeToolExecutionHandler(AiToolNames.AnalyzeMicrosoft365Spreadsheet)]);
+
+        // When
+        var tools = await registry.GetAvailableToolsAsync(organization.Id, CancellationToken.None);
+
+        // Then
+        var tool = Assert.Single(tools);
+        Assert.Equal(AiToolNames.AnalyzeMicrosoft365Spreadsheet, tool.Name);
+        var properties = tool.InputSchema.GetProperty("properties");
+        Assert.True(properties.TryGetProperty("aggregations", out _));
+        Assert.True(properties.TryGetProperty("filters", out _));
+    }
+
     private static OrganizationConnector CreateConnector(
         ConnectorType type,
         params Microsoft365SourceType[] sourceTypes) => new()

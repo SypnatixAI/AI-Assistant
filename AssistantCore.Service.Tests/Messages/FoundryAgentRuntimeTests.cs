@@ -111,6 +111,33 @@ public sealed class FoundryAgentRuntimeTests
     }
 
     [Theory, AutoDomainData]
+    public async Task Given_SearchAndSpreadsheetTools_When_RunAsync_Then_ExposesBothFoundryTools(
+        StartedMessageProcessing processing)
+    {
+        // Given
+        var client = new RecordingFoundryAgentClient(
+            new FoundryAgentClientResult("Réponse.", "agent@1", 8, 2, 1));
+        var runtime = CreateRuntime(
+            client,
+            new StubToolRegistry(
+            [
+                CreateAuthorizedEnterpriseSearchTool(),
+                CreateAuthorizedSpreadsheetAnalysisTool()
+            ]));
+
+        // When
+        await runtime.RunAsync(
+            new AgentTurnRequest(processing, CreateValidExecutionContext()),
+            CancellationToken.None);
+
+        // Then
+        var tools = Assert.Single(client.ReceivedRequests).Tools;
+        Assert.Equal(
+            ["AnalyzeSpreadsheet", "EnterpriseSearch"],
+            tools.Select(tool => tool.Name).OrderBy(name => name, StringComparer.Ordinal));
+    }
+
+    [Theory, AutoDomainData]
     public async Task Given_StreamingFoundryResponse_When_RunStreamingAsync_Then_ForwardsAnswerDeltas(
         StartedMessageProcessing processing)
     {
@@ -184,6 +211,21 @@ public sealed class FoundryAgentRuntimeTests
                     dateTo = new { type = new[] { "string", "null" } }
                 },
                 required = new[] { "query", "sourceTypes", "dateFrom", "dateTo" },
+                additionalProperties = false
+            }));
+
+    private static AiToolDefinition CreateAuthorizedSpreadsheetAnalysisTool() =>
+        new(
+            AiToolNames.AnalyzeMicrosoft365Spreadsheet,
+            "Analyze an authorized spreadsheet.",
+            JsonSerializer.SerializeToElement(new
+            {
+                type = "object",
+                properties = new
+                {
+                    fileName = new { type = "string" }
+                },
+                required = new[] { "fileName" },
                 additionalProperties = false
             }));
 

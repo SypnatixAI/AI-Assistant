@@ -6,6 +6,7 @@ using AssistantCore.Service.Controllers;
 using AssistantCore.Service.Infrastructure.Microsoft365;
 using AssistantCore.Service.Infrastructure.Foundry;
 using AssistantCore.Service.Application.Services.Messages.AgentRuntime;
+using AssistantCore.Service.Application.Services.Messages.Tabular;
 using AssistantCore.ExternalServices.Services.Foundry;
 using AssistantCore.Service.Application.Services.Microsoft365;
 using NetArchTest.Rules;
@@ -15,6 +16,36 @@ namespace AssistantCore.Architecture.Tests;
 
 public sealed class LayerDependencyTests
 {
+    [Fact]
+    public void Given_SpreadsheetAnalysis_When_ValidateExternalCallChain_Then_UsesApplicationInterfacesAndAdapters()
+    {
+        // Given
+        var serviceType = typeof(Microsoft365SpreadsheetAnalysisService);
+        var workbookReaderType = typeof(ISpreadsheetWorkbookReader);
+        var workbookReaderAdapterType = typeof(SpreadsheetWorkbookReaderAdapter);
+        var externalReaderType = typeof(MicrosoftExcelTableReaderClient);
+
+        // When
+        var violations = new List<string>();
+        if (!HasConstructorParameter(serviceType, workbookReaderType))
+        {
+            violations.Add("Spreadsheet analysis must depend on the application workbook reader interface.");
+        }
+
+        if (!workbookReaderType.IsAssignableFrom(workbookReaderAdapterType))
+        {
+            violations.Add("The spreadsheet workbook adapter must implement the application interface.");
+        }
+
+        if (!HasConstructorParameter(workbookReaderAdapterType, externalReaderType))
+        {
+            violations.Add("The spreadsheet workbook adapter must call the external Excel reader.");
+        }
+
+        // Then
+        Assert.Empty(violations);
+    }
+
     [Fact]
     public void Given_ApplicationServices_When_ValidateApplicationServiceDependencies_Then_ControllersAreForbidden()
     {

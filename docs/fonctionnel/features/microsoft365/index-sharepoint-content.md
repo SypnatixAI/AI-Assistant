@@ -818,6 +818,13 @@ Pour Excel, conserver les noms des feuilles et transformer les cellules utiles
 en texte structuré. Les formules peuvent être indexées avec leur dernière
 valeur enregistrée. Le worker ne doit pas recalculer un classeur.
 
+L’indexation textuelle sert à retrouver un classeur ou une information
+ponctuelle. Lorsqu’une question exige un agrégat ou un filtre sur toutes les
+lignes, l’outil `AnalyzeSpreadsheet` télécharge le classeur autorisé et utilise
+un analyseur déterministe. Le fichier est localisé grâce à son entrée indexée,
+mais les calculs ne dépendent pas du nombre de passages retournés par la
+recherche sémantique et n’envoient pas le fichier complet au modèle.
+
 Pour PowerPoint, conserver le numéro de diapositive, le titre, le texte et les
 notes lorsque celles-ci sont disponibles.
 

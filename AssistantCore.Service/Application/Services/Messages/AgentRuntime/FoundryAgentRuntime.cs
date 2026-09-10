@@ -70,19 +70,15 @@ public sealed class FoundryAgentRuntime(
             request.Processing.OrganizationId,
             cancellationToken);
 
-        var enterpriseSearch = availableTools.SingleOrDefault(tool =>
-            string.Equals(tool.Name, AiToolNames.SearchMicrosoft365, StringComparison.Ordinal));
-
-        var authorizedTools = enterpriseSearch is not null
-            && CanUseEnterpriseSearch(request.ExecutionContext)
-                ? new[]
-                {
-                    new FoundryAgentToolDefinition(
-                        "EnterpriseSearch",
-                        "Search authorized internal enterprise information when the answer depends on organization-specific data.",
-                        enterpriseSearch.InputSchema)
-                }
-                : [];
+        var authorizedToolMappings = CanUseMicrosoft365Tools(request.ExecutionContext)
+            ? CreateAuthorizedToolMappings(availableTools)
+            : new Dictionary<string, AiToolDefinition>(StringComparer.Ordinal);
+        var authorizedTools = authorizedToolMappings
+            .Select(mapping => new FoundryAgentToolDefinition(
+                mapping.Key,
+                GetFoundryToolDescription(mapping.Key),
+                mapping.Value.InputSchema))
+            .ToArray();
 
         var executedResults = new List<ToolExecutionResult>();
         var executedResultsLock = new object();
@@ -92,8 +88,7 @@ public sealed class FoundryAgentRuntime(
             FoundryAgentToolCall toolCall,
             CancellationToken token)
         {
-            if (enterpriseSearch is null
-                || !string.Equals(toolCall.Name, "EnterpriseSearch", StringComparison.Ordinal))
+            if (!authorizedToolMappings.TryGetValue(toolCall.Name, out var internalTool))
             {
                 throw new InvalidOperationException($"Foundry requested an unauthorized tool '{toolCall.Name}'.");
             }
@@ -105,11 +100,11 @@ public sealed class FoundryAgentRuntime(
 
             var requestedCall = new AiRequestedToolCall(
                 $"foundry-{Guid.NewGuid():N}",
-                enterpriseSearch.Name,
+                internalTool.Name,
                 toolCall.Arguments);
             var validatedCall = await toolCallValidator.ValidateAsync(
                 requestedCall,
-                [enterpriseSearch],
+                [internalTool],
                 token);
             var result = await toolExecutionRouter.ExecuteAsync(
                 validatedCall,
@@ -156,7 +151,37 @@ public sealed class FoundryAgentRuntime(
             ConversationHistory = request.Processing.ConversationHistory
         };
 
-    private static bool CanUseEnterpriseSearch(ConnectorExecutionContext context) =>
+    private static IReadOnlyDictionary<string, AiToolDefinition> CreateAuthorizedToolMappings(
+        IReadOnlyCollection<AiToolDefinition> availableTools)
+    {
+        var mappings = new Dictionary<string, AiToolDefinition>(StringComparer.Ordinal);
+        foreach (var tool in availableTools)
+        {
+            var foundryName = tool.Name switch
+            {
+                AiToolNames.SearchMicrosoft365 => "EnterpriseSearch",
+                AiToolNames.AnalyzeMicrosoft365Spreadsheet => "AnalyzeSpreadsheet",
+                _ => null
+            };
+            if (foundryName is not null)
+            {
+                mappings.Add(foundryName, tool);
+            }
+        }
+
+        return mappings;
+    }
+
+    private static string GetFoundryToolDescription(string toolName) => toolName switch
+    {
+        "EnterpriseSearch" =>
+            "Search authorized internal enterprise information when the answer depends on organization-specific data.",
+        "AnalyzeSpreadsheet" =>
+            "Use deterministic calculations over every row of an authorized Microsoft 365 XLSX or XLSM file. Use this for averages, sums, minima, maxima, counts and exhaustive row filtering; do not use semantic search for those operations.",
+        _ => throw new ArgumentOutOfRangeException(nameof(toolName), toolName, null)
+    };
+
+    private static bool CanUseMicrosoft365Tools(ConnectorExecutionContext context) =>
         context.OrganizationId != Guid.Empty
         && context.MemberId != Guid.Empty
         && context.IdentityProvider == IdentityProvider.MicrosoftEntraId

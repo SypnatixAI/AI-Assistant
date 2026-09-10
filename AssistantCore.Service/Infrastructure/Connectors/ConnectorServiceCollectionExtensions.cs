@@ -3,6 +3,7 @@ using AssistantCore.Service.Application.Services.Messages.Connectors;
 using AssistantCore.Service.Application.Services.Messages.Connectors.Microsoft365;
 using AssistantCore.Service.Application.Services.Messages.Evidence;
 using AssistantCore.Service.Application.Services.Messages.Tools;
+using AssistantCore.Service.Application.Services.Messages.Tabular;
 using AssistantCore.Service.Infrastructure.Connectors.Microsoft365;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -26,7 +27,9 @@ public static class ConnectorServiceCollectionExtensions
         services.AddScoped<IMicrosoft365SearchAccessVerifier, Microsoft365SearchAccessVerifierAdapter>();
         services.AddScoped<IAgenticRetrievalClient, AgenticRetrievalClientAdapter>();
         services.AddScoped<IMicrosoft365Connector, Microsoft365Connector>();
+        services.AddScoped<IMicrosoft365SpreadsheetDocumentResolver, Microsoft365SpreadsheetDocumentResolver>();
         services.AddScoped<IAiToolExecutionHandler, Microsoft365SearchToolExecutionHandler>();
+        services.AddScoped<IAiToolExecutionHandler, Microsoft365SpreadsheetAnalysisToolExecutionHandler>();
 
         return services;
     }

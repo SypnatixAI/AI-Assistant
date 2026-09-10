@@ -11,4 +11,8 @@ public static class ToolExecutionErrorCodes
     public const string EnterpriseSearchUnavailable = "ENTERPRISE_SEARCH_UNAVAILABLE";
 
     public const string EnterpriseSearchTimeout = "ENTERPRISE_SEARCH_TIMEOUT";
+
+    public const string SpreadsheetAnalysisFailed = "SPREADSHEET_ANALYSIS_FAILED";
+
+    public const string SpreadsheetAnalysisTimeout = "SPREADSHEET_ANALYSIS_TIMEOUT";
 }

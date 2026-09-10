@@ -1,5 +1,6 @@
 using AssistantCore.ExternalServices.Services.Microsoft;
 using AssistantCore.Service.Application.Configuration;
+using AssistantCore.Service.Application.Exceptions;
 using AssistantCore.Service.Application.Services.Microsoft365;
 using Microsoft.Extensions.Options;
 
@@ -16,19 +17,28 @@ public sealed class Microsoft365DriveContentClientAdapter(
         string driveItemId,
         CancellationToken cancellationToken = default)
     {
-        var configuration = options.Value;
-        var token = await identityClient.AcquireApplicationTokenAsync(
-            configuration.AuthorityBaseUrl,
-            tenantId,
-            configuration.ClientId,
-            configuration.ClientSecret,
-            cancellationToken);
-        return await graphClient.DownloadAsync(
-            configuration.GraphBaseUrl,
-            token.AccessToken,
-            driveId,
-            driveItemId,
-            configuration.MaximumExtractionFileSizeBytes,
-            cancellationToken);
+        try
+        {
+            var configuration = options.Value;
+            var token = await identityClient.AcquireApplicationTokenAsync(
+                configuration.AuthorityBaseUrl,
+                tenantId,
+                configuration.ClientId,
+                configuration.ClientSecret,
+                cancellationToken);
+            return await graphClient.DownloadAsync(
+                configuration.GraphBaseUrl,
+                token.AccessToken,
+                driveId,
+                driveItemId,
+                configuration.MaximumExtractionFileSizeBytes,
+                cancellationToken);
+        }
+        catch (MicrosoftExternalException exception)
+        {
+            throw new Microsoft365ExternalException(
+                "Microsoft 365 document content could not be downloaded.",
+                exception);
+        }
     }
 }

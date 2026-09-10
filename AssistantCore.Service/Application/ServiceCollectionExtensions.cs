@@ -10,6 +10,7 @@ using AssistantCore.Service.Application.Services.Messages.Authorization;
 using AssistantCore.Service.Application.Services.Messages.Lifecycle;
 using AssistantCore.Service.Application.Services.Messages.Responses;
 using AssistantCore.Service.Application.Services.Messages.Streaming;
+using AssistantCore.Service.Application.Services.Messages.Tabular;
 using AssistantCore.Service.Application.Services.Messages.Tools;
 using AssistantCore.Service.Application.Services.Messages.Validation;
 using AssistantCore.Service.Application.Services.Microsoft365;
@@ -104,6 +105,8 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IAiToolArgumentSecurityValidator, AiToolArgumentSecurityValidator>();
         services.AddScoped<IAiToolDateRangeValidator, AiToolDateRangeValidator>();
         services.AddScoped<IAiToolCallValidator, AiToolCallValidator>();
+        services.AddScoped<IMicrosoft365SpreadsheetAnalysisService, Microsoft365SpreadsheetAnalysisService>();
+        services.AddSingleton<ISpreadsheetAnalysisEngine, SpreadsheetAnalysisEngine>();
 
         return services;
     }

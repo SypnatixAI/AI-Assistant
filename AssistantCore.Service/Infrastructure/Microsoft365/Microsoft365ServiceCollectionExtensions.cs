@@ -4,6 +4,7 @@ using AssistantCore.ExternalServices.Services.OpenAI;
 using AssistantCore.Service.Application.Configuration;
 using AssistantCore.Service.Application.Services.Microsoft365;
 using AssistantCore.Service.Application.Services.Messages.Connectors.Microsoft365;
+using AssistantCore.Service.Application.Services.Messages.Tabular;
 using Microsoft.Extensions.Options;
 using System.Text.RegularExpressions;
 
@@ -104,6 +105,7 @@ public static class Microsoft365ServiceCollectionExtensions
         AddProtectedHttpClient<MicrosoftSharePointListItemPermissionClient>(services);
         services.AddSingleton<MicrosoftWordContentExtractorClient>();
         services.AddSingleton<MicrosoftExcelContentExtractorClient>();
+        services.AddSingleton<MicrosoftExcelTableReaderClient>();
         services.AddSingleton<MicrosoftPdfContentExtractorClient>();
         services.AddSingleton<MicrosoftCertificateIdentityClient>();
         AddProtectedHttpClient<MicrosoftSharePointUserGroupClient>(services);
@@ -121,6 +123,7 @@ public static class Microsoft365ServiceCollectionExtensions
         services.AddScoped<IMicrosoft365ListItemDeltaClient, Microsoft365ListItemDeltaClientAdapter>();
         services.AddScoped<IMicrosoft365DriveItemDeltaClient, Microsoft365DriveItemDeltaClientAdapter>();
         services.AddScoped<IMicrosoft365DriveContentClient, Microsoft365DriveContentClientAdapter>();
+        services.AddScoped<ISpreadsheetWorkbookReader, SpreadsheetWorkbookReaderAdapter>();
         services.AddScoped<IMicrosoft365ListSchemaClient, Microsoft365ListSchemaClientAdapter>();
         services.AddScoped<IMicrosoft365SiteSourcesClient, Microsoft365SiteSourcesClientAdapter>();
         services.AddScoped<IMicrosoft365SiteClient, Microsoft365SiteClientAdapter>();

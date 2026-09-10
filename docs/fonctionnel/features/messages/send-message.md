@@ -7,6 +7,7 @@
 - [Flow détaillé](#flow)
 - [Répartition des responsabilités](#responsabilites)
 - [Recherche Microsoft 365](#recherche-m365)
+- [Analyse des classeurs Excel](#analyse-classeurs)
 - [Sécurité](#securite)
 - [Persistance et historique](#persistance)
 - [Réponse progressive](#streaming)
@@ -66,10 +67,10 @@ l’identifiant retourné par Foundry et n’est jamais accepté dans la requêt
 4. Pour une conversation existante, le repository charge au maximum les 20
    derniers messages, puis les remet dans l’ordre chronologique.
 5. `FoundryAgentRuntime` obtient les outils autorisés pour l’organisation. Il
-   expose uniquement `EnterpriseSearch` lorsque l’identité Microsoft du membre
-   est complète.
-6. Le client Foundry envoie l’historique, la question et la définition de cet
-   outil à la version configurée de l’agent.
+   expose `EnterpriseSearch` et `AnalyzeSpreadsheet` lorsque l’identité
+   Microsoft du membre est complète.
+6. Le client Foundry envoie l’historique, la question et la définition de ces
+   outils à la version configurée de l’agent.
 7. Si Foundry appelle `EnterpriseSearch`, le backend valide l’appel et le route
    vers le connecteur Microsoft 365. Foundry ne reçoit jamais de credential ni
    la possibilité de construire lui-même un filtre d’autorisation.
@@ -78,8 +79,11 @@ l’identifiant retourné par Foundry et n’est jamais accepté dans la requêt
 9. Le backend applique encore le seuil de pertinence, une vérification ACL après
    recherche, la normalisation et la limite finale de sources avant de remettre
    les preuves à Foundry.
-10. Foundry peut poursuivre ses appels d’outil, puis produit la réponse finale.
-11. Le backend enregistre atomiquement la réponse, l’identifiant de l’agent,
+10. Pour une analyse tabulaire, le backend localise le classeur indexé, revérifie
+    ses permissions, le télécharge depuis Microsoft Graph et exécute les calculs
+    et filtres sur toutes ses lignes sans transmettre le classeur au modèle.
+11. Foundry peut poursuivre ses appels d’outil, puis produit la réponse finale.
+12. Le backend enregistre atomiquement la réponse, l’identifiant de l’agent,
     l’usage et les sources collectées, marque la question `Completed` et libère
     la place d’exécution.
 
@@ -99,6 +103,7 @@ d’échec exploitable.
 | Agent Foundry | Choisir le modèle, planifier les appels d’outil et rédiger la réponse |
 | Connecteur Microsoft 365 | Construire le filtre sécurisé et contrôler les preuves |
 | Azure AI Search Knowledge Base | Décomposer la recherche et retourner les passages candidats |
+| Analyseur de classeur | Lire les feuilles et exécuter les agrégats et filtres déterministes sur toutes les lignes |
 | Repository | Isoler et persister conversations, messages, sources et usage |
 
 L’ancien orchestrateur local, la sélection de modèle côté client, l’expansion de
@@ -133,6 +138,39 @@ peuvent jamais être omis ou modifiés et conserver la vérification après
 recherche. Tant que ce contrat sécurisé n’est pas démontré, `EnterpriseSearch`
 reste la façade contrôlée par le backend.
 
+<a id="analyse-classeurs"></a>
+## Analyse des classeurs Excel
+
+`AnalyzeSpreadsheet` complète la recherche sémantique pour les questions qui
+exigent un calcul global ou un filtrage exhaustif. Foundry doit utiliser cet
+outil pour les moyennes, sommes, minima, maxima, comptes et comparaisons portant
+sur l’ensemble d’un fichier XLSX ou XLSM.
+
+Le modèle fournit uniquement des paramètres fonctionnels : nom du fichier, nom
+de la feuille, agrégats, filtres et colonnes à retourner. Il ne fournit jamais
+de tenant, d’identifiant Graph, de filtre ACL ou de requête SQL. Le backend :
+
+1. résout les groupes Entra et SharePoint du membre;
+2. localise le document parmi les contenus indexés autorisés;
+3. revérifie ses permissions Microsoft 365 actuelles;
+4. télécharge le fichier avec la limite de taille configurée;
+5. lit toutes les lignes de la feuille dans les limites de cellules et de
+   feuilles configurées;
+6. calcule les agrégats avant d’appliquer les filtres;
+7. retourne le nombre exact de correspondances et au plus 200 lignes ou 40 000
+   caractères de résultat à Foundry.
+
+Les filtres sont combinés avec `AND`. Un filtre peut comparer une cellule à une
+valeur littérale ou au résultat d’un agrégat nommé. Par exemple, le backend peut
+calculer la moyenne de `Transaction Amount` sur toutes les lignes, puis conserver
+les lignes dont ce montant est supérieur à cette moyenne et qui satisfont les
+autres seuils numériques.
+
+Avant l’opération, Foundry ne possède que le nom fonctionnel du fichier. Après
+l’opération, il reçoit un résultat JSON borné avec les agrégats, le nombre total
+de lignes, le nombre exact de correspondances et les lignes retenues. Il ne
+reçoit ni le fichier brut ni les lignes qui ne correspondent pas.
+
 <a id="securite"></a>
 ## Sécurité
 
@@ -145,6 +183,9 @@ reste la façade contrôlée par le backend.
   aucun chemin moins sécurisé n’est utilisé en repli.
 - Les documents sont revérifiés après la recherche avant d’être envoyés à
   Foundry.
+- Un classeur est également revérifié avant son téléchargement; une permission
+  retirée bloque l’analyse même si ses passages sont encore présents dans
+  l’index.
 
 <a id="persistance"></a>
 ## Persistance et historique
@@ -177,6 +218,12 @@ règles de sécurité et de persistance.
 - Les autres connecteurs futurs devront être exposés un par un avec la même
   validation backend; Foundry ne reçoit pas automatiquement toutes les
   intégrations disponibles.
+- L’analyse tabulaire prend en charge XLSX et XLSM. Les feuilles masquées sont
+  ignorées, les formules utilisent leur dernière valeur enregistrée et le
+  backend ne recalcule pas le classeur.
+- Au-delà de 200 correspondances ou 40 000 caractères de résultat, le compte
+  reste exact mais seule la première partie des lignes est remise au modèle afin
+  de borner les jetons.
 
 <a id="references"></a>
 ## Références
