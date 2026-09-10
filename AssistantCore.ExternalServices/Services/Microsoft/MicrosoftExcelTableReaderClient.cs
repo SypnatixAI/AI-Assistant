@@ -82,7 +82,11 @@ public sealed class MicrosoftExcelTableReaderClient
                 state,
                 new HashSet<MicrosoftExcelExtractionWarning>(),
                 cancellationToken);
-            var table = CreateTable((string?)sheet.Attribute("name") ?? string.Empty, sourceRows);
+            var table = CreateTable(
+                (string?)sheet.Attribute("name") ?? string.Empty,
+                sourceRows,
+                maximumCells,
+                state);
             if (table is not null)
             {
                 worksheets.Add(table);
@@ -96,14 +100,16 @@ public sealed class MicrosoftExcelTableReaderClient
 
     private static MicrosoftExcelTableWorksheet? CreateTable(
         string sheetName,
-        IReadOnlyList<MicrosoftExcelWorksheetRow> rows)
+        IReadOnlyList<MicrosoftExcelWorksheetRow> rows,
+        int maximumCells,
+        MicrosoftExcelExtractionState state)
     {
         var headerIndex = rows
             .Select((row, index) => new { row, index })
             .FirstOrDefault(item => item.row.Cells.Count >= 2)?.index;
         if (headerIndex is null)
         {
-            return null;
+            return CreateCsvTable(sheetName, rows, maximumCells, state);
         }
 
         var headerCells = rows[headerIndex.Value].Cells;
@@ -134,6 +140,72 @@ public sealed class MicrosoftExcelTableReaderClient
         return new MicrosoftExcelTableWorksheet(
             sheetName,
             headers.Values.ToArray(),
+            tableRows);
+    }
+
+    private static MicrosoftExcelTableWorksheet? CreateCsvTable(
+        string sheetName,
+        IReadOnlyList<MicrosoftExcelWorksheetRow> rows,
+        int maximumCells,
+        MicrosoftExcelExtractionState state)
+    {
+        var parsedHeader = rows
+            .Select((row, index) => new
+            {
+                row,
+                index,
+                values = row.Cells.Count == 1
+                    ? MicrosoftCsvRowParser.TryParse(row.Cells[0].Value)
+                    : null
+            })
+            .FirstOrDefault(item => item.values?.Count >= 2);
+        if (parsedHeader?.values is null)
+        {
+            return null;
+        }
+
+        var columns = parsedHeader.values.Select(value => value.Trim()).ToArray();
+        if (columns.Any(string.IsNullOrWhiteSpace)
+            || columns.Distinct(StringComparer.OrdinalIgnoreCase).Count() != columns.Length)
+        {
+            throw new InvalidDataException(
+                $"Worksheet '{sheetName}' contains an empty or duplicate column name.");
+        }
+
+        var parsedRows = new List<IReadOnlyList<string>> { parsedHeader.values };
+        foreach (var row in rows.Skip(parsedHeader.index + 1))
+        {
+            var values = row.Cells.Count == 1
+                ? MicrosoftCsvRowParser.TryParse(row.Cells[0].Value)
+                : null;
+            if (values is null || values.Count != columns.Length)
+            {
+                throw new InvalidDataException(
+                    $"Worksheet '{sheetName}' contains an invalid CSV row.");
+            }
+
+            parsedRows.Add(values);
+        }
+
+        var additionalCellCount = parsedRows.Sum(row => row.Count - 1);
+        if (additionalCellCount > maximumCells - state.CellCount)
+        {
+            throw new InvalidDataException("The workbook exceeds the configured cell limit.");
+        }
+
+        state.CellCount += additionalCellCount;
+        var tableRows = parsedRows
+            .Skip(1)
+            .Select(values => columns
+                .Select((column, index) => new { column, value = values[index] })
+                .ToDictionary(item => item.column, item => item.value, StringComparer.OrdinalIgnoreCase))
+            .Where(row => row.Values.Any(value => !string.IsNullOrWhiteSpace(value)))
+            .Cast<IReadOnlyDictionary<string, string>>()
+            .ToArray();
+
+        return new MicrosoftExcelTableWorksheet(
+            sheetName,
+            columns,
             tableRows);
     }
 

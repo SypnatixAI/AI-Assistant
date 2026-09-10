@@ -80,6 +80,11 @@ public sealed class FoundryAgentRuntime(
                 mapping.Value.InputSchema))
             .ToArray();
 
+        logger.LogInformation(
+            "Foundry turn exposes {ToolCount} authorized tools: {ToolNames}.",
+            authorizedTools.Length,
+            string.Join(", ", authorizedTools.Select(tool => tool.Name)));
+
         var executedResults = new List<ToolExecutionResult>();
         var executedResultsLock = new object();
         var executionContext = CreateToolExecutionContext(request);
@@ -175,9 +180,15 @@ public sealed class FoundryAgentRuntime(
     private static string GetFoundryToolDescription(string toolName) => toolName switch
     {
         "EnterpriseSearch" =>
-            "Search authorized internal enterprise information when the answer depends on organization-specific data.",
+            "Search authorized internal enterprise information when the answer depends on organization-specific data. "
+            + "When an exhaustive spreadsheet calculation is requested without an exact Excel file name, use this tool first "
+            + "to identify the exact XLSX or XLSM title, then call AnalyzeSpreadsheet. Do not infer exhaustive spreadsheet "
+            + "results from search excerpts.",
         "AnalyzeSpreadsheet" =>
-            "Use deterministic calculations over every row of an authorized Microsoft 365 XLSX or XLSM file. Use this for averages, sums, minima, maxima, counts and exhaustive row filtering; do not use semantic search for those operations.",
+            "Use deterministic calculations over every row of an authorized Microsoft 365 XLSX or XLSM file. Always use "
+            + "this tool for averages, sums, minima, maxima, counts and exhaustive row filtering; do not use semantic search "
+            + "for those operations. If the exact file name is unknown, call EnterpriseSearch first to identify it, then call "
+            + "this tool with that exact file name.",
         _ => throw new ArgumentOutOfRangeException(nameof(toolName), toolName, null)
     };
 

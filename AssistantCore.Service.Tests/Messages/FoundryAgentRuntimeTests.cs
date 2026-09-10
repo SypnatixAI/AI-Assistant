@@ -135,6 +135,10 @@ public sealed class FoundryAgentRuntimeTests
         Assert.Equal(
             ["AnalyzeSpreadsheet", "EnterpriseSearch"],
             tools.Select(tool => tool.Name).OrderBy(name => name, StringComparer.Ordinal));
+        var enterpriseSearch = tools.Single(tool => tool.Name == "EnterpriseSearch");
+        var spreadsheetAnalysis = tools.Single(tool => tool.Name == "AnalyzeSpreadsheet");
+        Assert.Contains("then call AnalyzeSpreadsheet", enterpriseSearch.Description, StringComparison.Ordinal);
+        Assert.Contains("call EnterpriseSearch first", spreadsheetAnalysis.Description, StringComparison.Ordinal);
     }
 
     [Theory, AutoDomainData]
