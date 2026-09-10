@@ -140,7 +140,8 @@ public sealed class FoundryAgentRuntime(
         var clientRequest = new FoundryAgentClientRequest(
             request.Processing.ConversationHistory,
             request.Processing.UserMessage,
-            authorizedTools);
+            authorizedTools,
+            request.Processing.ConversationId);
 
         return new RuntimeExecutionContext(
             clientRequest,
