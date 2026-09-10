@@ -31,6 +31,54 @@ public interface IConversationRepository
         Guid conversationId,
         CancellationToken cancellationToken = default);
 
+    async Task<(Conversation Conversation, IReadOnlyList<ConversationMessageItem> History)?>
+        StartExistingConversationMessageAsync(
+            Guid organizationId,
+            Guid ownerMemberId,
+            Guid conversationId,
+            Message userMessage,
+            CancellationToken cancellationToken = default)
+    {
+        var conversation = await FindConversationAsync(
+            organizationId,
+            ownerMemberId,
+            conversationId,
+            cancellationToken);
+        if (conversation is null || conversation.Status == ConversationStatus.Archived)
+        {
+            return conversation is null
+                ? null
+                : (conversation, Array.Empty<ConversationMessageItem>());
+        }
+
+        var history = await GetConversationHistoryAsync(
+            organizationId,
+            ownerMemberId,
+            conversationId,
+            cancellationToken);
+        var addedMessage = await AddUserMessageAsync(
+            organizationId,
+            ownerMemberId,
+            conversationId,
+            userMessage,
+            cancellationToken);
+        if (addedMessage is null)
+        {
+            return null;
+        }
+
+        var updated = await UpdateMessageProcessingStatusAsync(
+            organizationId,
+            ownerMemberId,
+            conversationId,
+            userMessage.Id,
+            MessageProcessingStatus.InProgress,
+            userMessage.UpdatedAt,
+            cancellationToken);
+
+        return updated ? (conversation, history) : null;
+    }
+
     /// <summary>
     /// Retourne une page de resumes de conversations visibles portant le statut
     /// demande, triees par UpdatedAt puis Id decroissants. Une conversation
@@ -74,12 +122,6 @@ public interface IConversationRepository
         DateTimeOffset completedAt,
         CancellationToken cancellationToken = default);
 
-    /// <summary>
-    /// Applique un renommage ou un changement de statut sur une conversation visible.
-    /// Lorsque <paramref name="expectedVersion"/> est fourni, la mise a jour n'est appliquee
-    /// que s'il correspond encore a la version persistee, ce qui protege contre une
-    /// modification concurrente. Un appel sans version attendue ne verifie rien.
-    /// </summary>
     Task<ConversationUpdateResult> UpdateConversationAsync(
         Guid organizationId,
         Guid ownerMemberId,
@@ -91,11 +133,6 @@ public interface IConversationRepository
         string correlationId,
         CancellationToken cancellationToken = default);
 
-    /// <summary>
-    /// Marque une conversation comme supprimee et enregistre une demande de purge unique.
-    /// L'operation est idempotente : repeter la suppression ne cree pas un second travail
-    /// de purge et ne revele pas l'existence passee de la conversation.
-    /// </summary>
     Task<ConversationDeleteStatus> SoftDeleteConversationAsync(
         Guid organizationId,
         Guid ownerMemberId,

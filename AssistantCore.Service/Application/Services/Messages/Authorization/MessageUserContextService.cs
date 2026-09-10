@@ -1,4 +1,5 @@
 using AssistantCore.Repository.Abstractions;
+using AssistantCore.Repository.Domain.Entities;
 using AssistantCore.Repository.Domain.Enums;
 using AssistantCore.Repository.Queries;
 using AssistantCore.Service.Application.Abstractions;
@@ -22,22 +23,44 @@ public sealed class MessageUserContextService(
         CancellationToken cancellationToken)
     {
         var identity = currentIdentity.GetIdentity();
-        //Todo: Regarder si on peut éviter de faire 2 requêtes pour récupérer l'organisation et le membre. On pourrait peut-être faire un seul query qui retourne les deux.
-        var organization = await organizationQueries.FindOrganization(
+        var resolved = await memberQueries.FindMemberWithOrganization(
             identity.Provider,
             identity.ExternalOrganizationId,
+            identity.ExternalUserId,
             cancellationToken);
 
-        if (organization is null || organization.Status != RecordStatus.Active)
+        Organization? organization;
+        OrganizationMember? member;
+        if (resolved is not null)
+        {
+            organization = resolved.Organization;
+            member = resolved.Member;
+        }
+        else
+        {
+            // Compatibility fallback for alternate query implementations and tests.
+            // The production repository resolves both entities with one SQL query.
+            organization = await organizationQueries.FindOrganization(
+                identity.Provider,
+                identity.ExternalOrganizationId,
+                cancellationToken);
+
+            if (organization is null || organization.Status != RecordStatus.Active)
+            {
+                throw new ForbiddenException("Organization access denied.");
+            }
+
+            member = await memberQueries.FindMember(
+                organization.Id,
+                identity.Provider,
+                identity.ExternalUserId,
+                cancellationToken);
+        }
+
+        if (organization.Status != RecordStatus.Active)
         {
             throw new ForbiddenException("Organization access denied.");
         }
-
-        var member = await memberQueries.FindMember(
-            organization.Id,
-            identity.Provider,
-            identity.ExternalUserId,
-            cancellationToken);
 
         if (member is null || member.Status != RecordStatus.Active)
         {

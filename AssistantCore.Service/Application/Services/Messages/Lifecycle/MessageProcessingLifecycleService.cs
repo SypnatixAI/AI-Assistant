@@ -66,18 +66,16 @@ public sealed class MessageProcessingLifecycleService(
             CreatedConversation = conversationId is null ? MapSummary(conversation) : null
         };
 
-        await MarkAsInProgressAsync(processing, cancellationToken);
+        // Existing conversations are persisted directly as InProgress by the optimized
+        // repository operation. New conversations keep the legacy two-step lifecycle.
+        if (conversationId is null)
+        {
+            await MarkAsInProgressAsync(processing, cancellationToken);
+        }
 
         return processing;
     }
 
-    /// <summary>
-    /// Projette la conversation vers le resume que la liste retourne, afin qu'un
-    /// client puisse l'inserer directement sans convertir une forme parallele.
-    /// L'apercu reste null : au moment ou la conversation est creee, la reponse de
-    /// l'Assistant n'existe pas encore et deviendra le dernier message quelques
-    /// instants plus tard.
-    /// </summary>
     private static ConversationSummaryResponse MapSummary(Conversation conversation) =>
         new(
             conversation.Id,
@@ -110,48 +108,30 @@ public sealed class MessageProcessingLifecycleService(
 
     private async Task<(Conversation Conversation, IReadOnlyCollection<AiConversationMessage> History)>
         AddMessageToExistingConversationAsync(
-        Guid conversationId,
-        Organization organization,
-        OrganizationMember member,
-        Message userMessage,
-        CancellationToken cancellationToken)
+            Guid conversationId,
+            Organization organization,
+            OrganizationMember member,
+            Message userMessage,
+            CancellationToken cancellationToken)
     {
-        var conversation = await conversationRepository.FindConversationAsync(
+        var started = await conversationRepository.StartExistingConversationMessageAsync(
             organization.Id,
             member.Id,
             conversationId,
+            userMessage,
             cancellationToken)
             ?? throw CreateConversationNotFoundException();
 
-        if (conversation.Status == ConversationStatus.Archived)
+        if (started.Conversation.Status == ConversationStatus.Archived)
         {
             throw new ConflictException(
                 "The conversation is archived and cannot receive new messages.",
                 ConflictException.ConversationArchived);
         }
 
-        var history = await conversationRepository.GetConversationHistoryAsync(
-            organization.Id,
-            member.Id,
-            conversationId,
-            cancellationToken);
-
-        userMessage.ConversationId = conversation.Id;
-        var addedMessage = await conversationRepository.AddUserMessageAsync(
-            organization.Id,
-            member.Id,
-            conversation.Id,
-            userMessage,
-            cancellationToken);
-
-        if (addedMessage is null)
-        {
-            throw CreateConversationNotFoundException();
-        }
-
         return (
-            conversation,
-            history
+            started.Conversation,
+            started.History
                 .Select(message => new AiConversationMessage(
                     message.Role == MessageRole.User
                         ? AiConversationRole.User
@@ -328,8 +308,6 @@ public sealed class MessageProcessingLifecycleService(
         Organization organization,
         OrganizationMember member)
     {
-        //Todo: cette vérification est redondante avec la vérification effectuée dans MessageUserContextService. On pourrait peut-être supprimer cette vérification ici et s'assurer que le membre appartient à l'organisation avant d'appeler StartAsync.
-        //surtout que si la verification dans MessageUserContextService est faite en seule query, alors si le membre n'appartient pas à l'organisation, on ne pourra pas récupérer l'organisation et le membre en même temps.
         if (member.OrganizationId != organization.Id)
         {
             throw new ArgumentException(

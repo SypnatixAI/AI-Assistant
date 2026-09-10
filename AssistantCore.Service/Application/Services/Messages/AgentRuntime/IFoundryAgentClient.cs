@@ -24,7 +24,9 @@ public delegate Task<string> FoundryAgentToolExecutor(
 public sealed record FoundryAgentClientRequest(
     IReadOnlyCollection<AiConversationMessage> ConversationHistory,
     string UserMessage,
-    IReadOnlyCollection<FoundryAgentToolDefinition> Tools);
+    IReadOnlyCollection<FoundryAgentToolDefinition> Tools,
+    // Stable application conversation identity used to reuse its Foundry session.
+    Guid ConversationId = default);
 
 public sealed record FoundryAgentToolDefinition(
     string Name,
