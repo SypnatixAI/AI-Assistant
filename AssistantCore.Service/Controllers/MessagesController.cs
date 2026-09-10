@@ -2,6 +2,7 @@ using AssistantCore.Service.Application.Abstractions;
 using AssistantCore.Service.Application.Commands.SendMessage;
 using AssistantCore.Service.Application.Commands.SendMessage.Models;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.Mvc;
 using Swashbuckle.AspNetCore.Annotations;
 using System.Text.Json;
@@ -51,9 +52,16 @@ public sealed class MessagesController(IDispatcher dispatcher) : ControllerBase
         [FromBody] SendMessageRequest request,
         CancellationToken cancellationToken)
     {
-        Response.ContentType = "text/event-stream";
-        Response.Headers.CacheControl = "no-cache";
+        HttpContext.Features.Get<IHttpResponseBodyFeature>()?.DisableBuffering();
+        Response.ContentType = "text/event-stream; charset=utf-8";
+        Response.Headers.CacheControl = "no-cache, no-transform";
         Response.Headers.Append("X-Accel-Buffering", "no");
+
+        // Commit the SSE response before starting the potentially long-running
+        // agent turn so browsers and intermediaries can begin consuming the body.
+        await Response.StartAsync(cancellationToken);
+        await Response.WriteAsync(": connected\n\n", cancellationToken);
+        await Response.Body.FlushAsync(cancellationToken);
 
         var events = await dispatcher.SendAsync(
             new SendMessageStreamCommand(
