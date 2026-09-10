@@ -3,11 +3,22 @@ using AssistantCore.Repository.Domain.Entities;
 
 namespace AssistantCore.Repository.Queries;
 
+public sealed record OrganizationMemberWithOrganization(
+    Organization Organization,
+    OrganizationMember Member);
+
 public interface IOrganizationMemberQueries
 {
     Task<IReadOnlyCollection<OrganizationMember>> GetMembers(
         Guid organizationId,
         CancellationToken cancellationToken = default);
+
+    Task<OrganizationMemberWithOrganization?> FindMemberWithOrganization(
+        IdentityProvider identityProvider,
+        string externalOrganizationId,
+        string externalUserId,
+        CancellationToken cancellationToken = default) =>
+        Task.FromResult<OrganizationMemberWithOrganization?>(null);
 
     Task<OrganizationMember?> FindMember(
         Guid organizationId,
