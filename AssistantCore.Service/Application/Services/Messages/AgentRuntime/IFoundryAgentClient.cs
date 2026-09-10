@@ -25,6 +25,7 @@ public sealed record FoundryAgentClientRequest(
     IReadOnlyCollection<AiConversationMessage> ConversationHistory,
     string UserMessage,
     IReadOnlyCollection<FoundryAgentToolDefinition> Tools,
+    // Stable application conversation identity used to reuse the Foundry session.
     Guid ConversationId = default);
 
 public sealed record FoundryAgentToolDefinition(
