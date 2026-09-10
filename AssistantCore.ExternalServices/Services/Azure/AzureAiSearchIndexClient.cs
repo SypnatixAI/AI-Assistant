@@ -37,7 +37,10 @@ public sealed class AzureAiSearchIndexClient
         string vectorMetric = "cosine",
         string? knowledgeSourceName = null,
         string? knowledgeBaseName = null,
-        string retrievalReasoningEffort = "minimal")
+        string retrievalReasoningEffort = "minimal",
+        string vectorizerName = "m365-azure-openai-vectorizer",
+        AzureOpenAiModelConfiguration? vectorizerModel = null,
+        AzureOpenAiModelConfiguration? planningModel = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(semanticConfigurationName);
         if (vectorMetric != "cosine") throw new ArgumentException("The configured embedding strategy requires cosine.", nameof(vectorMetric));
@@ -84,7 +87,32 @@ public sealed class AzureAiSearchIndexClient
                 vectorSearch = new
                 {
                     algorithms = new[] { new { name = "m365-hnsw", kind = "hnsw", hnswParameters = new { metric = vectorMetric } } },
-                    profiles = new[] { new { name = "m365-vector-profile", algorithm = "m365-hnsw" } }
+                    profiles = new[]
+                    {
+                        new
+                        {
+                            name = "m365-vector-profile",
+                            algorithm = "m365-hnsw",
+                            vectorizer = vectorizerModel is null ? null : vectorizerName
+                        }
+                    },
+                    vectorizers = vectorizerModel is null
+                        ? null
+                        : new[]
+                        {
+                            new
+                            {
+                                name = vectorizerName,
+                                kind = "azureOpenAI",
+                                azureOpenAIParameters = new
+                                {
+                                    resourceUri = vectorizerModel.ResourceUri,
+                                    deploymentId = vectorizerModel.DeploymentId,
+                                    modelName = vectorizerModel.ModelName,
+                                    apiKey = vectorizerModel.ApiKey
+                                }
+                            }
+                        }
                 },
                 semantic = new
                 {
@@ -127,6 +155,7 @@ public sealed class AzureAiSearchIndexClient
                 knowledgeSourceName,
                 knowledgeBaseName,
                 retrievalReasoningEffort,
+                planningModel,
                 cancellationToken);
         }
     }
@@ -189,6 +218,7 @@ public sealed class AzureAiSearchIndexClient
         string knowledgeSourceName,
         string knowledgeBaseName,
         string retrievalReasoningEffort,
+        AzureOpenAiModelConfiguration? planningModel,
         CancellationToken cancellationToken)
     {
         using var request = new HttpRequestMessage(
@@ -213,6 +243,22 @@ public sealed class AzureAiSearchIndexClient
                 {
                     kind = retrievalReasoningEffort
                 },
+                models = planningModel is null
+                    ? null
+                    : new[]
+                    {
+                        new
+                        {
+                            kind = "azureOpenAI",
+                            azureOpenAIParameters = new
+                            {
+                                resourceUri = planningModel.ResourceUri,
+                                deploymentId = planningModel.DeploymentId,
+                                modelName = planningModel.ModelName,
+                                apiKey = planningModel.ApiKey
+                            }
+                        }
+                    },
                 encryptionKey = (object?)null
             })
         };

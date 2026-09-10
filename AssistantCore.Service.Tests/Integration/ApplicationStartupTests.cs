@@ -44,7 +44,7 @@ public sealed class ApplicationStartupTests
             StringComparison.Ordinal);
     }
 
-    [Theory, InlineAutoDomainData("low")]
+    [Theory, InlineAutoDomainData("medium")]
     public void Given_UnsupportedKnowledgeBaseReasoning_When_CreateClient_Then_StartupFails(
         string reasoningEffort)
     {
@@ -67,7 +67,37 @@ public sealed class ApplicationStartupTests
         var exception = Assert.Throws<OptionsValidationException>(() => factory.CreateClient());
 
         // Then
-        Assert.Contains("minimal retrieval reasoning", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("minimal or low retrieval reasoning", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Theory, InlineAutoDomainData("low")]
+    public void Given_LowKnowledgeBaseReasoningWithPlanningModel_When_CreateClient_Then_StartupSucceeds(
+        string reasoningEffort)
+    {
+        // Given
+        using var factory = new WebApplicationFactory<Program>()
+            .WithWebHostBuilder(builder =>
+            {
+                builder.UseEnvironment(Environments.Development);
+                builder.ConfigureAppConfiguration(configuration =>
+                    configuration.AddIntegrationTestDefaults().AddInMemoryCollection(
+                        new Dictionary<string, string?>
+                        {
+                            ["AzureSearch:KnowledgeBaseRetrievalReasoningEffort"] = reasoningEffort,
+                            ["AzureSearch:PlanningModelEndpoint"] = "https://planning.openai.azure.com",
+                            ["AzureSearch:PlanningModelDeploymentName"] = "gpt-5-mini",
+                            ["AzureSearch:PlanningModelName"] = "gpt-5-mini",
+                            ["AzureSearch:PlanningModelApiKey"] = "integration-test-key",
+                            ["Microsoft365:ClientSecret"] = "integration-test-secret",
+                            ["Microsoft365:ClientStateHmacKey"] = "integration-test-client-state-hmac-key"
+                        }));
+            });
+
+        // When
+        using var client = factory.CreateClient();
+
+        // Then
+        Assert.NotNull(client);
     }
 
     [Theory]

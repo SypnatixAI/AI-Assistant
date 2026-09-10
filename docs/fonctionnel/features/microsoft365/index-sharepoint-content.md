@@ -1563,7 +1563,8 @@ Le worker lui transmet seulement :
 - le titre utile;
 - le texte du passage.
 
-La configuration indique :
+En certification, les embeddings sont produits par le déploiement Azure OpenAI
+`m365-text-embedding-3-small` dans `canadacentral`. La configuration indique :
 
 - le fournisseur;
 - le modèle;
@@ -1574,6 +1575,12 @@ La configuration indique :
 
 Le nombre de dimensions du champ Azure AI Search doit correspondre exactement
 au modèle utilisé.
+
+Le profil `m365-vector-profile` référence le vectorizer
+`m365-azure-openai-vectorizer`. Ce vectorizer transforme les requêtes en
+vecteurs avec exactement le même endpoint, le même déploiement et le même
+modèle que le worker d’indexation. Les clés restent dans Azure Key Vault et ne
+sont pas stockées dans la définition Bicep ou les fichiers de configuration.
 
 Changer de modèle ou de dimensions demande la création d’un nouvel index ou
 une réindexation complète contrôlée.

@@ -33,7 +33,9 @@ public sealed class Microsoft365EmbeddingGeneratorAdapter(
                 configuration.EmbeddingModel,
                 configuration.EmbeddingDimensions,
                 batch,
-                cancellationToken));
+                cancellationToken,
+                configuration.EmbeddingDeploymentName,
+                configuration.EmbeddingApiVersion));
         }
 
         return vectors;

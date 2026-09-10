@@ -287,7 +287,8 @@ Dans Azure Portal, ouvrir le Key Vault, puis **Objects**, **Secrets**,
 | `microsoft365-client-secret` | secret de l’application Microsoft 365 CERTIF |
 | `microsoft365-sharepoint-certificate-pfx` | PFX SharePoint App-Only encodé en Base64 |
 | `microsoft365-sharepoint-certificate-password` | mot de passe protégeant ce PFX |
-| `openai-api-key` | clé OpenAI autorisée pour CERTIF |
+| `azure-openai-embedding-api-key` | clé du déploiement Azure OpenAI utilisé par le worker et le vectorizer |
+| `azure-openai-planning-api-key` | clé du modèle Azure OpenAI utilisé pour la planification de la Knowledge Base |
 | `azure-search-api-key` | clé Azure AI Search autorisée pour CERTIF |
 | `sqlpad-entra-client-secret` | secret de l'App Registration SQLPad CERTIF |
 

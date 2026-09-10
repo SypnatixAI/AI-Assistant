@@ -53,6 +53,7 @@ public static class Microsoft365ServiceCollectionExtensions
                     && options.MaximumChunksPerDocument > 0
                     && IsHttpsUrl(options.EmbeddingEndpoint)
                     && !string.IsNullOrWhiteSpace(options.EmbeddingModel)
+                    && HasValidAzureOpenAiEmbeddingConfiguration(options)
                     && options.EmbeddingDimensions > 0
                     && options.EmbeddingBatchSize is > 0 and <= 2048
                     && options.DocumentWorkLeaseMinutes > 0
@@ -75,14 +76,16 @@ public static class Microsoft365ServiceCollectionExtensions
             .Bind(configuration.GetSection(AzureAiSearchOptions.SectionName))
             .Validate(options =>
                     options.VectorSearchMetric == "cosine"
-                    && options.KnowledgeBaseRetrievalReasoningEffort == "minimal"
+                    && IsSupportedReasoningEffort(options.KnowledgeBaseRetrievalReasoningEffort)
+                    && HasValidPlanningModelConfiguration(options)
+                    && IsAzureSearchKnowledgeResourceName(options.VectorizerName)
                     && double.IsFinite(options.MinimumSemanticRelevanceScore)
                     && options.MinimumSemanticRelevanceScore is >= 0d and <= 4d
                     && options.KnowledgeBaseMaxRuntimeInSeconds > 0
                     && (options.KnowledgeBaseMaxOutputSizeInTokens is null or > 0)
                     && IsAzureSearchKnowledgeResourceName(options.KnowledgeSourceName)
                     && IsAzureSearchKnowledgeResourceName(options.KnowledgeBaseName),
-                "AzureSearch requires cosine similarity, minimal retrieval reasoning, valid semantic relevance, knowledge base limits and knowledge resource names.")
+                "AzureSearch requires cosine similarity, minimal or low retrieval reasoning, a planning model for low reasoning, valid semantic relevance, knowledge base limits and knowledge resource names.")
             .ValidateOnStart();
 
         services.AddDataProtection();
@@ -111,7 +114,7 @@ public static class Microsoft365ServiceCollectionExtensions
         services.AddHttpClient<AzureAiSearchIndexClient>()
             .RedactLoggedHeaders(["api-key", "Authorization"]);
         services.AddHttpClient<OpenAiEmbeddingsClient>()
-            .RedactLoggedHeaders(["Authorization"]);
+            .RedactLoggedHeaders(["api-key", "Authorization"]);
         services.AddHttpClient<MicrosoftVisionReadClient>()
             .RedactLoggedHeaders(["Ocp-Apim-Subscription-Key"]);
         services.AddScoped<IMicrosoft365ConsentClient, Microsoft365ConsentClientAdapter>();
@@ -174,6 +177,31 @@ public static class Microsoft365ServiceCollectionExtensions
         !string.IsNullOrWhiteSpace(value)
         && value.Length is >= 2 and <= 100
         && Regex.IsMatch(value, "^[a-z0-9](?:[a-z0-9-]*[a-z0-9])$", RegexOptions.CultureInvariant);
+
+    private static bool HasValidAzureOpenAiEmbeddingConfiguration(Microsoft365Options options) =>
+        string.IsNullOrWhiteSpace(options.EmbeddingDeploymentName)
+        || (!string.IsNullOrWhiteSpace(options.EmbeddingApiKey)
+            && !string.IsNullOrWhiteSpace(options.EmbeddingApiVersion));
+
+    private static bool IsSupportedReasoningEffort(string value) =>
+        string.Equals(value, "minimal", StringComparison.OrdinalIgnoreCase)
+        || string.Equals(value, "low", StringComparison.OrdinalIgnoreCase);
+
+    private static bool HasValidPlanningModelConfiguration(AzureAiSearchOptions options)
+    {
+        var hasCompleteConfiguration = IsHttpsUrl(options.PlanningModelEndpoint)
+            && !string.IsNullOrWhiteSpace(options.PlanningModelDeploymentName)
+            && !string.IsNullOrWhiteSpace(options.PlanningModelName)
+            && !string.IsNullOrWhiteSpace(options.PlanningModelApiKey);
+        var hasAnyConfiguration = !string.IsNullOrWhiteSpace(options.PlanningModelEndpoint)
+            || !string.IsNullOrWhiteSpace(options.PlanningModelDeploymentName)
+            || !string.IsNullOrWhiteSpace(options.PlanningModelName)
+            || !string.IsNullOrWhiteSpace(options.PlanningModelApiKey);
+
+        return (!hasAnyConfiguration || hasCompleteConfiguration)
+            && (!string.Equals(options.KnowledgeBaseRetrievalReasoningEffort, "low", StringComparison.OrdinalIgnoreCase)
+                || hasCompleteConfiguration);
+    }
 
     private static bool HasValidSharePointCertificateConfiguration(Microsoft365Options options)
     {

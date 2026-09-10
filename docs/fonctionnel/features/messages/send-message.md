@@ -118,9 +118,12 @@ backend lui transmet :
 - une limite large de candidats pour la recherche, distincte de la limite plus
   petite des preuves finales.
 
-Le mode de raisonnement reste `minimal` tant qu’un modèle Azure OpenAI de
-planification n’est pas configuré sur la Knowledge Base. Le passage à `low`
-nécessite ce déploiement et ses autorisations Azure.
+La Knowledge Base utilise le déploiement Azure OpenAI `gpt-5-mini` comme modèle
+de planification. Le mode de raisonnement est `minimal` par défaut et peut être
+basculé vers `low` avec
+`AzureSearch__KnowledgeBaseRetrievalReasoningEffort`. Toute autre valeur est
+refusée au démarrage; `low` est également refusé si le modèle de planification
+n’est pas complètement configuré.
 
 La Knowledge Base n’est pas exposée directement à Foundry par MCP pour le
 moment. Un accès MCP direct déplacerait vers Foundry l’appel au moteur de
@@ -166,9 +169,10 @@ règles de sécurité et de persistance.
 - Les sources retournées correspondent aujourd’hui aux preuves collectées par
   les appels d’outil, pas encore à une liste structurée des seules citations
   utilisées dans le texte final.
-- La recherche vectorielle agentique exige un vectorizer Azure AI Search lié au
-  même modèle d’embedding que l’index. Le déploiement Azure OpenAI correspondant
-  doit être fourni avant de l’activer sans risque d’incompatibilité vectorielle.
+- Le vectorizer Azure AI Search et le worker utilisent le même déploiement
+  `m365-text-embedding-3-small`, le même modèle `text-embedding-3-small` et
+  `1536` dimensions. Un changement de l’un de ces paramètres exige une
+  réindexation contrôlée avant sa mise en service.
 - Les autres connecteurs futurs devront être exposés un par un avec la même
   validation backend; Foundry ne reçoit pas automatiquement toutes les
   intégrations disponibles.

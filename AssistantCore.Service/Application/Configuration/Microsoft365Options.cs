@@ -80,6 +80,10 @@ public sealed class Microsoft365Options
 
     public string EmbeddingModel { get; init; } = "text-embedding-3-small";
 
+    public string EmbeddingDeploymentName { get; init; } = string.Empty;
+
+    public string EmbeddingApiVersion { get; init; } = "2024-06-01";
+
     public int EmbeddingDimensions { get; init; } = 1536;
 
     public int EmbeddingBatchSize { get; init; } = 32;

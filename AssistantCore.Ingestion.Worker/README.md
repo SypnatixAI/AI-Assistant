@@ -13,8 +13,9 @@ dotnet user-secrets --project AssistantCore.Service set "Microsoft365:ClientStat
 dotnet user-secrets --project AssistantCore.Service set "Microsoft365:SharePointCertificatePath" "<absolute-pfx-path>"
 dotnet user-secrets --project AssistantCore.Service set "Microsoft365:SharePointCertificatePassword" "<pfx-password>"
 dotnet user-secrets --project AssistantCore.Service set "ConnectionStrings:AssistantCoreDatabase" "<connection-string>"
-dotnet user-secrets --project AssistantCore.Service set "Microsoft365:EmbeddingApiKey" "<openai-api-key>"
+dotnet user-secrets --project AssistantCore.Service set "Microsoft365:EmbeddingApiKey" "<azure-openai-embedding-api-key>"
 dotnet user-secrets --project AssistantCore.Service set "AzureSearch:ApiKey" "<azure-search-api-key>"
+dotnet user-secrets --project AssistantCore.Service set "AzureSearch:PlanningModelApiKey" "<azure-openai-planning-api-key>"
 ```
 
 Pour vérifier une connexion précise au démarrage sans placer son identifiant

@@ -178,12 +178,22 @@ dotnet user-secrets --project AssistantCore.Service set "Microsoft365:ClientSecr
 dotnet user-secrets --project AssistantCore.Service set "Microsoft365:ClientStateHmacKey" "<32+ caracteres aleatoires>"
 dotnet user-secrets --project AssistantCore.Service set "Microsoft365:SharePointCertificatePath" "<absolute-pfx-path>"
 dotnet user-secrets --project AssistantCore.Service set "Microsoft365:SharePointCertificatePassword" "<pfx-password>"
-dotnet user-secrets --project AssistantCore.Service set "Microsoft365:EmbeddingApiKey" "<openai-api-key>"
+dotnet user-secrets --project AssistantCore.Service set "Microsoft365:EmbeddingApiKey" "<azure-openai-embedding-api-key>"
 dotnet user-secrets --project AssistantCore.Service set "Microsoft365:OcrEndpoint" "https://<vision-resource>.cognitiveservices.azure.com"
 dotnet user-secrets --project AssistantCore.Service set "Microsoft365:OcrApiKey" "<azure-vision-key>"
 dotnet user-secrets --project AssistantCore.Service set "AzureSearch:Endpoint" "https://<service>.search.windows.net"
 dotnet user-secrets --project AssistantCore.Service set "AzureSearch:IndexName" "microsoft-content-dev"
 dotnet user-secrets --project AssistantCore.Service set "AzureSearch:ApiKey" "<azure-search-api-key>"
+dotnet user-secrets --project AssistantCore.Service set "AzureSearch:PlanningModelApiKey" "<azure-openai-planning-api-key>"
+```
+
+`LocalLive` utilise `m365-text-embedding-3-small` pour l’indexation et la
+vectorisation des requêtes. Sa Knowledge Base DEV possède un nom distinct de
+celle de CERTIF. Le raisonnement reste `minimal` par défaut. Pour essayer
+`low`, définir temporairement :
+
+```bash
+AzureSearch__KnowledgeBaseRetrievalReasoningEffort=low bash scripts/start-local-live.sh
 ```
 
 La connexion SQL n'a pas besoin d'être ajoutée aux `user-secrets`. Le script
