@@ -13,7 +13,8 @@ public interface IMicrosoft365IndexedContentRepository
     Task<IReadOnlyCollection<Microsoft365IndexedContent>> FindAvailableByTitleAsync(
         Guid organizationId,
         string title,
-        CancellationToken cancellationToken = default);
+        CancellationToken cancellationToken = default) =>
+        Task.FromResult<IReadOnlyCollection<Microsoft365IndexedContent>>([]);
 
     Task<IReadOnlyCollection<Microsoft365IndexedContent>> GetAclReconciliationCandidatesAsync(
         DateTimeOffset dueAt,
