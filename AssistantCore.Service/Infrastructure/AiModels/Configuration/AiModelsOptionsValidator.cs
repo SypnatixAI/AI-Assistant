@@ -72,6 +72,18 @@ public sealed class AiModelsOptionsValidator : IValidateOptions<AiModelsOptions>
                 continue;
             }
 
+            if (string.IsNullOrWhiteSpace(model.DisplayName))
+            {
+                errors.Add(
+                    $"AiModels:Providers:{providerName}:Models:{modelName}:DisplayName is required.");
+            }
+
+            if (string.IsNullOrWhiteSpace(model.Description))
+            {
+                errors.Add(
+                    $"AiModels:Providers:{providerName}:Models:{modelName}:Description is required.");
+            }
+
             if (!activeModels.TryAdd(modelName, providerName))
             {
                 errors.Add($"The active model '{modelName}' is configured by more than one provider.");

@@ -185,7 +185,12 @@ public sealed class AiModelsOptionsValidatorTests
                 TimeoutSeconds = 30,
                 Models = new Dictionary<string, AiModelOptions>
                 {
-                    ["GPT-5.6-LUNA"] = new() { Enabled = true }
+                    ["GPT-5.6-LUNA"] = new()
+                    {
+                        Enabled = true,
+                        DisplayName = "Luna",
+                        Description = "Modele general recommande pour la plupart des questions."
+                    }
                 }
             });
         var validator = new AiModelsOptionsValidator();
@@ -198,6 +203,56 @@ public sealed class AiModelsOptionsValidatorTests
         Assert.Contains(
             result.Failures,
             failure => failure.Contains("more than one provider", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void Given_AnActiveModelWithoutADisplayName_When_Validate_Then_ReturnsFailure()
+    {
+        // Given
+        var options = CreateValidOptions();
+        options.Providers["OpenAI"].Models["gpt-5.6-luna"] = new AiModelOptions
+        {
+            Enabled = true,
+            DisplayName = string.Empty,
+            Description = "Modele general recommande pour la plupart des questions."
+        };
+        var validator = new AiModelsOptionsValidator();
+
+        // When
+        var result = validator.Validate(null, options);
+
+        // Then
+        Assert.True(result.Failed);
+        Assert.Contains(
+            result.Failures,
+            failure => failure.Contains(
+                "AiModels:Providers:OpenAI:Models:gpt-5.6-luna:DisplayName is required.",
+                StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void Given_AnActiveModelWithoutADescription_When_Validate_Then_ReturnsFailure()
+    {
+        // Given
+        var options = CreateValidOptions();
+        options.Providers["OpenAI"].Models["gpt-5.6-luna"] = new AiModelOptions
+        {
+            Enabled = true,
+            DisplayName = "Luna",
+            Description = string.Empty
+        };
+        var validator = new AiModelsOptionsValidator();
+
+        // When
+        var result = validator.Validate(null, options);
+
+        // Then
+        Assert.True(result.Failed);
+        Assert.Contains(
+            result.Failures,
+            failure => failure.Contains(
+                "AiModels:Providers:OpenAI:Models:gpt-5.6-luna:Description is required.",
+                StringComparison.Ordinal));
     }
 
     [Fact]
@@ -233,9 +288,24 @@ public sealed class AiModelsOptionsValidatorTests
                     TimeoutSeconds = timeoutSeconds,
                     Models = new Dictionary<string, AiModelOptions>
                     {
-                        ["gpt-5.6-luna"] = new() { Enabled = true },
-                        ["gpt-5.6-terra"] = new() { Enabled = true },
-                        ["gpt-5.6-sol"] = new() { Enabled = true }
+                        ["gpt-5.6-luna"] = new()
+                        {
+                            Enabled = true,
+                            DisplayName = "Luna",
+                            Description = "Modele general recommande pour la plupart des questions."
+                        },
+                        ["gpt-5.6-terra"] = new()
+                        {
+                            Enabled = true,
+                            DisplayName = "Terra",
+                            Description = "Modele adapte aux analyses plus detaillees."
+                        },
+                        ["gpt-5.6-sol"] = new()
+                        {
+                            Enabled = true,
+                            DisplayName = "Sol",
+                            Description = "Modele optimise pour des reponses rapides."
+                        }
                     }
                 }
             }

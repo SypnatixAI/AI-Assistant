@@ -2,6 +2,7 @@ using AssistantCore.ExternalServices.Entities.OpenAI.Models;
 using AssistantCore.ExternalServices.Services.OpenAI;
 using AssistantCore.Service.Application.Services.Messages.AiModels;
 using AssistantCore.Service.Application.Services.Messages.AiModels.Providers.OpenAI;
+using AssistantCore.Service.Application.Services.Models;
 using AssistantCore.Service.Infrastructure.AiModels.Configuration;
 using AssistantCore.Service.Infrastructure.AiModels.OpenAI;
 using Microsoft.Extensions.Options;
@@ -19,6 +20,7 @@ public static class AiModelServiceCollectionExtensions
             .Bind(configuration.GetSection(AiModelsOptions.SectionName))
             .ValidateOnStart();
         services.AddSingleton<IAuthorizedAiModelSelector, AuthorizedAiModelSelector>();
+        services.AddSingleton<IModelPolicyReader, AiModelsOptionsModelPolicyReader>();
         services.AddSingleton(serviceProvider =>
         {
             var aiModelsOptions = serviceProvider
