@@ -1,4 +1,5 @@
 using AssistantCore.Service.Application.Abstractions;
+using AssistantCore.Service.Application.Services.AuthenticateUser;
 using AssistantCore.Service.Infrastructure.Authentication.Authorization;
 using AssistantCore.Service.Infrastructure.Authentication.Configuration;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -83,6 +84,12 @@ public static class AuthenticationServiceCollectionExtensions
         services.AddScoped<IIdentityClaimsMapper, MicrosoftEntraIdentityClaimsMapper>();
         services.AddScoped<ICurrentIdentity, HttpCurrentIdentity>();
         services.AddScoped<ICorrelationIdProvider, HttpCorrelationIdProvider>();
+
+        services.AddSingleton<AuthenticationCacheWarmupWorker>();
+        services.AddSingleton<IAuthenticationCacheWarmupQueue>(serviceProvider =>
+            serviceProvider.GetRequiredService<AuthenticationCacheWarmupWorker>());
+        services.AddHostedService(serviceProvider =>
+            serviceProvider.GetRequiredService<AuthenticationCacheWarmupWorker>());
 
         services.AddSingleton<IValidateOptions<ApiAccessOptions>, ApiAccessOptionsValidator>();
         services.AddOptions<ApiAccessOptions>()

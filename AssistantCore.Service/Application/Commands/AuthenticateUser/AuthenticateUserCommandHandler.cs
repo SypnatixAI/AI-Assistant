@@ -1,23 +1,23 @@
 using AssistantCore.Service.Application.Abstractions;
 using AssistantCore.Service.Application.Commands.AuthenticateUser.Models;
 using AssistantCore.Service.Application.Services.AuthenticateUser;
-using AssistantCore.Service.Application.Services.Messages.Tools;
 
 namespace AssistantCore.Service.Application.Commands.AuthenticateUser;
 
 public sealed class AuthenticateUserCommandHandler(
     IAuthenticateUserService authenticateUserService,
-    IAiToolRegistry aiToolRegistry) : IRequestHandler<AuthenticateUserCommand, AuthenticateUserResponse>
+    IAuthenticationCacheWarmupQueue cacheWarmupQueue) : IRequestHandler<AuthenticateUserCommand, AuthenticateUserResponse>
 {
     public async Task<AuthenticateUserResponse> HandleAsync(AuthenticateUserCommand request, CancellationToken cancellationToken)
     {
         var (organization, member) = await authenticateUserService.GetOrganizationAsync(cancellationToken);
 
-        // Warm the organization tool cache during authentication so the first
-        // message does not pay the connector lookup cost.
-        await aiToolRegistry.GetAvailableToolsAsync(
+        // Queue cache warmups after authentication without extending the login
+        // response path. The hosted worker owns its dependency-injection scope.
+        cacheWarmupQueue.TryQueue(
             organization.Id,
-            cancellationToken);
+            organization.ExternalTenantId,
+            member.ExternalUserId);
 
         return new AuthenticateUserResponse(
             new CurrentUserResponse(
