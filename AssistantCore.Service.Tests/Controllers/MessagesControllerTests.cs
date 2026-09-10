@@ -78,8 +78,9 @@ public sealed class MessagesControllerTests
 
         // Then
         var payload = Encoding.UTF8.GetString(body.ToArray());
-        Assert.Equal("text/event-stream", httpContext.Response.ContentType);
-        Assert.StartsWith("event: message.accepted", payload);
+        Assert.Equal("text/event-stream; charset=utf-8", httpContext.Response.ContentType);
+        Assert.StartsWith(": connected", payload);
+        Assert.Contains("event: message.accepted", payload);
         Assert.Contains(@"""conversation"":{", payload);
         Assert.Contains(@"""title"":""Politique de teletravail""", payload);
         Assert.Contains(@"""status"":""Active""", payload);

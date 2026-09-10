@@ -114,6 +114,8 @@ public sealed class MessageProcessingLifecycleService(
             Message userMessage,
             CancellationToken cancellationToken)
     {
+        userMessage.ConversationId = conversationId;
+
         var started = await conversationRepository.StartExistingConversationMessageAsync(
             organization.Id,
             member.Id,
