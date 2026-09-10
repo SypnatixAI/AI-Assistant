@@ -49,8 +49,8 @@ public sealed class Microsoft365SpreadsheetDocumentResolver(
                 content.ExternalContentId,
                 content.WebUrl,
                 content.LastModifiedAt,
-                SearchScore: null,
-                RerankerScore: null))
+                RelevanceScore: null,
+                SemanticScore: null))
             .ToArray();
 
         if (candidateRecords.Length == 0)
