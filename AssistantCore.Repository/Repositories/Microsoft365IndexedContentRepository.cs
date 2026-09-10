@@ -20,6 +20,26 @@ public sealed class Microsoft365IndexedContentRepository(AssistantCoreDbContext 
                 && content.ExternalContentId == externalContentId,
                 cancellationToken);
 
+    public async Task<IReadOnlyCollection<Microsoft365IndexedContent>> FindAvailableByTitleAsync(
+        Guid organizationId,
+        string title,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentOutOfRangeException.ThrowIfEqual(organizationId, Guid.Empty);
+        ArgumentException.ThrowIfNullOrWhiteSpace(title);
+
+        return await dbContext.Microsoft365IndexedContents
+            .AsNoTracking()
+            .Include(content => content.Microsoft365Source)
+            .Include(content => content.Passages)
+            .Where(content =>
+                content.OrganizationId == organizationId
+                && content.IsAvailable
+                && content.Title != null
+                && content.Title == title)
+            .ToArrayAsync(cancellationToken);
+    }
+
     public async Task<IReadOnlyCollection<Microsoft365IndexedContent>> GetAclReconciliationCandidatesAsync(
         DateTimeOffset dueAt,
         int maximumResults,
