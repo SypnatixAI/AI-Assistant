@@ -12,7 +12,7 @@ public sealed class AiToolRegistry(
     IEnumerable<IAiToolExecutionHandler> toolHandlers,
     IMemoryCache? memoryCache = null) : IAiToolRegistry
 {
-    private static readonly TimeSpan CacheDuration = TimeSpan.FromSeconds(30);
+    private static readonly TimeSpan CacheDuration = TimeSpan.FromMinutes(15);
 
     public async Task<IReadOnlyCollection<AiToolDefinition>> GetAvailableToolsAsync(
         Guid organizationId,
