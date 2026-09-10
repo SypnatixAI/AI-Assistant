@@ -27,16 +27,12 @@ public sealed class ConversationMessageCursorCodec : IConversationMessageCursorC
 
             if (payload is null || payload.Id == Guid.Empty || payload.ConversationId == Guid.Empty)
             {
-                throw new BadRequestException(
-                    "cursor is invalid.",
-                    BadRequestException.InvalidPagination);
+                throw new BadRequestException("cursor is invalid.");
             }
 
             if (payload.ConversationId != conversationId)
             {
-                throw new BadRequestException(
-                    "cursor does not match the requested conversation.",
-                    BadRequestException.InvalidPagination);
+                throw new BadRequestException("cursor does not match the requested conversation.");
             }
 
             return new ConversationMessageCursor(payload.ConversationId, payload.CreatedAt, payload.Id);
@@ -44,9 +40,7 @@ public sealed class ConversationMessageCursorCodec : IConversationMessageCursorC
         catch (Exception exception) when (
             exception is FormatException or JsonException or DecoderFallbackException)
         {
-            throw new BadRequestException(
-                    "cursor is invalid.",
-                    BadRequestException.InvalidPagination);
+            throw new BadRequestException("cursor is invalid.");
         }
     }
 

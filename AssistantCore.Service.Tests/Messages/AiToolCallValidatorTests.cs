@@ -261,10 +261,10 @@ public sealed class AiToolCallValidatorTests
         var arguments = ParseJson($$"""{"amount":{{amountJson}}}""");
         var requestedToolCall = new AiRequestedToolCall(
             callId.ToString(),
-            AiToolNames.SearchInternalData,
+            AiToolNames.SearchMicrosoft365,
             arguments);
         var availableTool = new AiToolDefinition(
-            AiToolNames.SearchInternalData,
+            AiToolNames.SearchMicrosoft365,
             "Test numeric validation.",
             schema);
         var validator = CreateValidator();

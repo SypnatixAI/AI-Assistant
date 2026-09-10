@@ -23,6 +23,25 @@ public sealed class OrganizationMemberQueries(
             .ToListAsync(cancellationToken);
     }
 
+    public async Task<OrganizationMemberWithOrganization?> FindMemberWithOrganization(
+        IdentityProvider identityProvider,
+        string externalOrganizationId,
+        string externalUserId,
+        CancellationToken cancellationToken = default)
+    {
+        return await dbContext.OrganizationMembers
+            .AsNoTracking()
+            .Where(member =>
+                member.IdentityProvider == identityProvider
+                && member.ExternalUserId == externalUserId
+                && member.Organization.IdentityProvider == identityProvider
+                && member.Organization.ExternalTenantId == externalOrganizationId)
+            .Select(member => new OrganizationMemberWithOrganization(
+                member.Organization,
+                member))
+            .SingleOrDefaultAsync(cancellationToken);
+    }
+
     public async Task<OrganizationMember?> FindMember(
         Guid organizationId,
         IdentityProvider identityProvider,
@@ -167,7 +186,7 @@ public sealed class OrganizationMemberQueries(
             actorId,
             AdministrativeAuditAction.MemberStatusChanged,
             AdministrativeAuditSubjectTypes.Member,
-            memberId,
+            member.Id,
             occurredAt,
             new Dictionary<string, object?> { ["status"] = previousStatus.ToString() },
             new Dictionary<string, object?> { ["status"] = status.ToString() },

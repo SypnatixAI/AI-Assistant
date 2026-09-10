@@ -1,5 +1,4 @@
 using AssistantCore.Repository.Domain.Entities;
-using AssistantCore.Repository.Domain.Enums;
 using AssistantCore.Repository.Repositories;
 using AssistantCore.Service.Application.Configuration;
 using AssistantCore.Service.Application.Services.Usage;
@@ -110,60 +109,6 @@ public sealed class UsageTrackingServiceTests
     }
 
     [Theory, AutoDomainData]
-    public async Task Given_AnEffectiveUsagePolicy_When_GetCurrentUsageAsync_Then_UsesThePolicyLimitInsteadOfTheDefault(
-        Guid organizationId)
-    {
-        // Given
-        var now = DateTimeOffset.Parse("2026-09-18T15:42:00Z");
-        var repository = new StubTokenConsumptionRepository { SumToReturn = 700_000 };
-        var usagePolicyRepository = new StubOrganizationUsagePolicyRepository
-        {
-            EffectivePolicy = new OrganizationUsagePolicy
-            {
-                Id = Guid.NewGuid(),
-                OrganizationId = organizationId,
-                Version = 2,
-                MonthlyTokenLimit = 600_000,
-                Status = UsagePolicyStatus.Active,
-                EffectiveAt = DateTimeOffset.Parse("2026-09-01T00:00:00Z"),
-                CreatedAt = DateTimeOffset.Parse("2026-08-18T15:00:00Z"),
-                ActorId = Guid.NewGuid()
-            }
-        };
-        var service = CreateService(
-            repository,
-            defaultMonthlyTokenLimit: 1_000_000,
-            now: now,
-            usagePolicyRepository: usagePolicyRepository);
-
-        // When
-        var response = await service.GetCurrentUsageAsync(organizationId, CancellationToken.None);
-
-        // Then
-        Assert.Equal(600_000, response.TokenLimit);
-        Assert.Equal(0, response.TokensRemaining);
-        Assert.True(response.IsExhausted);
-        Assert.Equal(organizationId, usagePolicyRepository.ReceivedOrganizationId);
-        Assert.Equal(now, usagePolicyRepository.ReceivedAsOf);
-    }
-
-    [Theory, AutoDomainData]
-    public async Task Given_NoUsagePolicyForTheOrganization_When_GetCurrentUsageAsync_Then_FallsBackToTheDefaultLimit(
-        Guid organizationId)
-    {
-        // Given
-        var now = DateTimeOffset.Parse("2026-08-18T15:42:00Z");
-        var repository = new StubTokenConsumptionRepository { SumToReturn = 0 };
-        var service = CreateService(repository, defaultMonthlyTokenLimit: 1_000_000, now: now);
-
-        // When
-        var response = await service.GetCurrentUsageAsync(organizationId, CancellationToken.None);
-
-        // Then
-        Assert.Equal(1_000_000, response.TokenLimit);
-    }
-
-    [Theory, AutoDomainData]
     public async Task Given_TwoOrganizations_When_GetCurrentUsageAsync_Then_QueriesTheRequestedOrganizationOnly(
         Guid organizationId)
     {
@@ -184,11 +129,9 @@ public sealed class UsageTrackingServiceTests
     private static UsageTrackingService CreateService(
         ITokenConsumptionRepository repository,
         long defaultMonthlyTokenLimit,
-        DateTimeOffset now,
-        IOrganizationUsagePolicyRepository? usagePolicyRepository = null) =>
+        DateTimeOffset now) =>
         new(
             repository,
-            usagePolicyRepository ?? new StubOrganizationUsagePolicyRepository(),
             Options.Create(new UsageOptions { DefaultMonthlyTokenLimit = defaultMonthlyTokenLimit }),
             new FixedTimeProvider(now));
 

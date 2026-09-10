@@ -8,7 +8,6 @@ namespace AssistantCore.Service.Application.Services.Usage;
 
 public sealed class UsageTrackingService(
     ITokenConsumptionRepository consumptionRepository,
-    IOrganizationUsagePolicyRepository usagePolicyRepository,
     IOptions<UsageOptions> options,
     TimeProvider timeProvider) : IUsageTrackingService
 {
@@ -40,7 +39,6 @@ public sealed class UsageTrackingService(
 
         var (tokenLimit, tokensUsed, tokensRemaining) = await SummarizePeriodAsync(
             organizationId,
-            occurredAt,
             periodStartsAt,
             periodEndsAt,
             cancellationToken);
@@ -58,11 +56,9 @@ public sealed class UsageTrackingService(
         Guid organizationId,
         CancellationToken cancellationToken = default)
     {
-        var now = timeProvider.GetUtcNow();
-        var (periodStartsAt, periodEndsAt) = ComputeMonthlyPeriod(now);
+        var (periodStartsAt, periodEndsAt) = ComputeMonthlyPeriod(timeProvider.GetUtcNow());
         var (tokenLimit, tokensUsed, tokensRemaining) = await SummarizePeriodAsync(
             organizationId,
-            now,
             periodStartsAt,
             periodEndsAt,
             cancellationToken);
@@ -78,7 +74,6 @@ public sealed class UsageTrackingService(
 
     private async Task<(long TokenLimit, long TokensUsed, long TokensRemaining)> SummarizePeriodAsync(
         Guid organizationId,
-        DateTimeOffset asOf,
         DateTimeOffset periodStartsAt,
         DateTimeOffset periodEndsAt,
         CancellationToken cancellationToken)
@@ -88,11 +83,7 @@ public sealed class UsageTrackingService(
             periodStartsAt,
             periodEndsAt,
             cancellationToken);
-        var effectivePolicy = await usagePolicyRepository.FindEffectiveAsync(
-            organizationId,
-            asOf,
-            cancellationToken);
-        var tokenLimit = effectivePolicy?.MonthlyTokenLimit ?? options.Value.DefaultMonthlyTokenLimit;
+        var tokenLimit = options.Value.DefaultMonthlyTokenLimit;
         var tokensRemaining = Math.Max(0, tokenLimit - tokensUsed);
 
         return (tokenLimit, tokensUsed, tokensRemaining);
@@ -100,7 +91,8 @@ public sealed class UsageTrackingService(
 
     /// <summary>
     /// Periode mensuelle UTC : le debut est inclus, la fin est exclue et represente
-    /// le renouvellement.
+    /// le renouvellement. Provisoire tant que #108 n'introduit pas de politiques de
+    /// quota versionnees avec une date de renouvellement propre a l'organisation.
     /// </summary>
     private static (DateTimeOffset Start, DateTimeOffset End) ComputeMonthlyPeriod(DateTimeOffset now)
     {

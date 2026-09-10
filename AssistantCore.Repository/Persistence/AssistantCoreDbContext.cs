@@ -50,8 +50,6 @@ public class AssistantCoreDbContext(DbContextOptions<AssistantCoreDbContext> opt
 
     public DbSet<AdministrativeAuditEntry> AdministrativeAuditEntries => Set<AdministrativeAuditEntry>();
 
-    public DbSet<OrganizationUsagePolicy> OrganizationUsagePolicies => Set<OrganizationUsagePolicy>();
-
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(AssistantCoreDbContext).Assembly);

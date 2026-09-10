@@ -154,36 +154,11 @@ n'obtient aucun accès automatique aux conversations d'un collègue.
 <a id="conversation-management-errors"></a>
 ## Erreurs
 
-Chaque erreur métier prévisible porte un champ `code` stable, destiné à être
-comparé par le frontend. Le champ `message` reste destiné à l'affichage et au
-diagnostic : sa formulation peut changer, le `code` non.
-
-| Statut | `code` | Situation |
-| --- | --- | --- |
-| `400` | `empty_conversation_patch` | Ni `title` ni `status` fourni |
-| `400` | `invalid_conversation_title` | Titre vide ou trop long après normalisation |
-| `400` | `invalid_conversation_status` | `status` hors de `Active` et `Archived` |
-| `400` | `invalid_version_header` | En-tête `If-Match` présent mais illisible |
-| `400` | `invalid_pagination` | `limit` hors bornes ou curseur invalide |
-| `401` | — | Token absent, invalide ou expiré |
-| `403` | — | Membre ou organisation inactive |
-| `404` | `conversation_not_found` | Conversation absente, étrangère ou supprimée |
-| `409` | `conversation_version_conflict` | Modification concurrente |
-| `409` | `conversation_archived` | Nouveau message sur une conversation archivée |
-
-Une erreur `400` ou `404` sans code plus precis retombe sur `bad_request` ou
-`not_found`. Le champ n'est jamais nul sur ces statuts.
-
-Les champs du corps d'erreur suivent la même convention de nommage que les
-réponses normales de l'API :
-
-```json
-{
-  "message": "Status must be 'Active' or 'Archived'.",
-  "detail": null,
-  "code": "invalid_conversation_status"
-}
-```
+- `400` : patch vide, titre ou statut invalide.
+- `401` : token invalide.
+- `403` : membre ou organisation inactive.
+- `404` : conversation absente ou étrangère.
+- `409` : modification concurrente.
 
 <a id="conversation-management-acceptance"></a>
 ## Critères d'acceptation

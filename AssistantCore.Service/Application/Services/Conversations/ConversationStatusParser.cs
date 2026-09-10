@@ -22,9 +22,7 @@ public static class ConversationStatusParser
         {
             nameof(ConversationStatus.Active) => ConversationStatus.Active,
             nameof(ConversationStatus.Archived) => ConversationStatus.Archived,
-            _ => throw new BadRequestException(
-                "Status must be 'Active' or 'Archived'.",
-                BadRequestException.InvalidConversationStatus)
+            _ => throw new BadRequestException("Status must be 'Active' or 'Archived'.")
         };
 
     /// <summary>

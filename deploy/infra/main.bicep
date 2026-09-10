@@ -40,6 +40,18 @@ param sqlpadAllowedGroupObjectId string
 
 param azureSearchEndpoint string = 'https://synaptixsearch.search.windows.net'
 param azureSearchIndexName string = 'microsoft-content-${environmentName}'
+param azureOpenAiEmbeddingEndpoint string = 'https://onpremia-openai-search.openai.azure.com'
+param azureOpenAiEmbeddingDeploymentName string = 'm365-text-embedding-3-small'
+param azureOpenAiEmbeddingModelName string = 'text-embedding-3-small'
+param azureOpenAiPlanningEndpoint string = 'https://josetchibozo7-5469-resource.openai.azure.com'
+param azureOpenAiPlanningDeploymentName string = 'gpt-5-mini'
+param azureOpenAiPlanningModelName string = 'gpt-5-mini'
+@allowed([
+  'minimal'
+  'low'
+  'auto'
+])
+param knowledgeBaseRetrievalReasoningEffort string = 'auto'
 
 param tags object = {
   application: 'assistant'
@@ -211,8 +223,13 @@ var apiSecrets = isDev
         identity: workloadIdentity.id
       }
       {
-        name: 'openai-api-key'
-        keyVaultUrl: '${keyVaultBaseUrl}/openai-api-key'
+        name: 'azure-openai-embedding-api-key'
+        keyVaultUrl: '${keyVaultBaseUrl}/azure-openai-embedding-api-key'
+        identity: workloadIdentity.id
+      }
+      {
+        name: 'azure-openai-planning-api-key'
+        keyVaultUrl: '${keyVaultBaseUrl}/azure-openai-planning-api-key'
         identity: workloadIdentity.id
       }
       {
@@ -274,10 +291,6 @@ var devApiEnvironmentVariables = [
     name: 'AzureSearch__Endpoint'
     value: '${wiremockPublicBaseUrl}/azure-search'
   }
-  {
-    name: 'AiModels__Providers__OpenAI__Endpoint'
-    value: '${wiremockPublicBaseUrl}/openai/v1'
-  }
 ]
 
 var certifApiEnvironmentVariables = [
@@ -315,7 +328,19 @@ var certifApiEnvironmentVariables = [
   }
   {
     name: 'Microsoft365__EmbeddingApiKey'
-    secretRef: 'openai-api-key'
+    secretRef: 'azure-openai-embedding-api-key'
+  }
+  {
+    name: 'Microsoft365__EmbeddingEndpoint'
+    value: azureOpenAiEmbeddingEndpoint
+  }
+  {
+    name: 'Microsoft365__EmbeddingDeploymentName'
+    value: azureOpenAiEmbeddingDeploymentName
+  }
+  {
+    name: 'Microsoft365__EmbeddingModel'
+    value: azureOpenAiEmbeddingModelName
   }
   {
     name: 'AzureSearch__Endpoint'
@@ -330,8 +355,24 @@ var certifApiEnvironmentVariables = [
     secretRef: 'azure-search-api-key'
   }
   {
-    name: 'AiModels__Providers__OpenAI__ApiKey'
-    secretRef: 'openai-api-key'
+    name: 'AzureSearch__KnowledgeBaseRetrievalReasoningEffort'
+    value: knowledgeBaseRetrievalReasoningEffort
+  }
+  {
+    name: 'AzureSearch__PlanningModelEndpoint'
+    value: azureOpenAiPlanningEndpoint
+  }
+  {
+    name: 'AzureSearch__PlanningModelDeploymentName'
+    value: azureOpenAiPlanningDeploymentName
+  }
+  {
+    name: 'AzureSearch__PlanningModelName'
+    value: azureOpenAiPlanningModelName
+  }
+  {
+    name: 'AzureSearch__PlanningModelApiKey'
+    secretRef: 'azure-openai-planning-api-key'
   }
 ]
 
@@ -427,8 +468,13 @@ var workerSecrets = isDev
         identity: workloadIdentity.id
       }
       {
-        name: 'openai-api-key'
-        keyVaultUrl: '${keyVaultBaseUrl}/openai-api-key'
+        name: 'azure-openai-embedding-api-key'
+        keyVaultUrl: '${keyVaultBaseUrl}/azure-openai-embedding-api-key'
+        identity: workloadIdentity.id
+      }
+      {
+        name: 'azure-openai-planning-api-key'
+        keyVaultUrl: '${keyVaultBaseUrl}/azure-openai-planning-api-key'
         identity: workloadIdentity.id
       }
       {
@@ -499,7 +545,19 @@ var certifWorkerEnvironmentVariables = [
   }
   {
     name: 'Microsoft365__EmbeddingApiKey'
-    secretRef: 'openai-api-key'
+    secretRef: 'azure-openai-embedding-api-key'
+  }
+  {
+    name: 'Microsoft365__EmbeddingEndpoint'
+    value: azureOpenAiEmbeddingEndpoint
+  }
+  {
+    name: 'Microsoft365__EmbeddingDeploymentName'
+    value: azureOpenAiEmbeddingDeploymentName
+  }
+  {
+    name: 'Microsoft365__EmbeddingModel'
+    value: azureOpenAiEmbeddingModelName
   }
   {
     name: 'AzureSearch__Endpoint'
@@ -512,6 +570,26 @@ var certifWorkerEnvironmentVariables = [
   {
     name: 'AzureSearch__ApiKey'
     secretRef: 'azure-search-api-key'
+  }
+  {
+    name: 'AzureSearch__KnowledgeBaseRetrievalReasoningEffort'
+    value: knowledgeBaseRetrievalReasoningEffort
+  }
+  {
+    name: 'AzureSearch__PlanningModelEndpoint'
+    value: azureOpenAiPlanningEndpoint
+  }
+  {
+    name: 'AzureSearch__PlanningModelDeploymentName'
+    value: azureOpenAiPlanningDeploymentName
+  }
+  {
+    name: 'AzureSearch__PlanningModelName'
+    value: azureOpenAiPlanningModelName
+  }
+  {
+    name: 'AzureSearch__PlanningModelApiKey'
+    secretRef: 'azure-openai-planning-api-key'
   }
 ]
 

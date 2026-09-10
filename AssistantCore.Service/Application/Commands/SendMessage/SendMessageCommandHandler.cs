@@ -1,12 +1,11 @@
 using AssistantCore.Service.Application.Abstractions;
 using AssistantCore.Service.Application.Commands.SendMessage.Models;
-using AssistantCore.Service.Application.Services.Messages.AiModels;
+using AssistantCore.Service.Application.Models.Messages.AgentRuntime;
+using AssistantCore.Service.Application.Models.Messages.Lifecycle;
+using AssistantCore.Service.Application.Services.Messages.AgentRuntime;
 using AssistantCore.Service.Application.Services.Messages.Authorization;
 using AssistantCore.Service.Application.Services.Messages.Lifecycle;
-using AssistantCore.Service.Application.Models.Messages.Lifecycle;
-using AssistantCore.Service.Application.Services.Messages.Orchestration;
 using AssistantCore.Service.Application.Services.Messages.Responses;
-using AssistantCore.Service.Application.Services.Messages.Tools;
 using AssistantCore.Service.Application.Services.Messages.Validation;
 using System.Diagnostics;
 
@@ -15,10 +14,8 @@ namespace AssistantCore.Service.Application.Commands.SendMessage;
 public sealed class SendMessageCommandHandler(
     ISendMessageCommandValidator validator,
     IMessageUserContextService userContextService,
-    IAuthorizedAiModelSelector modelSelector,
     IMessageProcessingLifecycleService lifecycleService,
-    IAiToolRegistry toolRegistry,
-    IMessageToolOrchestrator orchestrator,
+    IAgentRuntime agentRuntime,
     ISendMessageResponseFactory responseFactory)
     : IRequestHandler<SendMessageCommand, SendMessageResponse>
 {
@@ -35,36 +32,26 @@ public sealed class SendMessageCommandHandler(
         {
             var validatedCommand = await validator.ValidateAsync(request, cancellationToken);
             var userContext = await userContextService.GetCurrentAsync(cancellationToken);
-            var selectedModel = await modelSelector.SelectAsync(
-                userContext.Organization.Id,
-                validatedCommand.Model,
-                cancellationToken);
             processing = await lifecycleService.StartAsync(
                 validatedCommand.ConversationId,
                 validatedCommand.Message,
                 userContext.Organization,
                 userContext.Member,
                 cancellationToken);
-            processing.SelectedModel = selectedModel;
-            var availableTools = await toolRegistry.GetAvailableToolsAsync(
-                userContext.Organization.Id,
-                cancellationToken);
-            var orchestrationResult = await orchestrator.OrchestrateAsync(
-                processing,
-                userContext.CreateConnectorExecutionContext(),
-                selectedModel,
-                processing.ConversationHistory,
-                availableTools,
+            var agentTurnResult = await agentRuntime.RunAsync(
+                new AgentTurnRequest(
+                    processing,
+                    userContext.CreateConnectorExecutionContext()),
                 cancellationToken);
             var completedProcessing = await lifecycleService.CompleteAsync(
                 processing,
-                orchestrationResult,
+                agentTurnResult,
                 cancellationToken);
 
             activity?.SetTag("messages.outcome", "completed");
             return responseFactory.Create(
                 processing,
-                orchestrationResult,
+                agentTurnResult,
                 completedProcessing);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)

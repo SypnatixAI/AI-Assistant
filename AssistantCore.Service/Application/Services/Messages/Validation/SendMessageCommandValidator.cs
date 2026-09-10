@@ -1,7 +1,6 @@
 using AssistantCore.Service.Application.Commands.SendMessage;
 using AssistantCore.Service.Application.Configuration;
 using AssistantCore.Service.Application.Exceptions;
-using AssistantCore.Service.Application.Services.Messages.AiModels;
 using FluentValidation;
 using Microsoft.Extensions.Options;
 
@@ -11,9 +10,7 @@ public sealed class SendMessageCommandValidator :
     AbstractValidator<SendMessageCommand>,
     ISendMessageCommandValidator
 {
-    public SendMessageCommandValidator(
-        IOptions<MessagesOptions> options,
-        IAuthorizedAiModelSelector aiModelSelector)
+    public SendMessageCommandValidator(IOptions<MessagesOptions> options)
     {
         RuleFor(command => command.Message)
             .Cascade(CascadeMode.Stop)
@@ -21,10 +18,6 @@ public sealed class SendMessageCommandValidator :
             .Must(message => message.Trim().Length <= options.Value.MaximumMessageLength)
             .WithMessage(
                 $"Message must not exceed {options.Value.MaximumMessageLength} characters.");
-
-        RuleFor(command => command.Model)
-            .Must(aiModelSelector.IsAvailable)
-            .WithMessage("The requested AI model is not available.");
     }
 
     async Task<SendMessageCommand> ISendMessageCommandValidator.ValidateAsync(
@@ -38,12 +31,6 @@ public sealed class SendMessageCommandValidator :
             throw new BadRequestException(validationResult.Errors[0].ErrorMessage);
         }
 
-        return command with
-        {
-            Message = command.Message.Trim(),
-            Model = string.IsNullOrWhiteSpace(command.Model)
-                ? null
-                : command.Model.Trim()
-        };
+        return command with { Message = command.Message.Trim() };
     }
 }

@@ -3,12 +3,10 @@ using AssistantCore.Repository.Domain.Enums;
 using AssistantCore.Repository.Repositories;
 using AssistantCore.Service.Application.Exceptions;
 using AssistantCore.Service.Application.Models.Messages;
-using AssistantCore.Service.Application.Models.Messages.AiModels;
+using AssistantCore.Service.Application.Models.Messages.AgentRuntime;
 using AssistantCore.Service.Application.Models.Messages.Lifecycle;
-using AssistantCore.Service.Application.Models.Messages.Orchestration;
 using AssistantCore.Service.Application.Models.Usage;
 using AssistantCore.Service.Application.Services.Messages.Lifecycle;
-using AssistantCore.Service.Application.Services.Messages.Memory;
 using AssistantCore.Service.Application.Services.Usage;
 
 namespace AssistantCore.Service.Tests.Messages;
@@ -294,7 +292,7 @@ public sealed class MessageProcessingLifecycleServiceTests
     }
 
     [Theory, AutoDomainData]
-    public async Task Given_AValidOrchestrationResult_When_CompleteAsync_Then_PersistsAssistantResponseSourcesAndWarnings(
+    public async Task Given_AValidAgentTurn_When_CompleteAsync_Then_PersistsAssistantResponseSourcesAndWarnings(
         StartedMessageProcessing processing,
         DateTimeOffset completedAt)
     {
@@ -307,20 +305,17 @@ public sealed class MessageProcessingLifecycleServiceTests
             "inventory-item-1",
             null,
             completedAt.AddMinutes(-1));
-        var orchestrationResult = new MessageOrchestrationResult(
+        var agentTurnResult = new AgentTurnResult(
             "There are 248 units available.",
             "gpt",
             [evidence],
             ["Quebec inventory was unavailable."],
-            new OrchestrationExecutionUsage(
+            new AgentTurnUsage(
                 TimeSpan.FromSeconds(2),
                 InputTokens: 100,
                 OutputTokens: 20,
                 ModelCallCount: 2,
-                ToolCallCount: 1,
-                EstimatedCost: 0.01m,
-                ContextSize: 100,
-                RepeatedToolCallCount: 0));
+                ToolCallCount: 1));
         var repository = new RecordingConversationRepository();
         var service = new MessageProcessingLifecycleService(
             repository,
@@ -331,15 +326,15 @@ public sealed class MessageProcessingLifecycleServiceTests
         // When
         var result = await service.CompleteAsync(
             processing,
-            orchestrationResult,
+            agentTurnResult,
             cancellationTokenSource.Token);
 
         // Then
         Assert.NotNull(repository.CompletedAssistantMessage);
         Assert.Equal(MessageRole.Assistant, repository.CompletedAssistantMessage.Role);
         Assert.Equal(MessageProcessingStatus.Completed, repository.CompletedAssistantMessage.ProcessingStatus);
-        Assert.Equal(orchestrationResult.Answer, repository.CompletedAssistantMessage.Content);
-        Assert.Equal(orchestrationResult.ModelName, repository.CompletedAssistantMessage.Model);
+        Assert.Equal(agentTurnResult.Content, repository.CompletedAssistantMessage.Content);
+        Assert.Equal(agentTurnResult.ModelName, repository.CompletedAssistantMessage.Model);
         Assert.Equal(completedAt, repository.CompletedAssistantMessage.CreatedAt);
         var persistedSource = Assert.Single(repository.CompletedSources);
         Assert.Equal(evidence.SourceType, persistedSource.SourceType);
@@ -354,25 +349,22 @@ public sealed class MessageProcessingLifecycleServiceTests
     }
 
     [Theory, AutoDomainData]
-    public async Task Given_AValidOrchestrationResult_When_CompleteAsync_Then_RecordsConsumptionForTheAssistantMessage(
+    public async Task Given_AValidAgentTurn_When_CompleteAsync_Then_RecordsConsumptionForTheAssistantMessage(
         StartedMessageProcessing processing,
         DateTimeOffset completedAt)
     {
         // Given
-        var orchestrationResult = new MessageOrchestrationResult(
+        var agentTurnResult = new AgentTurnResult(
             "There are 248 units available.",
             "gpt",
             [],
             [],
-            new OrchestrationExecutionUsage(
+            new AgentTurnUsage(
                 TimeSpan.FromSeconds(2),
                 InputTokens: 100,
                 OutputTokens: 20,
                 ModelCallCount: 2,
-                ToolCallCount: 1,
-                EstimatedCost: 0.01m,
-                ContextSize: 100,
-                RepeatedToolCallCount: 0));
+                ToolCallCount: 1));
         var repository = new RecordingConversationRepository();
         var usageTrackingService = new StubUsageTrackingService
         {
@@ -384,7 +376,7 @@ public sealed class MessageProcessingLifecycleServiceTests
             new StubTimeProvider(completedAt));
 
         // When
-        var result = await service.CompleteAsync(processing, orchestrationResult, CancellationToken.None);
+        var result = await service.CompleteAsync(processing, agentTurnResult, CancellationToken.None);
 
         // Then
         Assert.Equal(processing.OrganizationId, usageTrackingService.ReceivedOrganizationId);
@@ -395,35 +387,9 @@ public sealed class MessageProcessingLifecycleServiceTests
     }
 
     [Theory, AutoDomainData]
-    public async Task Given_ANonEmptyAiMemory_When_CompleteAsync_Then_PersistsTheAiGeneratedSummary(
-        StartedMessageProcessing processing,
-        MessageOrchestrationResult orchestrationResult,
-        DateTimeOffset completedAt)
-    {
-        // Given
-        processing.SelectedModel = new SelectedAiModel("OpenAI", "gpt-5-mini");
-        var repository = new RecordingConversationRepository();
-        var summaryService = new StubConversationMemorySummaryService("Facts\n- The team selected blue.");
-        var service = new MessageProcessingLifecycleService(
-            repository,
-            summaryService,
-            new StubUsageTrackingService(),
-            new StubTimeProvider(completedAt));
-
-        // When
-        await service.CompleteAsync(processing, orchestrationResult, CancellationToken.None);
-
-        // Then
-        Assert.Equal("Facts\n- The team selected blue.", repository.ReceivedContextSummary);
-        Assert.Equal(processing.SelectedModel, summaryService.ReceivedModel);
-        Assert.Equal(processing.UserMessage, summaryService.ReceivedUserMessage);
-        Assert.Equal(orchestrationResult.Answer, summaryService.ReceivedAssistantMessage);
-    }
-
-    [Theory, AutoDomainData]
     public async Task Given_RepositoryRejectsCompletion_When_CompleteAsync_Then_ThrowsNotFound(
         StartedMessageProcessing processing,
-        MessageOrchestrationResult orchestrationResult,
+        AgentTurnResult agentTurnResult,
         DateTimeOffset completedAt)
     {
         // Given
@@ -440,7 +406,7 @@ public sealed class MessageProcessingLifecycleServiceTests
         var exception = await Assert.ThrowsAsync<NotFoundException>(() =>
             service.CompleteAsync(
                 processing,
-                orchestrationResult,
+                agentTurnResult,
                 CancellationToken.None));
 
         // Then
@@ -591,29 +557,6 @@ public sealed class MessageProcessingLifecycleServiceTests
             throw new NotSupportedException();
     }
 
-    private sealed class StubConversationMemorySummaryService(string? summary)
-        : IConversationMemorySummaryService
-    {
-        public SelectedAiModel? ReceivedModel { get; private set; }
-
-        public string? ReceivedUserMessage { get; private set; }
-
-        public string? ReceivedAssistantMessage { get; private set; }
-
-        public Task<string?> CreateAsync(
-            SelectedAiModel model,
-            IReadOnlyCollection<AiConversationMessage> conversationHistory,
-            string currentUserMessage,
-            string currentAssistantMessage,
-            CancellationToken cancellationToken)
-        {
-            ReceivedModel = model;
-            ReceivedUserMessage = currentUserMessage;
-            ReceivedAssistantMessage = currentAssistantMessage;
-            return Task.FromResult(summary);
-        }
-    }
-
     [Theory, AutoDomainData]
     public async Task Given_AnArchivedConversation_When_StartAsync_Then_ThrowsAConflictWithTheArchivedCode(
         Organization organization,
@@ -701,8 +644,6 @@ public sealed class MessageProcessingLifecycleServiceTests
 
         public DateTimeOffset? ReceivedFailureDate { get; private set; }
 
-        public string? ReceivedContextSummary { get; private set; }
-
         public CancellationToken ReceivedCancellationToken { get; private set; }
 
         public List<string> Operations { get; } = [];
@@ -751,16 +692,6 @@ public sealed class MessageProcessingLifecycleServiceTests
             Operations.Add("GetConversationHistory");
             ReceivedCancellationToken = cancellationToken;
             return Task.FromResult<IReadOnlyList<ConversationMessageItem>>([]);
-        }
-
-        public Task<bool> UpdateConversationContextSummaryAsync(
-            Guid organizationId, Guid ownerMemberId, Guid conversationId, string summary,
-            DateTimeOffset updatedAt, CancellationToken cancellationToken = default)
-        {
-            Operations.Add("UpdateContextSummary");
-            ReceivedContextSummary = summary;
-            ReceivedCancellationToken = cancellationToken;
-            return Task.FromResult(true);
         }
 
         public Task<ConversationListPage> ListConversationsAsync(

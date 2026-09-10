@@ -178,14 +178,26 @@ dotnet user-secrets --project AssistantCore.Service set "Microsoft365:ClientSecr
 dotnet user-secrets --project AssistantCore.Service set "Microsoft365:ClientStateHmacKey" "<32+ caracteres aleatoires>"
 dotnet user-secrets --project AssistantCore.Service set "Microsoft365:SharePointCertificatePath" "<absolute-pfx-path>"
 dotnet user-secrets --project AssistantCore.Service set "Microsoft365:SharePointCertificatePassword" "<pfx-password>"
-dotnet user-secrets --project AssistantCore.Service set "Microsoft365:EmbeddingApiKey" "<openai-api-key>"
+dotnet user-secrets --project AssistantCore.Service set "Microsoft365:EmbeddingApiKey" "<azure-openai-embedding-api-key>"
 dotnet user-secrets --project AssistantCore.Service set "Microsoft365:OcrEndpoint" "https://<vision-resource>.cognitiveservices.azure.com"
 dotnet user-secrets --project AssistantCore.Service set "Microsoft365:OcrApiKey" "<azure-vision-key>"
 dotnet user-secrets --project AssistantCore.Service set "AzureSearch:Endpoint" "https://<service>.search.windows.net"
 dotnet user-secrets --project AssistantCore.Service set "AzureSearch:IndexName" "microsoft-content-dev"
 dotnet user-secrets --project AssistantCore.Service set "AzureSearch:ApiKey" "<azure-search-api-key>"
-dotnet user-secrets --project AssistantCore.Service set "AiModels:Providers:OpenAI:ApiKey" "<openai-api-key>"
+dotnet user-secrets --project AssistantCore.Service set "AzureSearch:PlanningModelApiKey" "<azure-openai-planning-api-key>"
 ```
+
+`LocalLive` utilise `m365-text-embedding-3-small` pour l’indexation et la
+vectorisation des requêtes. Sa Knowledge Base DEV possède un nom distinct de
+celle de CERTIF. Le raisonnement `auto` est utilisé par défaut : Azure commence
+par une recherche légère et active la planification si les résultats sont
+insuffisants. Pour forcer un mode, définir temporairement par exemple :
+
+```bash
+AzureSearch__KnowledgeBaseRetrievalReasoningEffort=low bash scripts/start-local-live.sh
+```
+
+Les valeurs acceptées sont `minimal`, `low` et `auto`.
 
 La connexion SQL n'a pas besoin d'être ajoutée aux `user-secrets`. Le script
 lit `SQL_SERVER_PASSWORD` dans `.env.database`, construit la chaîne de
@@ -197,7 +209,7 @@ synchronisation sont persistées dans SQL, puis réclamées directement par le
 Worker. En environnement Azure, activer `ServiceBus:Enabled` uniquement
 lorsque le namespace, les files et leurs consommateurs sont déployés.
 
-Le modèle défini par `AiModels:DefaultModel` doit être réellement accessible
+La définition `FoundryAgent` doit pointer vers une version d’agent réellement accessible
 avec la clé configurée. L'App Registration Microsoft 365 doit aussi accepter
 exactement ce callback `Web` :
 

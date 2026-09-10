@@ -1,16 +1,10 @@
 using System.Collections.Concurrent;
 using System.Text.Json;
-using AssistantCore.Repository.Persistence;
 using AssistantCore.Service.Application.Models.Messages.Connectors;
-using AssistantCore.Service.Application.Models.Messages.Connectors.InternalData;
 using AssistantCore.Service.Application.Models.Messages.Tools;
-using AssistantCore.Service.Application.Services.Messages.Connectors;
-using AssistantCore.Service.Application.Services.Messages.Connectors.InternalData;
 using AssistantCore.Service.Application.Services.Messages.Evidence;
 using AssistantCore.Service.Application.Services.Messages.Tools;
 using AssistantCore.Service.Infrastructure.Connectors;
-using AssistantCore.Service.Infrastructure.Connectors.InternalData;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -18,25 +12,19 @@ namespace AssistantCore.Service.Tests.Integration;
 
 public sealed class ConnectorServiceCollectionExtensionsTests
 {
-    [Theory]
-    [InlineAutoDomainData(20, 4000)]
-    public void Given_ValidConnectorConfiguration_When_AddConnectorInfrastructure_Then_RegistersInternalDataModule(
-        int maximumResults,
-        int maximumContentLength)
+    [Theory, AutoDomainData]
+    public void Given_ValidConnectorConfiguration_When_AddConnectorInfrastructure_Then_RegistersSharedInfrastructure(
+        Guid _)
     {
         // Given
         var configuration = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
             {
-                ["Connectors:InternalData:EnabledCategories:0"] = "Conversations",
-                ["Connectors:InternalData:EnabledCategories:1"] = "Messages",
-                ["Connectors:InternalData:MaximumResults"] = maximumResults.ToString(),
-                ["Connectors:InternalData:MaximumContentLength"] = maximumContentLength.ToString()
+                ["Connectors:Microsoft365:MaximumResults"] = "10",
+                ["Connectors:Microsoft365:MaximumContentLength"] = "4000"
             })
             .Build();
         var services = new ServiceCollection();
-        services.AddDbContext<AssistantCoreDbContext>(options =>
-            options.UseInMemoryDatabase(Guid.NewGuid().ToString()));
 
         // When
         services.AddConnectorInfrastructure(configuration);
@@ -44,17 +32,9 @@ public sealed class ConnectorServiceCollectionExtensionsTests
         // Then
         using var serviceProvider = services.BuildServiceProvider();
         using var scope = serviceProvider.CreateScope();
-        Assert.NotNull(scope.ServiceProvider.GetRequiredService<InternalDataConnectorOptions>());
         Assert.NotNull(scope.ServiceProvider.GetRequiredService<IEvidenceNormalizer>());
-        Assert.NotNull(scope.ServiceProvider.GetRequiredService<IInternalDataSearchRepository>());
-        Assert.NotNull(scope.ServiceProvider.GetRequiredService<IInternalDataConnector>());
         Assert.IsType<ScopedToolExecutionRouter>(
             scope.ServiceProvider.GetRequiredService<IToolExecutionRouter>());
-        Assert.Contains(
-            services,
-            descriptor =>
-                descriptor.ServiceType == typeof(IAiToolExecutionHandler)
-                && descriptor.ImplementationType == typeof(InternalDataToolExecutionHandler));
     }
 
     [Theory, AutoDomainData]

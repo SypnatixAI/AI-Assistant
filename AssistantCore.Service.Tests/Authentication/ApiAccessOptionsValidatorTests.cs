@@ -12,8 +12,7 @@ public sealed class ApiAccessOptionsValidatorTests
         {
             RequiredScope = "access_as_user",
             RequiredAdmissionRole = "AssistantCore.Access",
-            TenantAdminRole = "tenantAdmin",
-            UsagePolicyManagementRole = "usagePolicy.manage"
+            TenantAdminRole = "tenantAdmin"
         };
 
         // When
@@ -33,8 +32,7 @@ public sealed class ApiAccessOptionsValidatorTests
         {
             RequiredScope = scope,
             RequiredAdmissionRole = "AssistantCore.Access",
-            TenantAdminRole = "tenantAdmin",
-            UsagePolicyManagementRole = "usagePolicy.manage"
+            TenantAdminRole = "tenantAdmin"
         };
 
         // When
@@ -54,8 +52,7 @@ public sealed class ApiAccessOptionsValidatorTests
         {
             RequiredScope = "access_as_user profile",
             RequiredAdmissionRole = "AssistantCore.Access",
-            TenantAdminRole = "tenantAdmin",
-            UsagePolicyManagementRole = "usagePolicy.manage"
+            TenantAdminRole = "tenantAdmin"
         };
 
         // When
@@ -78,8 +75,7 @@ public sealed class ApiAccessOptionsValidatorTests
         {
             RequiredScope = "access_as_user",
             RequiredAdmissionRole = role,
-            TenantAdminRole = "tenantAdmin",
-            UsagePolicyManagementRole = "usagePolicy.manage"
+            TenantAdminRole = "tenantAdmin"
         };
 
         // When
@@ -98,8 +94,7 @@ public sealed class ApiAccessOptionsValidatorTests
         {
             RequiredScope = "access_as_user",
             RequiredAdmissionRole = "AssistantCore.Access Some.Other",
-            TenantAdminRole = "tenantAdmin",
-            UsagePolicyManagementRole = "usagePolicy.manage"
+            TenantAdminRole = "tenantAdmin"
         };
 
         // When
@@ -122,8 +117,7 @@ public sealed class ApiAccessOptionsValidatorTests
         {
             RequiredScope = "access_as_user",
             RequiredAdmissionRole = "AssistantCore.Access",
-            TenantAdminRole = role,
-            UsagePolicyManagementRole = "usagePolicy.manage"
+            TenantAdminRole = role
         };
 
         // When
@@ -142,8 +136,7 @@ public sealed class ApiAccessOptionsValidatorTests
         {
             RequiredScope = "access_as_user",
             RequiredAdmissionRole = "AssistantCore.Access",
-            TenantAdminRole = "tenantAdmin Some.Other",
-            UsagePolicyManagementRole = "usagePolicy.manage"
+            TenantAdminRole = "tenantAdmin Some.Other"
         };
 
         // When
@@ -153,51 +146,6 @@ public sealed class ApiAccessOptionsValidatorTests
         Assert.True(result.Failed);
         Assert.Contains(
             "AzureAd:TenantAdminRole must be a single value without whitespace.",
-            result.Failures);
-    }
-
-    [Theory]
-    [InlineData("")]
-    [InlineData("   ")]
-    public void Given_AMissingUsagePolicyManagementRole_When_Validate_Then_ValidationFailsOnTheUsagePolicyManagementRoleKey(
-        string role)
-    {
-        // Given
-        var options = new ApiAccessOptions
-        {
-            RequiredScope = "access_as_user",
-            RequiredAdmissionRole = "AssistantCore.Access",
-            TenantAdminRole = "tenantAdmin",
-            UsagePolicyManagementRole = role
-        };
-
-        // When
-        var result = new ApiAccessOptionsValidator().Validate(name: null, options);
-
-        // Then
-        Assert.True(result.Failed);
-        Assert.Contains("AzureAd:UsagePolicyManagementRole is required.", result.Failures);
-    }
-
-    [Fact]
-    public void Given_AUsagePolicyManagementRoleContainingSeveralValues_When_Validate_Then_ValidationFails()
-    {
-        // Given
-        var options = new ApiAccessOptions
-        {
-            RequiredScope = "access_as_user",
-            RequiredAdmissionRole = "AssistantCore.Access",
-            TenantAdminRole = "tenantAdmin",
-            UsagePolicyManagementRole = "usagePolicy.manage Some.Other"
-        };
-
-        // When
-        var result = new ApiAccessOptionsValidator().Validate(name: null, options);
-
-        // Then
-        Assert.True(result.Failed);
-        Assert.Contains(
-            "AzureAd:UsagePolicyManagementRole must be a single value without whitespace.",
             result.Failures);
     }
 }

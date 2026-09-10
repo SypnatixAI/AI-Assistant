@@ -3,9 +3,7 @@ namespace AssistantCore.RagEvaluation.Configuration;
 public sealed record RunnerOptions(
     string DatasetPath,
     string OutputDirectory,
-    string Mode,
-    string Model,
-    bool CompareAdaptive = false)
+    string Mode)
 {
     private const string DefaultDatasetPath =
         "docs/recherche/rag-agentique/evaluation-cases.json";
@@ -36,9 +34,7 @@ public sealed record RunnerOptions(
         return new RunnerOptions(
             GetValue(values, "dataset", DefaultDatasetPath),
             GetValue(values, "output", "artifacts/rag-evaluation"),
-            mode,
-            GetValue(values, "model", "gpt-5.6-luna"),
-            bool.Parse(GetValue(values, "compare-adaptive", "false")));
+            mode);
     }
 
     private static string GetValue(

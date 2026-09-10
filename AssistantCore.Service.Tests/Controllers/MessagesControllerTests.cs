@@ -30,7 +30,7 @@ public sealed class MessagesControllerTests
             new MessageUsageResponse(0, 0, 0, 0, DateTimeOffset.UtcNow, false));
         var dispatcher = new RecordingDispatcher { Response = response };
         var controller = new MessagesController(dispatcher);
-        var request = new SendMessageRequest(conversationId, "Question", "gpt");
+        var request = new SendMessageRequest(conversationId, "Question");
 
         // When
         var actionResult = await controller.SendMessage(request, cancellationToken);
@@ -42,7 +42,6 @@ public sealed class MessagesControllerTests
         var command = Assert.IsType<SendMessageCommand>(dispatcher.ReceivedRequest);
         Assert.Equal(conversationId, command.ConversationId);
         Assert.Equal("Question", command.Message);
-        Assert.Equal("gpt", command.Model);
         Assert.Equal(cancellationToken, dispatcher.ReceivedCancellationToken);
     }
 
@@ -74,13 +73,14 @@ public sealed class MessagesControllerTests
 
         // When
         await controller.SendMessageStream(
-            new SendMessageRequest(null, "Question", null),
+            new SendMessageRequest(null, "Question"),
             CancellationToken.None);
 
         // Then
         var payload = Encoding.UTF8.GetString(body.ToArray());
-        Assert.Equal("text/event-stream", httpContext.Response.ContentType);
-        Assert.StartsWith("event: message.accepted", payload);
+        Assert.Equal("text/event-stream; charset=utf-8", httpContext.Response.ContentType);
+        Assert.StartsWith(": connected", payload);
+        Assert.Contains("event: message.accepted", payload);
         Assert.Contains(@"""conversation"":{", payload);
         Assert.Contains(@"""title"":""Politique de teletravail""", payload);
         Assert.Contains(@"""status"":""Active""", payload);
@@ -105,7 +105,7 @@ public sealed class MessagesControllerTests
 
         // When
         await controller.SendMessageStream(
-            new SendMessageRequest(null, "Question", null),
+            new SendMessageRequest(null, "Question"),
             CancellationToken.None);
 
         // Then

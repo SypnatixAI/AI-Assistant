@@ -1,4 +1,5 @@
 using AssistantCore.Repository.Domain.Enums;
+using AssistantCore.Service.Application.Models.Messages.AiModels;
 
 namespace AssistantCore.Service.Application.Models.Messages.Connectors;
 
@@ -10,5 +11,4 @@ public sealed record ConnectorExecutionContext(
     IdentityProvider? IdentityProvider = null,
     int RetrievalCandidateLimit = int.MaxValue,
     string? UserEmail = null,
-    Orchestration.OrchestrationBudgetTracker? Budget = null,
-    Rag.RagExecutionStatus? RagStatus = null);
+    IReadOnlyCollection<AiConversationMessage>? ConversationHistory = null);

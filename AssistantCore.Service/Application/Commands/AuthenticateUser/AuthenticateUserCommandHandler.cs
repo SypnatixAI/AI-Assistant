@@ -5,11 +5,19 @@ using AssistantCore.Service.Application.Services.AuthenticateUser;
 namespace AssistantCore.Service.Application.Commands.AuthenticateUser;
 
 public sealed class AuthenticateUserCommandHandler(
-    IAuthenticateUserService authenticateUserService) : IRequestHandler<AuthenticateUserCommand, AuthenticateUserResponse>
+    IAuthenticateUserService authenticateUserService,
+    IAuthenticationCacheWarmupQueue cacheWarmupQueue) : IRequestHandler<AuthenticateUserCommand, AuthenticateUserResponse>
 {
     public async Task<AuthenticateUserResponse> HandleAsync(AuthenticateUserCommand request, CancellationToken cancellationToken)
     {
         var (organization, member) = await authenticateUserService.GetOrganizationAsync(cancellationToken);
+
+        // Queue cache warmups after authentication without extending the login
+        // response path. The hosted worker owns its dependency-injection scope.
+        cacheWarmupQueue.TryQueue(
+            organization.Id,
+            organization.ExternalTenantId,
+            member.ExternalUserId);
 
         return new AuthenticateUserResponse(
             new CurrentUserResponse(

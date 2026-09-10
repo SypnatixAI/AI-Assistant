@@ -541,59 +541,6 @@
             "description": "Active l'indexation de la bibliothèque et crée la synchronisation initiale traitée par le Worker local."
           },
           "response": []
-        },
-        {
-          "name": "Reset Selection",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('Status code is 200', function () {",
-                  "    pm.response.to.have.status(200);",
-                  "});",
-                  "",
-                  "pm.test('The response reports what was deleted', function () {",
-                  "    const response = pm.response.json();",
-                  "    pm.expect(response.organizationId).to.be.a('string');",
-                  "    pm.expect(response.deletedSources).to.be.a('number');",
-                  "    pm.expect(response.deletedSearchChunks).to.be.a('number');",
-                  "});",
-                  "",
-                  "pm.test('A second call deletes nothing, the operation is idempotent', function () {",
-                  "    pm.sendRequest({",
-                  "        url: pm.environment.get('base_url') + '/api/microsoft365/selection/reset',",
-                  "        method: 'POST',",
-                  "        header: { 'Authorization': pm.request.headers.get('Authorization') }",
-                  "    }, function (error, secondResponse) {",
-                  "        if (error) { return; }",
-                  "        pm.expect(secondResponse.code).to.eql(200);",
-                  "        pm.expect(secondResponse.json().deletedSources).to.eql(0);",
-                  "    });",
-                  "});"
-                ]
-              }
-            }
-          ],
-          "request": {
-            "method": "POST",
-            "header": [],
-            "url": {
-              "raw": "{{base_url}}/api/microsoft365/selection/reset",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "api",
-                "microsoft365",
-                "selection",
-                "reset"
-              ]
-            },
-            "description": "Remet l'organisation courante devant une selection de sites vierge, sans redemander le consentement administrateur.\n\nL'organisation vient du contexte authentifie : un administrateur ne peut reinitialiser que la sienne. Reserve au role Admin, sinon 403.\n\nEfface abonnements, synchronisations, travaux, contenus et passages indexes, puis les sources; les chunks correspondants sont retires d'Azure AI Search avant que leurs lignes ne disparaissent. Apres l'appel, Get Sites retourne les sites du tenant sans aucune selection."
-          },
-          "response": []
         }
       ]
     },
