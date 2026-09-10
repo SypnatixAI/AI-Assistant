@@ -1,4 +1,5 @@
 using System.ClientModel.Primitives;
+using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Text.Json;
 using AssistantCore.ExternalServices.Entities.Foundry;
@@ -19,6 +20,7 @@ public sealed class FoundryAgentExternalClient
     private readonly AIProjectClient _projectClient;
     private readonly ILogger<FoundryAgentExternalClient> _logger;
     private readonly SemaphoreSlim _configurationValidationLock = new(1, 1);
+    private readonly ConcurrentDictionary<Guid, ConversationSessionState> _conversationSessions = new();
     private volatile bool _configurationValidated;
 
     public FoundryAgentExternalClient(
@@ -44,9 +46,44 @@ public sealed class FoundryAgentExternalClient
 
         await ValidateConfigurationOnceAsync(cancellationToken);
         var agent = CreateAgent(request.Tools, toolExecutor);
-        var response = await agent.RunAsync(
-            CreateMessages(request),
-            cancellationToken: cancellationToken);
+
+        AgentResponse response;
+        if (request.ConversationId == Guid.Empty)
+        {
+            response = await agent.RunAsync(
+                CreateMessages(request),
+                cancellationToken: cancellationToken);
+        }
+        else
+        {
+            var sessionState = _conversationSessions.GetOrAdd(
+                request.ConversationId,
+                static _ => new ConversationSessionState());
+            await sessionState.Gate.WaitAsync(cancellationToken);
+            try
+            {
+                var isNewSession = sessionState.Session is null;
+                sessionState.Session ??= await agent.CreateSessionAsync(cancellationToken);
+                response = await agent.RunAsync(
+                    isNewSession ? CreateMessages(request) : CreateCurrentMessage(request),
+                    sessionState.Session,
+                    cancellationToken: cancellationToken);
+
+                _logger.LogInformation(
+                    "Foundry conversation {ConversationId} used a {SessionMode} agent session.",
+                    request.ConversationId,
+                    isNewSession ? "new" : "reused");
+            }
+            catch
+            {
+                sessionState.Session = null;
+                throw;
+            }
+            finally
+            {
+                sessionState.Gate.Release();
+            }
+        }
 
         return new FoundryAgentExternalResult(
             response.Text,
@@ -68,14 +105,71 @@ public sealed class FoundryAgentExternalClient
 
         await ValidateConfigurationOnceAsync(cancellationToken);
         var agent = CreateAgent(request.Tools, toolExecutor);
+
+        if (request.ConversationId == Guid.Empty)
+        {
+            return await RunStreamingCoreAsync(
+                agent,
+                request,
+                session: null,
+                includeHistory: true,
+                onAnswerDelta,
+                cancellationToken);
+        }
+
+        var sessionState = _conversationSessions.GetOrAdd(
+            request.ConversationId,
+            static _ => new ConversationSessionState());
+        await sessionState.Gate.WaitAsync(cancellationToken);
+        try
+        {
+            var isNewSession = sessionState.Session is null;
+            sessionState.Session ??= await agent.CreateSessionAsync(cancellationToken);
+            var result = await RunStreamingCoreAsync(
+                agent,
+                request,
+                sessionState.Session,
+                includeHistory: isNewSession,
+                onAnswerDelta,
+                cancellationToken);
+
+            _logger.LogInformation(
+                "Foundry conversation {ConversationId} used a {SessionMode} streaming agent session.",
+                request.ConversationId,
+                isNewSession ? "new" : "reused");
+            return result;
+        }
+        catch
+        {
+            sessionState.Session = null;
+            throw;
+        }
+        finally
+        {
+            sessionState.Gate.Release();
+        }
+    }
+
+    private async Task<FoundryAgentExternalResult> RunStreamingCoreAsync(
+        AIAgent agent,
+        FoundryAgentExternalRequest request,
+        AgentSession? session,
+        bool includeHistory,
+        Func<string, CancellationToken, ValueTask> onAnswerDelta,
+        CancellationToken cancellationToken)
+    {
         var responseText = new List<string>();
         UsageDetails? usage = null;
         var stopwatch = Stopwatch.StartNew();
         var firstEventLogged = false;
         var firstTextLogged = false;
+        var messages = includeHistory
+            ? CreateMessages(request)
+            : CreateCurrentMessage(request);
 
         await foreach (var update in agent.RunStreamingAsync(
-                           CreateMessages(request),
+                           messages,
+                           session,
                            cancellationToken: cancellationToken))
         {
             if (!firstEventLogged)
@@ -92,8 +186,8 @@ public sealed class FoundryAgentExternalClient
                 ?.Details
                 ?? usage;
 
-            // A streaming update can contain only a space or a line break. Those
-            // fragments are part of the answer and must not be discarded.
+            // Whitespace-only streaming fragments are significant formatting and
+            // must be preserved while empty/null updates are ignored.
             if (!HasStreamableText(update.Text)
                 || update.Contents.OfType<FunctionCallContent>().Any()
                 || update.Contents.OfType<FunctionResultContent>().Any())
@@ -232,6 +326,10 @@ public sealed class FoundryAgentExternalClient
         return messages;
     }
 
+    private static IReadOnlyCollection<ChatMessage> CreateCurrentMessage(
+        FoundryAgentExternalRequest request) =>
+        [new ChatMessage(ChatRole.User, request.UserMessage)];
+
     private string CreateAgentIdentifier() =>
         $"{_settings.AgentName}@{_settings.AgentVersion}";
 
@@ -240,6 +338,12 @@ public sealed class FoundryAgentExternalClient
 
     private static int ToTokenCount(long? tokenCount) =>
         tokenCount is null ? 0 : checked((int)tokenCount.Value);
+
+    private sealed class ConversationSessionState
+    {
+        public SemaphoreSlim Gate { get; } = new(1, 1);
+        public AgentSession? Session { get; set; }
+    }
 
     private sealed class JsonSchemaFunction(
         AIFunction innerFunction,

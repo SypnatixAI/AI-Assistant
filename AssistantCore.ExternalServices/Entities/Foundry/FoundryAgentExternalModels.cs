@@ -24,7 +24,8 @@ public sealed record FoundryAgentExternalToolCall(
 public sealed record FoundryAgentExternalRequest(
     IReadOnlyCollection<FoundryAgentExternalMessage> ConversationHistory,
     string UserMessage,
-    IReadOnlyCollection<FoundryAgentExternalToolDefinition> Tools);
+    IReadOnlyCollection<FoundryAgentExternalToolDefinition> Tools,
+    Guid ConversationId = default);
 
 public sealed record FoundryAgentExternalResult(
     string Content,

@@ -152,6 +152,69 @@ public sealed class ConversationRepository(
         return messages;
     }
 
+    public async Task<(Conversation Conversation, IReadOnlyList<ConversationMessageItem> History)?>
+        StartExistingConversationMessageAsync(
+            Guid organizationId,
+            Guid ownerMemberId,
+            Guid conversationId,
+            Message userMessage,
+            CancellationToken cancellationToken = default)
+    {
+        ValidateIdentifier(
+            userMessage.ConversationId,
+            conversationId,
+            nameof(userMessage.ConversationId));
+
+        var conversation = await dbContext.Conversations
+            .Include(candidate => candidate.Messages
+                .Where(message =>
+                    message.ProcessingStatus == MessageProcessingStatus.Completed
+                    && !message.Sources.Any(source => source.SourceType == "Microsoft365"))
+                .OrderByDescending(message => message.CreatedAt)
+                .ThenByDescending(message => message.Id)
+                .Take(MaximumAgentHistoryMessages))
+            .SingleOrDefaultAsync(
+                candidate =>
+                    candidate.Id == conversationId
+                    && candidate.OrganizationId == organizationId
+                    && candidate.OwnerMemberId == ownerMemberId
+                    && candidate.DeletedAt == null,
+                cancellationToken);
+
+        if (conversation is null)
+        {
+            return null;
+        }
+
+        if (conversation.Status == ConversationStatus.Archived)
+        {
+            return (conversation, Array.Empty<ConversationMessageItem>());
+        }
+
+        var history = conversation.Messages
+            .OrderBy(message => message.CreatedAt)
+            .ThenBy(message => message.Id)
+            .Select(message => new ConversationMessageItem(
+                message.Id,
+                message.Role,
+                message.Content,
+                message.ProcessingStatus,
+                message.Model,
+                message.CreatedAt,
+                message.UpdatedAt,
+                Array.Empty<ConversationMessageSourceItem>()))
+            .ToArray();
+
+        userMessage.ConversationId = conversationId;
+        userMessage.Role = MessageRole.User;
+        userMessage.ProcessingStatus = MessageProcessingStatus.InProgress;
+        conversation.UpdatedAt = userMessage.CreatedAt;
+        dbContext.Messages.Add(userMessage);
+        await dbContext.SaveChangesAsync(cancellationToken);
+
+        return (conversation, history);
+    }
+
     public async Task<ConversationListPage> ListConversationsAsync(
         Guid organizationId,
         Guid ownerMemberId,

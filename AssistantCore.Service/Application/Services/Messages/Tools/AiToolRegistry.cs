@@ -3,31 +3,44 @@ using AssistantCore.Repository.Domain.Entities;
 using AssistantCore.Repository.Domain.Enums;
 using AssistantCore.Repository.Queries;
 using AssistantCore.Service.Application.Models.Messages.Tools;
+using Microsoft.Extensions.Caching.Memory;
 
 namespace AssistantCore.Service.Application.Services.Messages.Tools;
 
 public sealed class AiToolRegistry(
     IOrganizationConnectorQueries organizationConnectorQueries,
-    IEnumerable<IAiToolExecutionHandler> toolHandlers) : IAiToolRegistry
+    IEnumerable<IAiToolExecutionHandler> toolHandlers,
+    IMemoryCache? memoryCache = null) : IAiToolRegistry
 {
+    private static readonly TimeSpan CacheDuration = TimeSpan.FromSeconds(30);
+
     public async Task<IReadOnlyCollection<AiToolDefinition>> GetAvailableToolsAsync(
         Guid organizationId,
         CancellationToken cancellationToken)
     {
         ArgumentOutOfRangeException.ThrowIfEqual(organizationId, Guid.Empty);
 
-      //Todo: Lorsquon retourne lorg depuis la BD, il devrait peut etre retourner aussi les connecteurs actifs et configurés, pour éviter de faire une autre requête pour récupérer les connecteurs. On pourrait peut-être créer un query qui retourne l'organisation avec ses connecteurs actifs et configurés.    
+        var cacheKey = $"ai-tools:{organizationId:D}";
+        if (memoryCache is not null
+            && memoryCache.TryGetValue(cacheKey, out IReadOnlyCollection<AiToolDefinition>? cachedTools)
+            && cachedTools is not null)
+        {
+            return cachedTools;
+        }
+
         var connectors = await organizationConnectorQueries.GetActiveConfiguredConnectors(
             organizationId,
             cancellationToken);
         var executableTools = toolHandlers
             .Select(handler => handler.ToolName)
             .ToHashSet(StringComparer.Ordinal);
-
-        return connectors
+        var tools = connectors
             .Select(connector => CreateToolDefinition(connector, executableTools))
             .OfType<AiToolDefinition>()
             .ToArray();
+
+        memoryCache?.Set(cacheKey, tools, CacheDuration);
+        return tools;
     }
 
     private AiToolDefinition? CreateToolDefinition(

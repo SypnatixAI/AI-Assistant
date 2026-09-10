@@ -50,7 +50,8 @@ public sealed class FoundryAgentClientAdapter(
                     tool.Name,
                     tool.Description,
                     tool.InputSchema))
-                .ToArray());
+                .ToArray(),
+            request.ConversationId);
 
     private static FoundryAgentExternalMessage MapMessage(AiConversationMessage message) =>
         new(
