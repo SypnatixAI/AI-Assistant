@@ -189,12 +189,15 @@ dotnet user-secrets --project AssistantCore.Service set "AzureSearch:PlanningMod
 
 `LocalLive` utilise `m365-text-embedding-3-small` pour l’indexation et la
 vectorisation des requêtes. Sa Knowledge Base DEV possède un nom distinct de
-celle de CERTIF. Le raisonnement reste `minimal` par défaut. Pour essayer
-`low`, définir temporairement :
+celle de CERTIF. Le raisonnement `auto` est utilisé par défaut : Azure commence
+par une recherche légère et active la planification si les résultats sont
+insuffisants. Pour forcer un mode, définir temporairement par exemple :
 
 ```bash
 AzureSearch__KnowledgeBaseRetrievalReasoningEffort=low bash scripts/start-local-live.sh
 ```
+
+Les valeurs acceptées sont `minimal`, `low` et `auto`.
 
 La connexion SQL n'a pas besoin d'être ajoutée aux `user-secrets`. Le script
 lit `SQL_SERVER_PASSWORD` dans `.env.database`, construit la chaîne de

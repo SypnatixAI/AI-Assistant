@@ -49,8 +49,9 @@ param azureOpenAiPlanningModelName string = 'gpt-5-mini'
 @allowed([
   'minimal'
   'low'
+  'auto'
 ])
-param knowledgeBaseRetrievalReasoningEffort string = 'minimal'
+param knowledgeBaseRetrievalReasoningEffort string = 'auto'
 
 param tags object = {
   application: 'assistant'

@@ -145,10 +145,10 @@ public sealed class AzureAiSearchKnowledgeBaseRetrievalClient
     private static string NormalizeReasoningEffort(string value)
     {
         var normalized = value.Trim().ToLowerInvariant();
-        return normalized is "minimal" or "low"
+        return normalized is "minimal" or "low" or "auto"
             ? normalized
             : throw new ArgumentException(
-                "Azure AI Search retrieval reasoning effort must be 'minimal' or 'low'.",
+                "Azure AI Search retrieval reasoning effort must be 'minimal', 'low' or 'auto'.",
                 nameof(value));
     }
 

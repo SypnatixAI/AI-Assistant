@@ -85,7 +85,7 @@ public static class Microsoft365ServiceCollectionExtensions
                     && (options.KnowledgeBaseMaxOutputSizeInTokens is null or > 0)
                     && IsAzureSearchKnowledgeResourceName(options.KnowledgeSourceName)
                     && IsAzureSearchKnowledgeResourceName(options.KnowledgeBaseName),
-                "AzureSearch requires cosine similarity, minimal or low retrieval reasoning, a planning model for low reasoning, valid semantic relevance, knowledge base limits and knowledge resource names.")
+                "AzureSearch requires cosine similarity, minimal, low or auto retrieval reasoning, a planning model for low or auto reasoning, valid semantic relevance, knowledge base limits and knowledge resource names.")
             .ValidateOnStart();
 
         services.AddDataProtection();
@@ -185,7 +185,8 @@ public static class Microsoft365ServiceCollectionExtensions
 
     private static bool IsSupportedReasoningEffort(string value) =>
         string.Equals(value, "minimal", StringComparison.OrdinalIgnoreCase)
-        || string.Equals(value, "low", StringComparison.OrdinalIgnoreCase);
+        || string.Equals(value, "low", StringComparison.OrdinalIgnoreCase)
+        || string.Equals(value, "auto", StringComparison.OrdinalIgnoreCase);
 
     private static bool HasValidPlanningModelConfiguration(AzureAiSearchOptions options)
     {
@@ -199,7 +200,8 @@ public static class Microsoft365ServiceCollectionExtensions
             || !string.IsNullOrWhiteSpace(options.PlanningModelApiKey);
 
         return (!hasAnyConfiguration || hasCompleteConfiguration)
-            && (!string.Equals(options.KnowledgeBaseRetrievalReasoningEffort, "low", StringComparison.OrdinalIgnoreCase)
+            && (!(string.Equals(options.KnowledgeBaseRetrievalReasoningEffort, "low", StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(options.KnowledgeBaseRetrievalReasoningEffort, "auto", StringComparison.OrdinalIgnoreCase))
                 || hasCompleteConfiguration);
     }
 

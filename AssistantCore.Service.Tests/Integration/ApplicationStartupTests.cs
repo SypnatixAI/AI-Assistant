@@ -67,11 +67,13 @@ public sealed class ApplicationStartupTests
         var exception = Assert.Throws<OptionsValidationException>(() => factory.CreateClient());
 
         // Then
-        Assert.Contains("minimal or low retrieval reasoning", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("minimal, low or auto retrieval reasoning", exception.Message, StringComparison.Ordinal);
     }
 
-    [Theory, InlineAutoDomainData("low")]
-    public void Given_LowKnowledgeBaseReasoningWithPlanningModel_When_CreateClient_Then_StartupSucceeds(
+    [Theory]
+    [InlineAutoDomainData("low")]
+    [InlineAutoDomainData("auto")]
+    public void Given_ModelBackedKnowledgeBaseReasoningWithPlanningModel_When_CreateClient_Then_StartupSucceeds(
         string reasoningEffort)
     {
         // Given

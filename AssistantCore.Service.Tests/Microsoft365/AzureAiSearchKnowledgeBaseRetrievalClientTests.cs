@@ -128,8 +128,11 @@ public sealed class AzureAiSearchKnowledgeBaseRetrievalClientTests
         Assert.Contains(result.Activity, activity => activity.Search == "MecanoPlus financial risks");
     }
 
-    [Theory, AutoDomainData]
-    public async Task Given_LowReasoning_When_RetrieveAsync_Then_SendsConversationMessages(
+    [Theory]
+    [InlineAutoDomainData("low")]
+    [InlineAutoDomainData("auto")]
+    public async Task Given_ModelBackedReasoning_When_RetrieveAsync_Then_SendsConversationMessages(
+        string reasoningEffort,
         string apiKey,
         string query,
         string filter,
@@ -161,12 +164,12 @@ public sealed class AzureAiSearchKnowledgeBaseRetrievalClientTests
                 10,
                 30,
                 6000,
-                "low"),
+                reasoningEffort),
             CancellationToken.None);
 
         // Then
         using var document = JsonDocument.Parse(payload!);
-        Assert.Equal("low", document.RootElement.GetProperty("retrievalReasoningEffort").GetProperty("kind").GetString());
+        Assert.Equal(reasoningEffort, document.RootElement.GetProperty("retrievalReasoningEffort").GetProperty("kind").GetString());
         Assert.False(document.RootElement.TryGetProperty("intents", out _));
         var messages = document.RootElement.GetProperty("messages");
         Assert.Equal(2, messages.GetArrayLength());

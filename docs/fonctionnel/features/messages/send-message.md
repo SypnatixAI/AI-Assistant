@@ -119,11 +119,12 @@ backend lui transmet :
   petite des preuves finales.
 
 La Knowledge Base utilise le déploiement Azure OpenAI `gpt-5-mini` comme modèle
-de planification. Le mode de raisonnement est `minimal` par défaut et peut être
-basculé vers `low` avec
-`AzureSearch__KnowledgeBaseRetrievalReasoningEffort`. Toute autre valeur est
-refusée au démarrage; `low` est également refusé si le modèle de planification
-n’est pas complètement configuré.
+de planification. Le mode de raisonnement est `auto` par défaut : Azure commence
+par une recherche légère et poursuit avec une planification par modèle lorsque
+les premiers résultats ne suffisent pas. La valeur peut être forcée à `minimal`
+ou `low` avec `AzureSearch__KnowledgeBaseRetrievalReasoningEffort`. Toute autre
+valeur est refusée au démarrage; `low` et `auto` sont également refusés si le
+modèle de planification n’est pas complètement configuré.
 
 La Knowledge Base n’est pas exposée directement à Foundry par MCP pour le
 moment. Un accès MCP direct déplacerait vers Foundry l’appel au moteur de
