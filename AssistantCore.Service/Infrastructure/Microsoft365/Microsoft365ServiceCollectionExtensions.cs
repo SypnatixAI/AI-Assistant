@@ -4,7 +4,9 @@ using AssistantCore.ExternalServices.Services.OpenAI;
 using AssistantCore.Service.Application.Configuration;
 using AssistantCore.Service.Application.Services.Microsoft365;
 using AssistantCore.Service.Application.Services.Messages.Connectors.Microsoft365;
+using AssistantCore.Service.Application.Services.Messages.Tabular;
 using Microsoft.Extensions.Options;
+using System.Text.RegularExpressions;
 
 namespace AssistantCore.Service.Infrastructure.Microsoft365;
 
@@ -17,8 +19,6 @@ public static class Microsoft365ServiceCollectionExtensions
         this IServiceCollection services,
         IConfiguration configuration)
     {
-        services.AddOptions<RagOptions>().Bind(configuration.GetSection(RagOptions.SectionName))
-            .Validate(options => options.IsValid(), "Invalid Rag configuration.").ValidateOnStart();
         services.AddOptions<Microsoft365Options>()
             .Bind(configuration.GetSection(Microsoft365Options.SectionName))
             .Validate(options =>
@@ -47,8 +47,6 @@ public static class Microsoft365ServiceCollectionExtensions
                     && options.MaximumExtractedCharacters > 0
                     && options.MaximumExcelSheets > 0
                     && options.MaximumExcelCells > 0
-                    && options.MaximumStructuredDataDepth > 0
-                    && options.MaximumCsvRows > 0
                     && options.SharePointGroupCacheMinutes > 0
                     && options.ChunkMaximumTokens > 0
                     && options.ChunkOverlapTokens >= 0
@@ -56,6 +54,7 @@ public static class Microsoft365ServiceCollectionExtensions
                     && options.MaximumChunksPerDocument > 0
                     && IsHttpsUrl(options.EmbeddingEndpoint)
                     && !string.IsNullOrWhiteSpace(options.EmbeddingModel)
+                    && HasValidAzureOpenAiEmbeddingConfiguration(options)
                     && options.EmbeddingDimensions > 0
                     && options.EmbeddingBatchSize is > 0 and <= 2048
                     && options.DocumentWorkLeaseMinutes > 0
@@ -77,9 +76,17 @@ public static class Microsoft365ServiceCollectionExtensions
         services.AddOptions<AzureAiSearchOptions>()
             .Bind(configuration.GetSection(AzureAiSearchOptions.SectionName))
             .Validate(options =>
-                    double.IsFinite(options.MinimumSemanticRelevanceScore)
-                    && options.MinimumSemanticRelevanceScore is >= 0d and <= 4d,
-                "AzureSearch minimum semantic relevance score must be between 0 and 4.")
+                    options.VectorSearchMetric == "cosine"
+                    && IsSupportedReasoningEffort(options.KnowledgeBaseRetrievalReasoningEffort)
+                    && HasValidPlanningModelConfiguration(options)
+                    && IsAzureSearchKnowledgeResourceName(options.VectorizerName)
+                    && double.IsFinite(options.MinimumSemanticRelevanceScore)
+                    && options.MinimumSemanticRelevanceScore is >= 0d and <= 4d
+                    && options.KnowledgeBaseMaxRuntimeInSeconds > 0
+                    && (options.KnowledgeBaseMaxOutputSizeInTokens is null or > 0)
+                    && IsAzureSearchKnowledgeResourceName(options.KnowledgeSourceName)
+                    && IsAzureSearchKnowledgeResourceName(options.KnowledgeBaseName),
+                "AzureSearch requires cosine similarity, minimal, low or auto retrieval reasoning, a planning model for low or auto reasoning, valid semantic relevance, knowledge base limits and knowledge resource names.")
             .ValidateOnStart();
 
         services.AddDataProtection();
@@ -98,29 +105,25 @@ public static class Microsoft365ServiceCollectionExtensions
         AddProtectedHttpClient<MicrosoftSharePointListItemPermissionClient>(services);
         services.AddSingleton<MicrosoftWordContentExtractorClient>();
         services.AddSingleton<MicrosoftExcelContentExtractorClient>();
+        services.AddSingleton<MicrosoftExcelTableReaderClient>();
         services.AddSingleton<MicrosoftPdfContentExtractorClient>();
-        services.AddSingleton<MicrosoftPlainTextContentExtractorClient>();
-        services.AddSingleton<MicrosoftCsvContentExtractorClient>();
-        services.AddSingleton<MicrosoftJsonContentExtractorClient>();
-        services.AddSingleton<MicrosoftXmlContentExtractorClient>();
-        services.AddSingleton<MicrosoftHtmlContentExtractorClient>();
-        services.AddSingleton<MicrosoftOpenDocumentContentExtractorClient>();
         services.AddSingleton<MicrosoftCertificateIdentityClient>();
         AddProtectedHttpClient<MicrosoftSharePointUserGroupClient>(services);
         services.AddHttpClient<AzureAiSearchPassageAclClient>()
             .RedactLoggedHeaders(["api-key", "Authorization"]);
-        services.AddHttpClient<AzureAiSearchPassageSearchClient>()
+        services.AddHttpClient<AzureAiSearchKnowledgeBaseRetrievalClient>()
             .RedactLoggedHeaders(["api-key", "Authorization"]);
         services.AddHttpClient<AzureAiSearchIndexClient>()
             .RedactLoggedHeaders(["api-key", "Authorization"]);
         services.AddHttpClient<OpenAiEmbeddingsClient>()
-            .RedactLoggedHeaders(["Authorization"]);
+            .RedactLoggedHeaders(["api-key", "Authorization"]);
         services.AddHttpClient<MicrosoftVisionReadClient>()
             .RedactLoggedHeaders(["Ocp-Apim-Subscription-Key"]);
         services.AddScoped<IMicrosoft365ConsentClient, Microsoft365ConsentClientAdapter>();
         services.AddScoped<IMicrosoft365ListItemDeltaClient, Microsoft365ListItemDeltaClientAdapter>();
         services.AddScoped<IMicrosoft365DriveItemDeltaClient, Microsoft365DriveItemDeltaClientAdapter>();
         services.AddScoped<IMicrosoft365DriveContentClient, Microsoft365DriveContentClientAdapter>();
+        services.AddScoped<ISpreadsheetWorkbookReader, SpreadsheetWorkbookReaderAdapter>();
         services.AddScoped<IMicrosoft365ListSchemaClient, Microsoft365ListSchemaClientAdapter>();
         services.AddScoped<IMicrosoft365SiteSourcesClient, Microsoft365SiteSourcesClientAdapter>();
         services.AddScoped<IMicrosoft365SiteClient, Microsoft365SiteClientAdapter>();
@@ -134,12 +137,6 @@ public static class Microsoft365ServiceCollectionExtensions
         services.AddScoped<IMicrosoft365ContentExtractor, Microsoft365WordContentExtractorAdapter>();
         services.AddScoped<IMicrosoft365ContentExtractor, Microsoft365ExcelContentExtractorAdapter>();
         services.AddScoped<IMicrosoft365ContentExtractor, Microsoft365PdfImageContentExtractorAdapter>();
-        services.AddScoped<IMicrosoft365ContentExtractor, Microsoft365PlainTextContentExtractorAdapter>();
-        services.AddScoped<IMicrosoft365ContentExtractor, Microsoft365CsvContentExtractorAdapter>();
-        services.AddScoped<IMicrosoft365ContentExtractor, Microsoft365JsonContentExtractorAdapter>();
-        services.AddScoped<IMicrosoft365ContentExtractor, Microsoft365XmlContentExtractorAdapter>();
-        services.AddScoped<IMicrosoft365ContentExtractor, Microsoft365HtmlContentExtractorAdapter>();
-        services.AddScoped<IMicrosoft365ContentExtractor, Microsoft365OpenDocumentContentExtractorAdapter>();
         services.AddScoped<IMicrosoft365EmbeddingGenerator, Microsoft365EmbeddingGeneratorAdapter>();
         services.AddScoped<IMicrosoft365SearchIndexInitializer, Microsoft365SearchIndexInitializerAdapter>();
         services.AddSingleton<IMicrosoft365ClientStateProtector, Microsoft365ClientStateProtectorAdapter>();
@@ -178,6 +175,38 @@ public static class Microsoft365ServiceCollectionExtensions
     private static bool IsServiceBusNamespace(string value) =>
         Uri.CheckHostName(value) == UriHostNameType.Dns
         && !value.Contains("://", StringComparison.Ordinal);
+
+    private static bool IsAzureSearchKnowledgeResourceName(string value) =>
+        !string.IsNullOrWhiteSpace(value)
+        && value.Length is >= 2 and <= 100
+        && Regex.IsMatch(value, "^[a-z0-9](?:[a-z0-9-]*[a-z0-9])$", RegexOptions.CultureInvariant);
+
+    private static bool HasValidAzureOpenAiEmbeddingConfiguration(Microsoft365Options options) =>
+        string.IsNullOrWhiteSpace(options.EmbeddingDeploymentName)
+        || (!string.IsNullOrWhiteSpace(options.EmbeddingApiKey)
+            && !string.IsNullOrWhiteSpace(options.EmbeddingApiVersion));
+
+    private static bool IsSupportedReasoningEffort(string value) =>
+        string.Equals(value, "minimal", StringComparison.OrdinalIgnoreCase)
+        || string.Equals(value, "low", StringComparison.OrdinalIgnoreCase)
+        || string.Equals(value, "auto", StringComparison.OrdinalIgnoreCase);
+
+    private static bool HasValidPlanningModelConfiguration(AzureAiSearchOptions options)
+    {
+        var hasCompleteConfiguration = IsHttpsUrl(options.PlanningModelEndpoint)
+            && !string.IsNullOrWhiteSpace(options.PlanningModelDeploymentName)
+            && !string.IsNullOrWhiteSpace(options.PlanningModelName)
+            && !string.IsNullOrWhiteSpace(options.PlanningModelApiKey);
+        var hasAnyConfiguration = !string.IsNullOrWhiteSpace(options.PlanningModelEndpoint)
+            || !string.IsNullOrWhiteSpace(options.PlanningModelDeploymentName)
+            || !string.IsNullOrWhiteSpace(options.PlanningModelName)
+            || !string.IsNullOrWhiteSpace(options.PlanningModelApiKey);
+
+        return (!hasAnyConfiguration || hasCompleteConfiguration)
+            && (!(string.Equals(options.KnowledgeBaseRetrievalReasoningEffort, "low", StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(options.KnowledgeBaseRetrievalReasoningEffort, "auto", StringComparison.OrdinalIgnoreCase))
+                || hasCompleteConfiguration);
+    }
 
     private static bool HasValidSharePointCertificateConfiguration(Microsoft365Options options)
     {

@@ -149,11 +149,6 @@ public sealed class ConversationMessageListingServiceTests
             CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();
 
-        public Task<bool> UpdateConversationContextSummaryAsync(
-            Guid organizationId, Guid ownerMemberId, Guid conversationId, string summary,
-            DateTimeOffset updatedAt, CancellationToken cancellationToken = default) =>
-            throw new NotSupportedException();
-
         public Task<(Conversation Conversation, Message UserMessage)> CreateConversationWithFirstMessageAsync(
             Guid organizationId,
             Guid ownerMemberId,

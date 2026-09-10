@@ -3,59 +3,75 @@ using AssistantCore.Repository.Domain.Entities;
 using AssistantCore.Repository.Domain.Enums;
 using AssistantCore.Repository.Queries;
 using AssistantCore.Service.Application.Models.Messages.Tools;
-using AssistantCore.Service.Application.Services.Messages.Connectors;
+using Microsoft.Extensions.Caching.Memory;
 
 namespace AssistantCore.Service.Application.Services.Messages.Tools;
 
 public sealed class AiToolRegistry(
     IOrganizationConnectorQueries organizationConnectorQueries,
-    IEnumerable<IErpConnector> erpConnectors,
-    IEnumerable<ICrmConnector> crmConnectors,
-    IEnumerable<IAiToolExecutionHandler> toolHandlers) : IAiToolRegistry
+    IEnumerable<IAiToolExecutionHandler> toolHandlers,
+    IMemoryCache? memoryCache = null) : IAiToolRegistry
 {
+    private static readonly TimeSpan CacheDuration = TimeSpan.FromMinutes(15);
+
     public async Task<IReadOnlyCollection<AiToolDefinition>> GetAvailableToolsAsync(
         Guid organizationId,
         CancellationToken cancellationToken)
     {
         ArgumentOutOfRangeException.ThrowIfEqual(organizationId, Guid.Empty);
 
-      //Todo: Lorsquon retourne lorg depuis la BD, il devrait peut etre retourner aussi les connecteurs actifs et configurés, pour éviter de faire une autre requête pour récupérer les connecteurs. On pourrait peut-être créer un query qui retourne l'organisation avec ses connecteurs actifs et configurés.    
+        var cacheKey = $"ai-tools:{organizationId:D}";
+        if (memoryCache is not null
+            && memoryCache.TryGetValue(cacheKey, out IReadOnlyCollection<AiToolDefinition>? cachedTools)
+            && cachedTools is not null)
+        {
+            return cachedTools;
+        }
+
         var connectors = await organizationConnectorQueries.GetActiveConfiguredConnectors(
             organizationId,
             cancellationToken);
         var executableTools = toolHandlers
             .Select(handler => handler.ToolName)
             .ToHashSet(StringComparer.Ordinal);
-
-        return connectors
-            .Select(connector => CreateToolDefinition(connector, executableTools))
-            .OfType<AiToolDefinition>()
+        var tools = connectors
+            .SelectMany(connector => CreateToolDefinitions(connector, executableTools))
             .ToArray();
+
+        memoryCache?.Set(cacheKey, tools, CacheDuration);
+        return tools;
     }
 
-    private AiToolDefinition? CreateToolDefinition(
+    private static IReadOnlyCollection<AiToolDefinition> CreateToolDefinitions(
         OrganizationConnector connector,
-        IReadOnlySet<string> executableTools) =>
-        connector.Type switch
+        IReadOnlySet<string> executableTools)
+    {
+        if (connector.Type != ConnectorType.Microsoft365)
         {
-            ConnectorType.Microsoft365
-                when executableTools.Contains(AiToolNames.SearchMicrosoft365) =>
-                CreateMicrosoft365Tool(connector),
-            ConnectorType.Erp
-                when erpConnectors.Any()
-                    && executableTools.Contains(AiToolNames.QueryErp) =>
-                CreateErpTool(),
-            ConnectorType.Crm
-                when crmConnectors.Any()
-                    && executableTools.Contains(AiToolNames.QueryCrm) =>
-                CreateCrmTool(),
-            ConnectorType.InternalData
-                when executableTools.Contains(AiToolNames.SearchInternalData) =>
-                CreateInternalDataTool(),
-            _ => null
-        };
+            return [];
+        }
 
-    private static AiToolDefinition? CreateMicrosoft365Tool(OrganizationConnector connector)
+        var tools = new List<AiToolDefinition>();
+        if (executableTools.Contains(AiToolNames.SearchMicrosoft365))
+        {
+            var searchTool = CreateMicrosoft365SearchTool(connector);
+            if (searchTool is not null)
+            {
+                tools.Add(searchTool);
+            }
+        }
+
+        if (executableTools.Contains(AiToolNames.AnalyzeMicrosoft365Spreadsheet)
+            && connector.Sources.Any(source => source.SourceType is
+                Microsoft365SourceType.SharePoint or Microsoft365SourceType.OneDrive))
+        {
+            tools.Add(CreateMicrosoft365SpreadsheetAnalysisTool());
+        }
+
+        return tools;
+    }
+
+    private static AiToolDefinition? CreateMicrosoft365SearchTool(OrganizationConnector connector)
     {
         var allowedSourceTypes = connector.Sources
             .Select(source => source.SourceType switch
@@ -95,49 +111,59 @@ public sealed class AiToolRegistry(
                 }));
     }
 
-    private static AiToolDefinition CreateErpTool() => new(
-        AiToolNames.QueryErp,
-        "Lire les ventes, commandes, factures ou stocks dans l'ERP.",
-        CreateObjectSchema(
-            new Dictionary<string, object>
-            {
-                ["metric"] = new
+    private static AiToolDefinition CreateMicrosoft365SpreadsheetAnalysisTool() =>
+        new(
+            AiToolNames.AnalyzeMicrosoft365Spreadsheet,
+            "Analyser exhaustivement un classeur Excel Microsoft 365 autorise avec des calculs et filtres deterministes.",
+            CreateObjectSchema(
+                new Dictionary<string, object>
                 {
-                    type = "string",
-                    @enum = new[] { "sales", "orders", "invoices", "inventory" },
-                    description = "Categorie de donnees ERP a lire."
-                },
-                ["dateFrom"] = NullableDateProperty("Date minimale de la periode."),
-                ["dateTo"] = NullableDateProperty("Date maximale de la periode.")
-            }));
-
-    private static AiToolDefinition CreateCrmTool() => new(
-        AiToolNames.QueryCrm,
-        "Rechercher des clients, contacts ou opportunites dans le CRM.",
-        CreateObjectSchema(
-            new Dictionary<string, object>
-            {
-                ["query"] = StringProperty("Termes a rechercher dans le CRM."),
-                ["entityTypes"] = NullableProperty(new
-                {
-                    type = "array",
-                    items = new
+                    ["fileName"] = StringProperty("Nom exact du fichier XLSX ou XLSM, avec son extension."),
+                    ["worksheetName"] = NullableProperty(new
                     {
                         type = "string",
-                        @enum = new[] { "customers", "contacts", "opportunities" }
-                    },
-                    description = "Types d'entites a limiter, ou null pour tous les types autorises."
-                })
-            }));
-
-    private static AiToolDefinition CreateInternalDataTool() => new(
-        AiToolNames.SearchInternalData,
-        "Rechercher dans les donnees internes autorisees.",
-        CreateObjectSchema(
-            new Dictionary<string, object>
-            {
-                ["query"] = StringProperty("Termes a rechercher dans les donnees internes.")
-            }));
+                        description = "Nom de la feuille. Obligatoire lorsque le classeur contient plusieurs feuilles."
+                    }),
+                    ["aggregations"] = NullableProperty(new
+                    {
+                        type = "array",
+                        description = "Calculs executes sur toutes les lignes avant les filtres, ou null si aucun calcul n'est requis.",
+                        items = CreateObjectSchema(new Dictionary<string, object>
+                        {
+                            ["alias"] = StringProperty("Nom unique permettant de reutiliser le resultat dans un filtre."),
+                            ["operation"] = EnumStringProperty(
+                                "Operation mathematique.",
+                                "average", "sum", "minimum", "maximum", "count"),
+                            ["column"] = StringProperty("Nom exact de la colonne numerique.")
+                        })
+                    }),
+                    ["filters"] = NullableProperty(new
+                    {
+                        type = "array",
+                        description = "Filtres combines avec AND et appliques a toutes les lignes, ou null pour ne pas filtrer.",
+                        items = CreateObjectSchema(new Dictionary<string, object>
+                        {
+                            ["column"] = StringProperty("Nom exact de la colonne a filtrer."),
+                            ["operator"] = EnumStringProperty(
+                                "Operateur de comparaison.",
+                                "equals", "not_equals", "greater_than", "greater_than_or_equal",
+                                "less_than", "less_than_or_equal", "contains"),
+                            ["value"] = NullableScalarProperty(
+                                "Valeur litterale. Null si aggregationAlias est utilise."),
+                            ["aggregationAlias"] = NullableProperty(new
+                            {
+                                type = "string",
+                                description = "Alias d'un calcul a comparer. Null si value est utilise."
+                            })
+                        })
+                    }),
+                    ["selectColumns"] = NullableProperty(new
+                    {
+                        type = "array",
+                        items = new { type = "string" },
+                        description = "Colonnes a retourner, ou null pour retourner toutes les colonnes."
+                    })
+                }));
 
     private static JsonElement CreateObjectSchema(IReadOnlyDictionary<string, object> properties) =>
         JsonSerializer.SerializeToElement(new
@@ -154,12 +180,30 @@ public sealed class AiToolRegistry(
         description
     };
 
+    private static object EnumStringProperty(string description, params string[] values) => new
+    {
+        type = "string",
+        @enum = values,
+        description
+    };
+
     private static object NullableDateProperty(string description) =>
         NullableProperty(new
         {
             type = "string",
             description = $"{description} Format YYYY-MM-DD."
         });
+
+    private static object NullableScalarProperty(string description) => new
+    {
+        anyOf = new object[]
+        {
+            new { type = "string", description },
+            new { type = "number", description },
+            new { type = "boolean", description },
+            new { type = "null" }
+        }
+    };
 
     private static object NullableProperty(object property) => new
     {

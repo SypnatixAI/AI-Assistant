@@ -9,17 +9,6 @@ public sealed class ExceptionMiddleware(
     ILogger<ExceptionMiddleware> logger,
     IHostEnvironment environment)
 {
-    /// <summary>
-    /// Le corps d'erreur emploie la meme convention de nommage que les reponses
-    /// JSON ordinaires de l'API. Sans ces options, JsonSerializer conserverait les
-    /// noms de proprietes C# et les erreurs seraient le seul endroit de l'API en
-    /// PascalCase, obligeant le client a connaitre deux conventions.
-    /// </summary>
-    private static readonly JsonSerializerOptions ErrorSerializerOptions = new()
-    {
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase
-    };
-
     public async Task InvokeAsync(HttpContext context)
     {
         try
@@ -37,7 +26,7 @@ public sealed class ExceptionMiddleware(
                 exception.Message,
                 environment.IsDevelopment() ? exception.Message : null);
 
-            await context.Response.WriteAsync(JsonSerializer.Serialize(response, ErrorSerializerOptions));
+            await context.Response.WriteAsync(JsonSerializer.Serialize(response));
         }
         catch (ForbiddenException exception)
         {
@@ -51,7 +40,7 @@ public sealed class ExceptionMiddleware(
                 environment.IsDevelopment() ? exception.Message : null,
                 (exception as IErrorCodeException)?.ErrorCode);
 
-            await context.Response.WriteAsync(JsonSerializer.Serialize(response, ErrorSerializerOptions));
+            await context.Response.WriteAsync(JsonSerializer.Serialize(response));
         }
         catch (BadRequestException exception)
         {
@@ -65,7 +54,7 @@ public sealed class ExceptionMiddleware(
                 environment.IsDevelopment() ? exception.Message : null,
                 (exception as IErrorCodeException)?.ErrorCode);
 
-            await context.Response.WriteAsync(JsonSerializer.Serialize(response, ErrorSerializerOptions));
+            await context.Response.WriteAsync(JsonSerializer.Serialize(response));
         }
         catch (ConflictException exception)
         {
@@ -79,7 +68,7 @@ public sealed class ExceptionMiddleware(
                 environment.IsDevelopment() ? exception.Message : null,
                 exception.ErrorCode);
 
-            await context.Response.WriteAsync(JsonSerializer.Serialize(response, ErrorSerializerOptions));
+            await context.Response.WriteAsync(JsonSerializer.Serialize(response));
         }
         catch (NotFoundException exception)
         {
@@ -90,10 +79,9 @@ public sealed class ExceptionMiddleware(
 
             var response = new ExceptionResponse(
                 exception.Message,
-                environment.IsDevelopment() ? exception.Message : null,
-                exception.ErrorCode);
+                environment.IsDevelopment() ? exception.Message : null);
 
-            await context.Response.WriteAsync(JsonSerializer.Serialize(response, ErrorSerializerOptions));
+            await context.Response.WriteAsync(JsonSerializer.Serialize(response));
         }
         catch (OperationCanceledException) when (context.RequestAborted.IsCancellationRequested)
         {
@@ -112,7 +100,7 @@ public sealed class ExceptionMiddleware(
                 exception.Message,
                 environment.IsDevelopment() ? exception.Message : null);
 
-            await context.Response.WriteAsync(JsonSerializer.Serialize(response, ErrorSerializerOptions));
+            await context.Response.WriteAsync(JsonSerializer.Serialize(response));
         }
         catch (Microsoft365ExternalException exception)
         {
@@ -125,7 +113,7 @@ public sealed class ExceptionMiddleware(
                 "Microsoft 365 consent could not be completed.",
                 environment.IsDevelopment() ? exception.Message : null);
 
-            await context.Response.WriteAsync(JsonSerializer.Serialize(response, ErrorSerializerOptions));
+            await context.Response.WriteAsync(JsonSerializer.Serialize(response));
         }
         catch (AiProviderException exception)
         {
@@ -153,7 +141,7 @@ public sealed class ExceptionMiddleware(
                 exception.Message,
                 environment.IsDevelopment() ? exception.Message : null);
 
-            await context.Response.WriteAsync(JsonSerializer.Serialize(response, ErrorSerializerOptions));
+            await context.Response.WriteAsync(JsonSerializer.Serialize(response));
         }
         catch (Exception exception)
         {
@@ -166,7 +154,7 @@ public sealed class ExceptionMiddleware(
                 "An unexpected error occurred.",
                 environment.IsDevelopment() ? exception.Message : null);
 
-            await context.Response.WriteAsync(JsonSerializer.Serialize(response, ErrorSerializerOptions));
+            await context.Response.WriteAsync(JsonSerializer.Serialize(response));
         }
     }
 

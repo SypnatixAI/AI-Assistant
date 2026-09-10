@@ -8,7 +8,7 @@ public sealed class RagEvaluationScorer
         EvaluationDataset dataset,
         IReadOnlyCollection<EvaluationObservation> observations,
         string mode,
-        string model)
+        string agentIdentifier)
     {
         var observationsByCase = observations.ToDictionary(item => item.CaseId, StringComparer.Ordinal);
         var results = dataset.Cases
@@ -19,7 +19,7 @@ public sealed class RagEvaluationScorer
         return new EvaluationReport(
             DateTimeOffset.UtcNow,
             mode,
-            model,
+            agentIdentifier,
             CreateSummary(results),
             results);
     }

@@ -25,7 +25,6 @@ internal static class AuthorizationIntegrationTestFactory
     public const string RequiredScope = "access_as_user";
     public const string RequiredAdmissionRole = "AssistantCore.Access";
     public const string TenantAdminRole = "TenantAdmin";
-    public const string UsagePolicyManagementRole = "UsagePolicy.Manage";
 
     public static WebApplicationFactory<Program> CreateFactory(bool useTestAuthentication)
     {
@@ -37,7 +36,6 @@ internal static class AuthorizationIntegrationTestFactory
                     configuration.AddIntegrationTestDefaults().AddInMemoryCollection(
                         new Dictionary<string, string?>
                         {
-                            ["AiModels:Providers:OpenAI:ApiKey"] = "integration-test-secret",
                             ["Microsoft365:ClientSecret"] = "integration-test-secret",
                             ["Microsoft365:ClientStateHmacKey"] = "integration-test-client-state-hmac-key"
                         }));

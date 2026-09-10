@@ -33,15 +33,6 @@ public sealed class ApiAccessOptionsValidator : IValidateOptions<ApiAccessOption
             return ValidateOptionsResult.Fail(tenantAdminRoleError);
         }
 
-        var usagePolicyManagementRoleError = ValidateSingleValue(
-            options.UsagePolicyManagementRole,
-            nameof(ApiAccessOptions.UsagePolicyManagementRole));
-
-        if (usagePolicyManagementRoleError is not null)
-        {
-            return ValidateOptionsResult.Fail(usagePolicyManagementRoleError);
-        }
-
         return ValidateOptionsResult.Success;
     }
 

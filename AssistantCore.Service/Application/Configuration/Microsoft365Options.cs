@@ -68,10 +68,6 @@ public sealed class Microsoft365Options
 
     public int MaximumExcelCells { get; init; } = 100_000;
 
-    public int MaximumStructuredDataDepth { get; init; } = 64;
-
-    public int MaximumCsvRows { get; init; } = 100_000;
-
     public int ChunkMaximumTokens { get; init; } = 800;
 
     public int ChunkOverlapTokens { get; init; } = 100;
@@ -83,6 +79,10 @@ public sealed class Microsoft365Options
     public string EmbeddingApiKey { get; init; } = string.Empty;
 
     public string EmbeddingModel { get; init; } = "text-embedding-3-small";
+
+    public string EmbeddingDeploymentName { get; init; } = string.Empty;
+
+    public string EmbeddingApiVersion { get; init; } = "2024-06-01";
 
     public int EmbeddingDimensions { get; init; } = 1536;
 

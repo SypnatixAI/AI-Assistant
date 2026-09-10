@@ -27,7 +27,6 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IMicrosoft365SourceSynchronizationRepository, Microsoft365SourceSynchronizationRepository>();
         services.AddScoped<IMicrosoft365SourceDiscoveryRepository, Microsoft365SourceDiscoveryRepository>();
         services.AddScoped<IMicrosoft365SubscriptionRepository, Microsoft365SubscriptionRepository>();
-        services.AddScoped<IMicrosoft365ResetRepository, Microsoft365ResetRepository>();
         services.AddScoped<IMicrosoft365IndexedContentRepository, Microsoft365IndexedContentRepository>();
         services.AddScoped<
             IMicrosoft365DocumentWorkProcessingRepository,
@@ -37,7 +36,6 @@ public static class ServiceCollectionExtensions
             Microsoft365PendingSynchronizationRepository>();
         services.AddScoped<ITokenConsumptionRepository, TokenConsumptionRepository>();
         services.AddScoped<IAdministrativeAuditRepository, AdministrativeAuditRepository>();
-        services.AddScoped<IOrganizationUsagePolicyRepository, OrganizationUsagePolicyRepository>();
 
         return services;
     }

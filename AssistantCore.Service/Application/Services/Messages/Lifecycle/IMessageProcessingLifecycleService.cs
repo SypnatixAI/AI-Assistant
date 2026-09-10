@@ -1,6 +1,6 @@
 using AssistantCore.Repository.Domain.Entities;
+using AssistantCore.Service.Application.Models.Messages.AgentRuntime;
 using AssistantCore.Service.Application.Models.Messages.Lifecycle;
-using AssistantCore.Service.Application.Models.Messages.Orchestration;
 
 namespace AssistantCore.Service.Application.Services.Messages.Lifecycle;
 
@@ -19,7 +19,7 @@ public interface IMessageProcessingLifecycleService
 
     Task<CompletedMessageProcessing> CompleteAsync(
         StartedMessageProcessing processing,
-        MessageOrchestrationResult result,
+        AgentTurnResult result,
         CancellationToken cancellationToken);
 
     Task FailAsync(

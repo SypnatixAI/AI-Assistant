@@ -298,13 +298,8 @@ ou tous les messages en memoire.
 
 ### `400 Bad Request`
 
-- `limit` est invalide, code `invalid_pagination`
-- `cursor` est invalide, code `invalid_pagination`
-- `status` est inconnu, code `invalid_conversation_status`
-
-Le champ `code` du corps d'erreur est stable et destine a etre compare par le
-frontend; le champ `message` reste destine a l'affichage. Les codes complets sont
-listes dans [Gerer le cycle de vie d'une conversation](manage-conversation.md#conversation-management-errors).
+- `limit` est invalide
+- `cursor` est invalide
 
 ### `401 Unauthorized`
 

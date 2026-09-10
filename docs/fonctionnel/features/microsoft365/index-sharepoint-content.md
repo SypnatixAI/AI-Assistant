@@ -18,7 +18,6 @@
 - [Renouvellement des webhooks](#m365-sharepoint-webhook-renewal)
 - [Synchronisation initiale](#m365-sharepoint-initial-sync)
 - [Synchronisation des changements](#m365-sharepoint-delta-sync)
-- [Reinitialiser la selection](#m365-sharepoint-reset-selection)
 - [Réindexation administrative d’un client](#m365-sharepoint-admin-reindex)
 - [Traitement par le worker](#m365-sharepoint-worker)
 - [Téléchargement et extraction](#m365-sharepoint-extraction)
@@ -819,6 +818,13 @@ Pour Excel, conserver les noms des feuilles et transformer les cellules utiles
 en texte structuré. Les formules peuvent être indexées avec leur dernière
 valeur enregistrée. Le worker ne doit pas recalculer un classeur.
 
+L’indexation textuelle sert à retrouver un classeur ou une information
+ponctuelle. Lorsqu’une question exige un agrégat ou un filtre sur toutes les
+lignes, l’outil `AnalyzeSpreadsheet` télécharge le classeur autorisé et utilise
+un analyseur déterministe. Le fichier est localisé grâce à son entrée indexée,
+mais les calculs ne dépendent pas du nombre de passages retournés par la
+recherche sémantique et n’envoient pas le fichier complet au modèle.
+
 Pour PowerPoint, conserver le numéro de diapositive, le titre, le texte et les
 notes lorsque celles-ci sont disponibles.
 
@@ -1128,61 +1134,6 @@ son checkpoint à la fois.
 Pour une liste, le webhook ne contient pas toutes les nouvelles valeurs. Il
 réveille uniquement la synchronisation delta. Une réconciliation planifiée
 relance aussi le delta afin de couvrir une notification perdue.
-
-<a id="m365-sharepoint-admin-reindex"></a>
-<a id="m365-sharepoint-reset-selection"></a>
-## Réinitialiser la sélection
-
-```http
-POST /api/microsoft365/selection/reset
-```
-
-Un administrateur du tenant client peut redemander une sélection vierge de ses
-sites, par exemple après s'être trompé de site ou pour repartir d'une
-indexation propre.
-
-L'organisation n'est pas un paramètre : elle vient du contexte authentifié, si
-bien qu'un administrateur ne peut réinitialiser que sa propre organisation. À ne
-pas confondre avec la [réindexation administrative](#m365-sharepoint-admin-reindex),
-réservée à un opérateur Synaptix et qui agit sur une autre organisation.
-
-### Ce qui est conservé
-
-La connexion Microsoft 365 reste active et **le consentement administrateur
-n'est pas redemandé**. L'organisation, ses membres et leurs rôles sont
-intacts. Le but est de recommencer la sélection et l'indexation, pas
-l'onboarding.
-
-### Ce qui est effacé
-
-Pour cette seule organisation : abonnements, synchronisations, travaux de
-document et d'élément de liste, contenus et passages indexés, puis les sources
-elles-mêmes — sites, bibliothèques et listes. Les chunks correspondants sont
-également supprimés d'Azure AI Search.
-
-Les chunks partent de l'index **avant** que leurs lignes ne soient effacées.
-Dans l'ordre inverse, un échec laisserait des documents orphelins dans l'index,
-sans plus aucun moyen de les retrouver ni de les supprimer.
-
-### État après réinitialisation
-
-`GET /api/microsoft365/onboarding` retourne un consentement complet mais une
-sélection et une indexation incomplètes. `GET /api/microsoft365/sites` propose
-de nouveau les sites du tenant, aucun n'étant sélectionné. Le cache
-d'onboarding est invalidé immédiatement, sans quoi l'administrateur reverrait
-son organisation comme configurée pendant une trentaine de secondes.
-
-### Règles
-
-- L'opération est idempotente : la rejouer ne supprime plus rien et ne
-  produit pas d'erreur.
-- Une organisation ne peut jamais effacer les données d'une autre.
-- Un membre non administrateur reçoit `403` avant toute lecture.
-- Une connexion absente retourne `404`, une connexion inactive retourne `409`
-  avec le code `microsoft365_connection_inactive`.
-
-La réponse retourne le nombre de lignes réellement supprimées par catégorie, ce
-qui permet de constater qu'un second appel ne supprime plus rien.
 
 <a id="m365-sharepoint-admin-reindex"></a>
 ## Réindexation administrative d’un client
@@ -1609,52 +1560,6 @@ Chaque passage possède une clé déterministe construite à partir de :
 organisation + site + bibliothèque + document + numéro du passage
 ```
 
-### Contexte documentaire d'un passage
-
-Un passage isolé peut perdre le sens que lui donnait son en-tête. « Maximum
-remboursable : 75 $ par jour » est retrouvable sans que rien n'indique qu'il
-concerne les repas en déplacement international. Deux sections d'un même
-document peuvent ainsi contenir la même phrase avec deux sens différents.
-
-Chaque passage conserve donc le titre de sa section en **métadonnée**, à côté de
-son contenu, et non à l'intérieur. Deux représentations coexistent :
-
-| Représentation | Usage |
-| --- | --- |
-| `Content` | le texte du document, cité tel quel à l'utilisateur |
-| Texte contextualisé | assemblé au moment de l'embedding, jamais persisté |
-
-Le texte contextualisé préfixe le contenu du document et de la section :
-
-```text
-[Document] Politique de remboursement des déplacements
-[Section] Repas lors de déplacements internationaux
-
-Maximum remboursable : 75 $ par jour.
-```
-
-La construction est déterministe et n'utilise que des métadonnées réellement
-extraites : aucun contexte n'est inventé. Un document sans titre ni section est
-indexé tel quel, si bien que les formats sans structure explicite continuent de
-fonctionner. La section n'est pas répétée lorsque le passage commence déjà par
-elle.
-
-Mélanger les deux représentations aurait deux effets indésirables : le préfixe
-apparaîtrait dans les citations, et il consommerait une partie du budget de
-caractères du passage, amputant d'autant le texte réel.
-
-### Réindexation après un changement de contextualisation
-
-La clé d'un passage dérive de la version du document. Un document inchangé
-conserve donc sa clé, et son embedding n'est pas recalculé : les documents déjà
-indexés gardent leur ancienne représentation jusqu'à leur prochaine
-modification.
-
-Pour forcer une reconstruction complète, un administrateur utilise
-[la réinitialisation de la sélection](#m365-sharepoint-reset-selection) puis
-resélectionne ses sites. L'indexation initiale repart alors avec la
-contextualisation courante.
-
 <a id="m365-sharepoint-embeddings"></a>
 ## Création des embeddings
 
@@ -1663,9 +1568,10 @@ Le fournisseur d’embeddings est accessible par une interface applicative.
 Le worker lui transmet seulement :
 
 - le titre utile;
-- le texte contextualisé du passage.
+- le texte du passage.
 
-La configuration indique :
+En certification, les embeddings sont produits par le déploiement Azure OpenAI
+`m365-text-embedding-3-small` dans `canadacentral`. La configuration indique :
 
 - le fournisseur;
 - le modèle;
@@ -1676,6 +1582,12 @@ La configuration indique :
 
 Le nombre de dimensions du champ Azure AI Search doit correspondre exactement
 au modèle utilisé.
+
+Le profil `m365-vector-profile` référence le vectorizer
+`m365-azure-openai-vectorizer`. Ce vectorizer transforme les requêtes en
+vecteurs avec exactement le même endpoint, le même déploiement et le même
+modèle que le worker d’indexation. Les clés restent dans Azure Key Vault et ne
+sont pas stockées dans la définition Bicep ou les fichiers de configuration.
 
 Changer de modèle ou de dimensions demande la création d’un nouvel index ou
 une réindexation complète contrôlée.
@@ -2691,7 +2603,7 @@ l'ancien index pour revenir à l'ancienne configuration en cas de problème. Ne 
 supprimer qu'après validation opérationnelle. La migration et le basculement Azure
 restent des opérations explicites de déploiement ; le démarrage ne les effectue pas.
 
-Voir [Corrective RAG et comparaison des variantes](../../../recherche/rag-agentique/evaluation-automatisee.md#corrective-rag).
+Voir [Évaluation automatisée de l’agent et de la recherche](../../../recherche/rag-agentique/evaluation-automatisee.md#flow).
 ### PDF et images
 
 Les PDF sont d'abord lus avec leur couche de texte native. L'OCR Azure AI Vision Read est utilise uniquement lorsqu'une page est vide ou contient moins de texte que le seuil configure. Pour un PDF mixte, les pages lisibles restent natives et seules les pages insuffisantes sont remplacees par leur resultat OCR.

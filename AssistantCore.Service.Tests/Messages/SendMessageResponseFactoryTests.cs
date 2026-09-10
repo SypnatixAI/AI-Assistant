@@ -1,6 +1,6 @@
 using AssistantCore.Service.Application.Models.Messages;
+using AssistantCore.Service.Application.Models.Messages.AgentRuntime;
 using AssistantCore.Service.Application.Models.Messages.Lifecycle;
-using AssistantCore.Service.Application.Models.Messages.Orchestration;
 using AssistantCore.Service.Application.Services.Messages.Responses;
 
 namespace AssistantCore.Service.Tests.Messages;
@@ -22,25 +22,25 @@ public sealed class SendMessageResponseFactoryTests
             "report-1",
             "https://example.test/report-1",
             occurredAt);
-        var orchestrationResult = new MessageOrchestrationResult(
+        var agentTurnResult = new AgentTurnResult(
             "Sales increased.",
-            "gpt-5.6-luna",
+            "onpremia-agent@2",
             [evidence],
             ["One source was unavailable.", "rag.groundedness.unverified", "rag.groundedness.content_rejected"],
-            OrchestrationExecutionUsage.Empty);
+            new AgentTurnUsage(TimeSpan.FromSeconds(1), 20, 5, 1, 1));
         var factory = new SendMessageResponseFactory();
 
         // When
         var response = factory.Create(
             processing,
-            orchestrationResult,
+            agentTurnResult,
             completedProcessing);
 
         // Then
         Assert.Equal(processing.ConversationId, response.ConversationId);
         Assert.Equal(completedProcessing.AssistantMessageId, response.MessageId);
-        Assert.Equal(orchestrationResult.Answer, response.Answer);
-        Assert.Equal(orchestrationResult.ModelName, response.Model);
+        Assert.Equal(agentTurnResult.Content, response.Answer);
+        Assert.Equal(agentTurnResult.ModelName, response.Model);
         Assert.Equal(["One source was unavailable."], response.Warnings);
         Assert.Equal(completedProcessing.CreatedAt, response.CreatedAt);
         Assert.Equal(completedProcessing.Usage, response.Usage);

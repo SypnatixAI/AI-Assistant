@@ -131,12 +131,6 @@ public sealed class Microsoft365DocumentProcessingService(
         var extraction = await extractionService.ExtractAsync(
             new Microsoft365ContentExtractionRequest(work.Name, work.MimeType, stream, bytes.Length),
             cancellationToken);
-        Microsoft365ContentExtractionTelemetry.RecordStatus(extraction.Status);
-        if (IsGracefullySkippable(extraction.Status))
-        {
-            return;
-        }
-
         if (extraction.Status != Microsoft365ContentExtractionStatus.Success)
         {
             throw new InvalidDataException($"Document extraction ended with {extraction.Status}.");
@@ -212,16 +206,7 @@ public sealed class Microsoft365DocumentProcessingService(
     }
 
     private static string BuildEmbeddingContent(Microsoft365SearchPassage passage) =>
-        Microsoft365PassageContextBuilder.BuildEmbeddingContent(passage);
-
-    /// <summary>
-    /// Un format inconnu ou sans contenu lisible n'est pas une erreur de traitement : le
-    /// worker doit passer au fichier suivant sans faire echouer ni reessayer cet element.
-    /// </summary>
-    private static bool IsGracefullySkippable(Microsoft365ContentExtractionStatus status) => status is
-        Microsoft365ContentExtractionStatus.UnsupportedFormat
-        or Microsoft365ContentExtractionStatus.EmptyDocument
-        or Microsoft365ContentExtractionStatus.NoIndexableContent;
+        $"Document: {passage.Title}\n\n{passage.Content}";
 
     private async Task DeleteAsync(
         Microsoft365DocumentWork work,

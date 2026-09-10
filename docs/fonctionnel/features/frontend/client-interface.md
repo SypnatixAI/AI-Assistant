@@ -9,7 +9,6 @@
 - [Écran principal](#frontend-main-screen)
 - [Conversations](#frontend-conversations)
 - [Messages et sources](#frontend-messages)
-- [Choix du modèle](#frontend-model-selection)
 - [Jetons disponibles](#frontend-token-usage)
 - [Endpoints utilisés](#frontend-api-endpoints)
 - [États et erreurs](#frontend-states-errors)
@@ -32,7 +31,6 @@ L'expérience reprend les repères d'un outil conversationnel moderne :
 - une barre latérale contenant les conversations
 - une zone principale contenant les messages
 - un champ pour écrire une question
-- un sélecteur présentant les modèles autorisés
 - les sources utilisées sous chaque réponse
 - le nombre de jetons encore disponibles pour l'organisation
 
@@ -125,11 +123,8 @@ applicative. Une session frontend contient au minimum :
 Le frontend ne construit jamais l'organisation depuis le domaine du courriel,
 le sous-domaine de l'URL ou une valeur saisie par l'utilisateur.
 
-Après la session, le frontend charge en parallèle :
-
-- `GET /api/models`
-- `GET /api/usage`
-- `GET /api/conversations?limit=25`
+Après la session, le frontend charge en parallèle `GET /api/usage` et
+`GET /api/conversations?limit=25`.
 
 Une route protégée ne doit pas afficher brièvement l'interface avant que la
 session soit vérifiée. Pendant cette vérification, elle affiche un écran de
@@ -156,7 +151,6 @@ Sans conversation sélectionnée, elle affiche :
 
 - un court message d'accueil utilisant le prénom ou le nom affiché
 - quelques exemples concrets de questions
-- le sélecteur de modèle
 - le champ de saisie
 
 Avec une conversation sélectionnée, elle affiche les messages dans l'ordre
@@ -212,20 +206,6 @@ source sans URL affiche son titre et sa référence sans créer de lien vide.
 Le frontend ne présente jamais un avertissement comme une source. Il explique
 simplement qu'une partie des données n'a pas pu être consultée.
 
-<a id="frontend-model-selection"></a>
-## Choix du modèle
-
-Le sélecteur utilise uniquement `GET /api/models`.
-
-- le modèle par défaut est présélectionné pour une nouvelle conversation
-- l'identifiant envoyé dans `POST /api/messages` est le champ `id`
-- le nom destiné à l'utilisateur est le champ `displayName`
-- un modèle désactivé ou absent de la réponse ne peut pas être sélectionné
-- le frontend ne contient aucune liste de modèles codée en dur
-
-Le modèle peut être changé avant chaque message. La réponse de
-`POST /api/messages` indique le modèle réellement utilisé.
-
 <a id="frontend-token-usage"></a>
 ## Jetons disponibles
 
@@ -253,7 +233,6 @@ d'une seule orchestration.
 | Moment | Appel | Résultat attendu |
 | --- | --- | --- |
 | Après la connexion | `GET /api/core/authenticateUser` | Utilisateur, organisation et rôles |
-| Ouverture de l'application | `GET /api/models` | Modèles sélectionnables |
 | Ouverture de l'application | `GET /api/usage` | Quota courant de l'organisation |
 | Ouverture de l'application | `GET /api/conversations?limit=25` | Première page de conversations |
 | Sélection d'une conversation | `GET /api/conversations/{id}/messages?limit=50` | Messages et sources |
@@ -341,7 +320,7 @@ Sur un écran étroit :
 
 - la barre latérale devient un panneau ouvrable et refermable
 - le champ de saisie reste accessible sans couvrir le dernier message
-- le sélecteur de modèle et le quota restent lisibles
+- le quota reste lisible
 - les longues URL de sources ne débordent pas de l'écran
 - la navigation au clavier et le focus restent visibles
 
@@ -350,7 +329,6 @@ Sur un écran étroit :
 
 La première version ne couvre pas :
 
-- le streaming mot par mot
 - le partage public d'une conversation
 - les pièces jointes
 - la dictée vocale

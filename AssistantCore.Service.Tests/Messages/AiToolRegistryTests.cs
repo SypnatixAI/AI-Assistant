@@ -1,6 +1,7 @@
 using AssistantCore.Repository.Domain.Entities;
 using AssistantCore.Repository.Domain.Enums;
 using AssistantCore.Repository.Queries;
+using AssistantCore.Service.Application.Models.Messages.Connectors;
 using AssistantCore.Service.Application.Models.Messages.Tools;
 using AssistantCore.Service.Application.Services.Messages.Tools;
 
@@ -9,7 +10,7 @@ namespace AssistantCore.Service.Tests.Messages;
 public sealed class AiToolRegistryTests
 {
     [Theory, AutoDomainData]
-    public async Task Given_AllConnectorsAreAvailable_When_GetAvailableToolsAsync_Then_ReturnsStrictToolDefinitions(
+    public async Task Given_Microsoft365IsConfigured_When_GetAvailableToolsAsync_Then_ReturnsItsStrictDefinition(
         Organization organization)
     {
         // Given
@@ -20,21 +21,12 @@ public sealed class AiToolRegistryTests
                 CreateConnector(
                     ConnectorType.Microsoft365,
                     Microsoft365SourceType.SharePoint,
-                    Microsoft365SourceType.OneDrive),
-                CreateConnector(ConnectorType.Erp),
-                CreateConnector(ConnectorType.Crm),
-                CreateConnector(ConnectorType.InternalData)
+                    Microsoft365SourceType.OneDrive)
             ]
         };
         var registry = new AiToolRegistry(
             connectorQueries,
-            [new FakeErpConnector()],
-            [new FakeCrmConnector()],
-            CreateHandlers(
-                AiToolNames.SearchMicrosoft365,
-                AiToolNames.QueryErp,
-                AiToolNames.QueryCrm,
-                AiToolNames.SearchInternalData));
+            [new FakeToolExecutionHandler(AiToolNames.SearchMicrosoft365)]);
 
         // When
         var tools = await registry.GetAvailableToolsAsync(
@@ -42,66 +34,25 @@ public sealed class AiToolRegistryTests
             CancellationToken.None);
 
         // Then
-        Assert.Equal(
-            [
-                AiToolNames.SearchMicrosoft365,
-                AiToolNames.QueryErp,
-                AiToolNames.QueryCrm,
-                AiToolNames.SearchInternalData
-            ],
-            tools.Select(tool => tool.Name));
+        var tool = Assert.Single(tools);
+        Assert.Equal(AiToolNames.SearchMicrosoft365, tool.Name);
+        Assert.Equal("object", tool.InputSchema.GetProperty("type").GetString());
+        Assert.False(tool.InputSchema.GetProperty("additionalProperties").GetBoolean());
         Assert.Equal(organization.Id, connectorQueries.ReceivedOrganizationId);
-
-        foreach (var tool in tools)
-        {
-            Assert.Equal("object", tool.InputSchema.GetProperty("type").GetString());
-            Assert.False(tool.InputSchema.GetProperty("additionalProperties").GetBoolean());
-
-            var properties = tool.InputSchema.GetProperty("properties");
-            var required = tool.InputSchema.GetProperty("required")
-                .EnumerateArray()
-                .Select(item => item.GetString()!)
-                .ToArray();
-            Assert.Equal(properties.EnumerateObject().Select(property => property.Name), required);
-        }
-
-        var microsoft365Tool = tools.Single(
-            tool => tool.Name == AiToolNames.SearchMicrosoft365);
-        var sourceTypesSchema = microsoft365Tool.InputSchema
+        var sourceTypes = tool.InputSchema
             .GetProperty("properties")
             .GetProperty("sourceTypes")
-            .GetProperty("anyOf")[0];
-        var allowedSourceTypes = sourceTypesSchema
+            .GetProperty("anyOf")[0]
             .GetProperty("items")
             .GetProperty("enum")
             .EnumerateArray()
-            .Select(item => item.GetString()!)
+            .Select(item => item.GetString())
             .ToArray();
-        Assert.Equal(["onedrive", "sharepoint"], allowedSourceTypes);
-        Assert.False(sourceTypesSchema.TryGetProperty("uniqueItems", out _));
-        var microsoft365Properties = microsoft365Tool.InputSchema
-            .GetProperty("properties");
-        Assert.Contains(
-            "Date minimale de modification des fichiers",
-            microsoft365Properties.GetProperty("dateFrom").GetProperty("anyOf")[0]
-                .GetProperty("description").GetString(),
-            StringComparison.Ordinal);
-        Assert.Contains(
-            "Ne filtre pas les dates mentionnees dans leur contenu",
-            microsoft365Properties.GetProperty("dateTo").GetProperty("anyOf")[0]
-                .GetProperty("description").GetString(),
-            StringComparison.Ordinal);
-
-        var crmTool = tools.Single(tool => tool.Name == AiToolNames.QueryCrm);
-        var entityTypesSchema = crmTool.InputSchema
-            .GetProperty("properties")
-            .GetProperty("entityTypes")
-            .GetProperty("anyOf")[0];
-        Assert.False(entityTypesSchema.TryGetProperty("uniqueItems", out _));
+        Assert.Equal(["onedrive", "sharepoint"], sourceTypes);
     }
 
     [Theory, AutoDomainData]
-    public async Task Given_Microsoft365HasNoAvailableSource_When_GetAvailableToolsAsync_Then_OmitsMicrosoft365Tool(
+    public async Task Given_Microsoft365HasNoSource_When_GetAvailableToolsAsync_Then_ReturnsNoTool(
         Organization organization)
     {
         // Given
@@ -111,9 +62,7 @@ public sealed class AiToolRegistryTests
         };
         var registry = new AiToolRegistry(
             connectorQueries,
-            [],
-            [],
-            CreateHandlers(AiToolNames.SearchMicrosoft365));
+            [new FakeToolExecutionHandler(AiToolNames.SearchMicrosoft365)]);
 
         // When
         var tools = await registry.GetAvailableToolsAsync(
@@ -125,23 +74,16 @@ public sealed class AiToolRegistryTests
     }
 
     [Theory, AutoDomainData]
-    public async Task Given_ErpAndCrmHaveNoRegisteredAdapter_When_GetAvailableToolsAsync_Then_OmitsTheirTools(
+    public async Task Given_NoExecutionHandler_When_GetAvailableToolsAsync_Then_ReturnsNoTool(
         Organization organization)
     {
         // Given
         var connectorQueries = new StubOrganizationConnectorQueries
         {
             Connectors =
-            [
-                CreateConnector(ConnectorType.Erp),
-                CreateConnector(ConnectorType.Crm)
-            ]
+            [CreateConnector(ConnectorType.Microsoft365, Microsoft365SourceType.SharePoint)]
         };
-        var registry = new AiToolRegistry(
-            connectorQueries,
-            [],
-            [],
-            CreateHandlers(AiToolNames.QueryErp, AiToolNames.QueryCrm));
+        var registry = new AiToolRegistry(connectorQueries, []);
 
         // When
         var tools = await registry.GetAvailableToolsAsync(
@@ -153,69 +95,28 @@ public sealed class AiToolRegistryTests
     }
 
     [Theory, AutoDomainData]
-    public async Task Given_OnlyErpHasARegisteredAdapter_When_GetAvailableToolsAsync_Then_ReturnsOnlyErpTool(
+    public async Task Given_Microsoft365SpreadsheetHandler_When_GetAvailableToolsAsync_Then_ReturnsAnalysisTool(
         Organization organization)
     {
         // Given
         var connectorQueries = new StubOrganizationConnectorQueries
         {
-            Connectors =
-            [
-                CreateConnector(ConnectorType.Erp),
-                CreateConnector(ConnectorType.Crm)
-            ]
+            Connectors = [CreateConnector(ConnectorType.Microsoft365, Microsoft365SourceType.SharePoint)]
         };
         var registry = new AiToolRegistry(
             connectorQueries,
-            [new FakeErpConnector()],
-            [],
-            CreateHandlers(AiToolNames.QueryErp, AiToolNames.QueryCrm));
+            [new FakeToolExecutionHandler(AiToolNames.AnalyzeMicrosoft365Spreadsheet)]);
 
         // When
-        var tools = await registry.GetAvailableToolsAsync(
-            organization.Id,
-            CancellationToken.None);
+        var tools = await registry.GetAvailableToolsAsync(organization.Id, CancellationToken.None);
 
         // Then
         var tool = Assert.Single(tools);
-        Assert.Equal(AiToolNames.QueryErp, tool.Name);
+        Assert.Equal(AiToolNames.AnalyzeMicrosoft365Spreadsheet, tool.Name);
+        var properties = tool.InputSchema.GetProperty("properties");
+        Assert.True(properties.TryGetProperty("aggregations", out _));
+        Assert.True(properties.TryGetProperty("filters", out _));
     }
-
-    [Theory, AutoDomainData]
-    public async Task Given_AConfiguredConnectorWithoutExecutionHandler_When_GetAvailableToolsAsync_Then_OmitsItsTool(
-        Organization organization)
-    {
-        // Given
-        var connectorQueries = new StubOrganizationConnectorQueries
-        {
-            Connectors =
-            [
-                CreateConnector(
-                    ConnectorType.Microsoft365,
-                    Microsoft365SourceType.SharePoint),
-                CreateConnector(ConnectorType.InternalData)
-            ]
-        };
-        var registry = new AiToolRegistry(
-            connectorQueries,
-            [],
-            [],
-            []);
-
-        // When
-        var tools = await registry.GetAvailableToolsAsync(
-            organization.Id,
-            CancellationToken.None);
-
-        // Then
-        Assert.Empty(tools);
-    }
-
-    private static IReadOnlyCollection<IAiToolExecutionHandler> CreateHandlers(
-        params string[] toolNames) =>
-        toolNames
-            .Select(toolName => new FakeToolExecutionHandler(toolName))
-            .ToArray();
 
     private static OrganizationConnector CreateConnector(
         ConnectorType type,
@@ -247,6 +148,22 @@ public sealed class AiToolRegistryTests
         {
             ReceivedOrganizationId = organizationId;
             return Task.FromResult(Connectors);
+        }
+    }
+
+    private sealed class FakeToolExecutionHandler(string toolName) : IAiToolExecutionHandler
+    {
+        public string ToolName { get; } = toolName;
+
+        public Task<ToolExecutionResult> ExecuteAsync(
+            ValidatedToolCall validatedToolCall,
+            ConnectorExecutionContext context,
+            CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            return Task.FromResult(ToolExecutionResult.Failed(
+                validatedToolCall.CallId,
+                ToolExecutionErrorCodes.ExecutorNotFound));
         }
     }
 }

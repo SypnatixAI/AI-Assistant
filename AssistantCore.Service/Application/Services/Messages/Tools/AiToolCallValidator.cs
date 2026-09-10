@@ -11,12 +11,7 @@ public sealed class AiToolCallValidator(
     private const int MaximumCallIdLength = 100;
 
     private static readonly HashSet<string> ReadOnlyToolNames =
-    [
-        AiToolNames.SearchMicrosoft365,
-        AiToolNames.QueryErp,
-        AiToolNames.QueryCrm,
-        AiToolNames.SearchInternalData
-    ];
+        [AiToolNames.SearchMicrosoft365, AiToolNames.AnalyzeMicrosoft365Spreadsheet];
 
     public Task<ValidatedToolCall> ValidateAsync(
         AiRequestedToolCall requestedToolCall,

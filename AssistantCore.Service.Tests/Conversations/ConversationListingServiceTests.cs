@@ -237,11 +237,6 @@ public sealed class ConversationListingServiceTests
             CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();
 
-        public Task<bool> UpdateConversationContextSummaryAsync(
-            Guid organizationId, Guid ownerMemberId, Guid conversationId, string summary,
-            DateTimeOffset updatedAt, CancellationToken cancellationToken = default) =>
-            throw new NotSupportedException();
-
         public Task<Conversation?> FindConversationAsync(
             Guid organizationId,
             Guid ownerMemberId,

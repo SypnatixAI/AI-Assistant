@@ -63,6 +63,5 @@ public sealed class Microsoft365OnboardingCompletionChecker(
             cancellationToken);
     }
 
-    private static string GetCacheKey(Guid organizationId) =>
-        Microsoft365OnboardingCacheKeys.CompletionKey(organizationId);
+    private static string GetCacheKey(Guid organizationId) => $"m365-onboarding-complete:{organizationId:D}";
 }

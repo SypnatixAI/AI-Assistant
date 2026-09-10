@@ -1,4 +1,5 @@
 using AssistantCore.Service.Application.Abstractions;
+using AssistantCore.Service.Application.Services.AuthenticateUser;
 using AssistantCore.Service.Infrastructure.Authentication.Authorization;
 using AssistantCore.Service.Infrastructure.Authentication.Configuration;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -84,6 +85,12 @@ public static class AuthenticationServiceCollectionExtensions
         services.AddScoped<ICurrentIdentity, HttpCurrentIdentity>();
         services.AddScoped<ICorrelationIdProvider, HttpCorrelationIdProvider>();
 
+        services.AddSingleton<AuthenticationCacheWarmupWorker>();
+        services.AddSingleton<IAuthenticationCacheWarmupQueue>(serviceProvider =>
+            serviceProvider.GetRequiredService<AuthenticationCacheWarmupWorker>());
+        services.AddHostedService(serviceProvider =>
+            serviceProvider.GetRequiredService<AuthenticationCacheWarmupWorker>());
+
         services.AddSingleton<IValidateOptions<ApiAccessOptions>, ApiAccessOptionsValidator>();
         services.AddOptions<ApiAccessOptions>()
             .Bind(configuration.GetSection(ApiAccessOptions.SectionName))
@@ -92,7 +99,6 @@ public static class AuthenticationServiceCollectionExtensions
         services.AddSingleton<IAuthorizationHandler, RequiredScopeAuthorizationHandler>();
         services.AddSingleton<IAuthorizationHandler, RequiredAppRoleAuthorizationHandler>();
         services.AddSingleton<IConfigureOptions<AuthorizationOptions>, ConfigureApiAuthorizationOptions>();
-        services.AddSingleton<IConfigureOptions<AuthorizationOptions>, ConfigureUsagePolicyAuthorizationOptions>();
         services.AddAuthorization();
 
         return services;

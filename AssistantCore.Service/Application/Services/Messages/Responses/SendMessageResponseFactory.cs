@@ -1,7 +1,7 @@
 using AssistantCore.Service.Application.Commands.SendMessage.Models;
 using AssistantCore.Service.Application.Models.Messages;
+using AssistantCore.Service.Application.Models.Messages.AgentRuntime;
 using AssistantCore.Service.Application.Models.Messages.Lifecycle;
-using AssistantCore.Service.Application.Models.Messages.Orchestration;
 
 namespace AssistantCore.Service.Application.Services.Messages.Responses;
 
@@ -9,15 +9,15 @@ public sealed class SendMessageResponseFactory : ISendMessageResponseFactory
 {
     public SendMessageResponse Create(
         StartedMessageProcessing processing,
-        MessageOrchestrationResult orchestrationResult,
+        AgentTurnResult agentTurnResult,
         CompletedMessageProcessing completedProcessing) =>
         new(
             processing.ConversationId,
             completedProcessing.AssistantMessageId,
-            orchestrationResult.Answer,
-            orchestrationResult.ModelName,
-            orchestrationResult.CitedEvidence.Select(MapSource).ToArray(),
-            orchestrationResult.Warnings.Where(IsUserFacingWarning).ToArray(),
+            agentTurnResult.Content,
+            agentTurnResult.ModelName,
+            agentTurnResult.Citations.Select(MapSource).ToArray(),
+            agentTurnResult.Warnings.Where(IsUserFacingWarning).ToArray(),
             completedProcessing.CreatedAt,
             completedProcessing.Usage);
 

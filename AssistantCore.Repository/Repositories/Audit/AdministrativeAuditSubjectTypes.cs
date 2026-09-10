@@ -9,8 +9,4 @@ public static class AdministrativeAuditSubjectTypes
     public const string Member = "Member";
 
     public const string Conversation = "Conversation";
-
-    public const string Application = "Application";
-
-    public const string Organization = "Organization";
 }

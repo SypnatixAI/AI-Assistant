@@ -4,34 +4,20 @@ using AssistantCore.Repository.Repositories;
 using AssistantCore.Service.Application.Exceptions;
 using AssistantCore.Service.Application.Models.Conversations;
 using AssistantCore.Service.Application.Models.Messages;
+using AssistantCore.Service.Application.Models.Messages.AgentRuntime;
 using AssistantCore.Service.Application.Models.Messages.AiModels;
 using AssistantCore.Service.Application.Models.Messages.Lifecycle;
-using AssistantCore.Service.Application.Models.Messages.Orchestration;
 using AssistantCore.Service.Application.Services.Conversations;
-using AssistantCore.Service.Application.Services.Messages.Memory;
 using AssistantCore.Service.Application.Services.Usage;
 
 namespace AssistantCore.Service.Application.Services.Messages.Lifecycle;
 
 public sealed class MessageProcessingLifecycleService(
     IConversationRepository conversationRepository,
-    IConversationMemorySummaryService conversationMemorySummaryService,
     IUsageTrackingService usageTrackingService,
     TimeProvider timeProvider) : IMessageProcessingLifecycleService
 {
     private const int MaximumProcessingErrorCodeLength = 100;
-
-    public MessageProcessingLifecycleService(
-        IConversationRepository conversationRepository,
-        IUsageTrackingService usageTrackingService,
-        TimeProvider timeProvider)
-        : this(
-            conversationRepository,
-            new DeterministicConversationMemorySummaryService(),
-            usageTrackingService,
-            timeProvider)
-    {
-    }
 
     public async Task<StartedMessageProcessing> StartAsync(
         Guid? conversationId,
@@ -80,18 +66,16 @@ public sealed class MessageProcessingLifecycleService(
             CreatedConversation = conversationId is null ? MapSummary(conversation) : null
         };
 
-        await MarkAsInProgressAsync(processing, cancellationToken);
+        // Existing conversations are persisted directly as InProgress by the optimized
+        // repository operation. New conversations keep the legacy two-step lifecycle.
+        if (conversationId is null)
+        {
+            await MarkAsInProgressAsync(processing, cancellationToken);
+        }
 
         return processing;
     }
 
-    /// <summary>
-    /// Projette la conversation vers le resume que la liste retourne, afin qu'un
-    /// client puisse l'inserer directement sans convertir une forme parallele.
-    /// L'apercu reste null : au moment ou la conversation est creee, la reponse de
-    /// l'Assistant n'existe pas encore et deviendra le dernier message quelques
-    /// instants plus tard.
-    /// </summary>
     private static ConversationSummaryResponse MapSummary(Conversation conversation) =>
         new(
             conversation.Id,
@@ -124,48 +108,30 @@ public sealed class MessageProcessingLifecycleService(
 
     private async Task<(Conversation Conversation, IReadOnlyCollection<AiConversationMessage> History)>
         AddMessageToExistingConversationAsync(
-        Guid conversationId,
-        Organization organization,
-        OrganizationMember member,
-        Message userMessage,
-        CancellationToken cancellationToken)
+            Guid conversationId,
+            Organization organization,
+            OrganizationMember member,
+            Message userMessage,
+            CancellationToken cancellationToken)
     {
-        var conversation = await conversationRepository.FindConversationAsync(
+        var started = await conversationRepository.StartExistingConversationMessageAsync(
             organization.Id,
             member.Id,
             conversationId,
+            userMessage,
             cancellationToken)
             ?? throw CreateConversationNotFoundException();
 
-        if (conversation.Status == ConversationStatus.Archived)
+        if (started.Conversation.Status == ConversationStatus.Archived)
         {
             throw new ConflictException(
                 "The conversation is archived and cannot receive new messages.",
                 ConflictException.ConversationArchived);
         }
 
-        var history = await conversationRepository.GetConversationHistoryAsync(
-            organization.Id,
-            member.Id,
-            conversationId,
-            cancellationToken);
-
-        userMessage.ConversationId = conversation.Id;
-        var addedMessage = await conversationRepository.AddUserMessageAsync(
-            organization.Id,
-            member.Id,
-            conversation.Id,
-            userMessage,
-            cancellationToken);
-
-        if (addedMessage is null)
-        {
-            throw CreateConversationNotFoundException();
-        }
-
         return (
-            conversation,
-            history
+            started.Conversation,
+            started.History
                 .Select(message => new AiConversationMessage(
                     message.Role == MessageRole.User
                         ? AiConversationRole.User
@@ -195,12 +161,12 @@ public sealed class MessageProcessingLifecycleService(
 
     public async Task<CompletedMessageProcessing> CompleteAsync(
         StartedMessageProcessing processing,
-        MessageOrchestrationResult result,
+        AgentTurnResult result,
         CancellationToken cancellationToken)
     {
         var completedAt = timeProvider.GetUtcNow();
         var assistantMessage = CreateAssistantMessage(result, completedAt);
-        var sources = CreateSources(result.CitedEvidence);
+        var sources = CreateSources(result.Citations);
         var warnings = CreateWarnings(result.Warnings);
 
         var completedMessage = await conversationRepository
@@ -215,28 +181,6 @@ public sealed class MessageProcessingLifecycleService(
                 completedAt,
                 cancellationToken)
             ?? throw CreateConversationNotFoundException();
-
-        var containsMicrosoft365Evidence = result.CitedEvidence.Any(evidence =>
-            string.Equals(evidence.SourceType, "Microsoft365", StringComparison.Ordinal));
-        var summary = containsMicrosoft365Evidence
-            ? string.Empty
-            : processing.SelectedModel is { } selectedModel
-                ? await conversationMemorySummaryService.CreateAsync(
-                    selectedModel,
-                    processing.ConversationHistory,
-                    processing.UserMessage,
-                    result.Answer,
-                    cancellationToken)
-                : null;
-        summary ??= CreateContextSummaryEntry(processing.UserMessage, result.Answer);
-
-        await conversationRepository.UpdateConversationContextSummaryAsync(
-            processing.OrganizationId,
-            processing.OwnerMemberId,
-            processing.ConversationId,
-            summary,
-            completedAt,
-            cancellationToken);
 
         var usage = await usageTrackingService.RecordConsumptionAsync(
             processing.OrganizationId,
@@ -308,13 +252,13 @@ public sealed class MessageProcessingLifecycleService(
         };
 
     private static Message CreateAssistantMessage(
-        MessageOrchestrationResult result,
+        AgentTurnResult result,
         DateTimeOffset completedAt) =>
         new()
         {
             Id = Guid.NewGuid(),
             Role = MessageRole.Assistant,
-            Content = result.Answer,
+            Content = result.Content,
             ProcessingStatus = MessageProcessingStatus.Completed,
             Model = result.ModelName,
             CreatedAt = completedAt,
@@ -346,21 +290,6 @@ public sealed class MessageProcessingLifecycleService(
             })
             .ToArray();
 
-    private static string CreateContextSummaryEntry(string userMessage, string answer) =>
-        $"User: {userMessage}\nAssistant: {answer}";
-
-    private sealed class DeterministicConversationMemorySummaryService
-        : IConversationMemorySummaryService
-    {
-        public Task<string?> CreateAsync(
-            SelectedAiModel model,
-            IReadOnlyCollection<AiConversationMessage> conversationHistory,
-            string currentUserMessage,
-            string currentAssistantMessage,
-            CancellationToken cancellationToken) =>
-            Task.FromResult<string?>(null);
-    }
-
     private static string ValidateErrorCode(string errorCode)
     {
         var normalizedErrorCode = errorCode.Trim();
@@ -379,8 +308,6 @@ public sealed class MessageProcessingLifecycleService(
         Organization organization,
         OrganizationMember member)
     {
-        //Todo: cette vérification est redondante avec la vérification effectuée dans MessageUserContextService. On pourrait peut-être supprimer cette vérification ici et s'assurer que le membre appartient à l'organisation avant d'appeler StartAsync.
-        //surtout que si la verification dans MessageUserContextService est faite en seule query, alors si le membre n'appartient pas à l'organisation, on ne pourra pas récupérer l'organisation et le membre en même temps.
         if (member.OrganizationId != organization.Id)
         {
             throw new ArgumentException(
