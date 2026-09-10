@@ -55,7 +55,7 @@ public sealed class MessageProcessingLifecycleService(
             conversationHistory = existingConversation.History;
         }
 
-        return new StartedMessageProcessing(
+        var processing = new StartedMessageProcessing(
             organization.Id,
             member.Id,
             conversation.Id,
@@ -65,6 +65,15 @@ public sealed class MessageProcessingLifecycleService(
             ConversationHistory = conversationHistory,
             CreatedConversation = conversationId is null ? MapSummary(conversation) : null
         };
+
+        // Existing conversations are persisted directly as InProgress by the optimized
+        // repository operation. New conversations keep the legacy two-step lifecycle.
+        if (conversationId is null)
+        {
+            await MarkAsInProgressAsync(processing, cancellationToken);
+        }
+
+        return processing;
     }
 
     private static ConversationSummaryResponse MapSummary(Conversation conversation) =>
