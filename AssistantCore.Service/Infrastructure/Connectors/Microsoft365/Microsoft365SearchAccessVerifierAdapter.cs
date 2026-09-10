@@ -3,14 +3,18 @@ using AssistantCore.Service.Application.Models.Messages.Connectors.Microsoft365;
 using AssistantCore.Service.Application.Models.Microsoft365.Permissions;
 using AssistantCore.Service.Application.Services.Microsoft365;
 using AssistantCore.Service.Application.Services.Messages.Connectors.Microsoft365;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
 
 namespace AssistantCore.Service.Infrastructure.Connectors.Microsoft365;
 
 public sealed class Microsoft365SearchAccessVerifierAdapter(
     IMicrosoft365AclResolver aclResolver,
-    ILogger<Microsoft365SearchAccessVerifierAdapter>? logger = null) : IMicrosoft365SearchAccessVerifier
+    ILogger<Microsoft365SearchAccessVerifierAdapter>? logger = null,
+    IMemoryCache? memoryCache = null) : IMicrosoft365SearchAccessVerifier
 {
+    private static readonly TimeSpan AclCacheDuration = TimeSpan.FromMinutes(1);
+
     public async Task<IReadOnlyCollection<Microsoft365SearchRecord>> KeepAuthorizedAsync(
         Guid organizationId,
         string externalTenantId,
@@ -123,6 +127,38 @@ public sealed class Microsoft365SearchAccessVerifierAdapter(
         Microsoft365SearchRecord record,
         CancellationToken cancellationToken)
     {
+        var acl = await ResolveAclAsync(
+            organization,
+            record,
+            cancellationToken);
+        if (acl is null)
+        {
+            return false;
+        }
+
+        return acl.AllowedEntraUserIds.Contains(entraUserId, StringComparer.OrdinalIgnoreCase)
+            || acl.AllowedEntraGroupIds.Any(entraGroupIds.Contains)
+            || acl.AllowedSharePointGroupIds.Any(sharePointGroupIds.Contains);
+    }
+
+    private async Task<Microsoft365Acl?> ResolveAclAsync(
+        Organization organization,
+        Microsoft365SearchRecord record,
+        CancellationToken cancellationToken)
+    {
+        var cacheKey = new AclReadCacheKey(
+            organization.Id,
+            organization.ExternalTenantId!.Trim().ToLowerInvariant(),
+            record.SiteId!,
+            record.DriveId!,
+            record.DriveItemId!);
+        if (memoryCache is not null
+            && memoryCache.TryGetValue(cacheKey, out Microsoft365Acl? cachedAcl)
+            && cachedAcl is not null)
+        {
+            return cachedAcl;
+        }
+
         var resolution = await aclResolver.ResolveAsync(
             organization,
             new Microsoft365ContentReference(
@@ -134,16 +170,21 @@ public sealed class Microsoft365SearchAccessVerifierAdapter(
             cancellationToken);
         if (resolution is not Microsoft365AclResolution.ResolvedAcl resolved)
         {
-            return false;
+            return null;
         }
 
-        var acl = resolved.Acl;
-        return acl.AllowedEntraUserIds.Contains(entraUserId, StringComparer.OrdinalIgnoreCase)
-            || acl.AllowedEntraGroupIds.Any(entraGroupIds.Contains)
-            || acl.AllowedSharePointGroupIds.Any(sharePointGroupIds.Contains);
+        memoryCache?.Set(cacheKey, resolved.Acl, AclCacheDuration);
+        return resolved.Acl;
     }
 
     private readonly record struct DocumentReference(
+        string SiteId,
+        string DriveId,
+        string DriveItemId);
+
+    private readonly record struct AclReadCacheKey(
+        Guid OrganizationId,
+        string TenantId,
         string SiteId,
         string DriveId,
         string DriveItemId);
