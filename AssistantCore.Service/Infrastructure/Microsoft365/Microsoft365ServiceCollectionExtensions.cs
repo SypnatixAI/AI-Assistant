@@ -47,6 +47,8 @@ public static class Microsoft365ServiceCollectionExtensions
                     && options.MaximumExtractedCharacters > 0
                     && options.MaximumExcelSheets > 0
                     && options.MaximumExcelCells > 0
+                    && options.MaximumStructuredDataDepth > 0
+                    && options.MaximumCsvRows > 0
                     && options.SharePointGroupCacheMinutes > 0
                     && options.ChunkMaximumTokens > 0
                     && options.ChunkOverlapTokens >= 0
@@ -97,6 +99,12 @@ public static class Microsoft365ServiceCollectionExtensions
         services.AddSingleton<MicrosoftWordContentExtractorClient>();
         services.AddSingleton<MicrosoftExcelContentExtractorClient>();
         services.AddSingleton<MicrosoftPdfContentExtractorClient>();
+        services.AddSingleton<MicrosoftPlainTextContentExtractorClient>();
+        services.AddSingleton<MicrosoftCsvContentExtractorClient>();
+        services.AddSingleton<MicrosoftJsonContentExtractorClient>();
+        services.AddSingleton<MicrosoftXmlContentExtractorClient>();
+        services.AddSingleton<MicrosoftHtmlContentExtractorClient>();
+        services.AddSingleton<MicrosoftOpenDocumentContentExtractorClient>();
         services.AddSingleton<MicrosoftCertificateIdentityClient>();
         AddProtectedHttpClient<MicrosoftSharePointUserGroupClient>(services);
         services.AddHttpClient<AzureAiSearchPassageAclClient>()
@@ -126,6 +134,12 @@ public static class Microsoft365ServiceCollectionExtensions
         services.AddScoped<IMicrosoft365ContentExtractor, Microsoft365WordContentExtractorAdapter>();
         services.AddScoped<IMicrosoft365ContentExtractor, Microsoft365ExcelContentExtractorAdapter>();
         services.AddScoped<IMicrosoft365ContentExtractor, Microsoft365PdfImageContentExtractorAdapter>();
+        services.AddScoped<IMicrosoft365ContentExtractor, Microsoft365PlainTextContentExtractorAdapter>();
+        services.AddScoped<IMicrosoft365ContentExtractor, Microsoft365CsvContentExtractorAdapter>();
+        services.AddScoped<IMicrosoft365ContentExtractor, Microsoft365JsonContentExtractorAdapter>();
+        services.AddScoped<IMicrosoft365ContentExtractor, Microsoft365XmlContentExtractorAdapter>();
+        services.AddScoped<IMicrosoft365ContentExtractor, Microsoft365HtmlContentExtractorAdapter>();
+        services.AddScoped<IMicrosoft365ContentExtractor, Microsoft365OpenDocumentContentExtractorAdapter>();
         services.AddScoped<IMicrosoft365EmbeddingGenerator, Microsoft365EmbeddingGeneratorAdapter>();
         services.AddScoped<IMicrosoft365SearchIndexInitializer, Microsoft365SearchIndexInitializerAdapter>();
         services.AddSingleton<IMicrosoft365ClientStateProtector, Microsoft365ClientStateProtectorAdapter>();

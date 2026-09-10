@@ -68,6 +68,10 @@ public sealed class Microsoft365Options
 
     public int MaximumExcelCells { get; init; } = 100_000;
 
+    public int MaximumStructuredDataDepth { get; init; } = 64;
+
+    public int MaximumCsvRows { get; init; } = 100_000;
+
     public int ChunkMaximumTokens { get; init; } = 800;
 
     public int ChunkOverlapTokens { get; init; } = 100;
