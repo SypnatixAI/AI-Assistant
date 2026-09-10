@@ -24,6 +24,8 @@ public sealed class Microsoft365Connector(
     IEvidenceNormalizer evidenceNormalizer,
     ILogger<Microsoft365Connector>? logger = null) : IMicrosoft365Connector
 {
+    private const int MaximumRetrievalHistoryMessages = 6;
+
     public async Task<ConnectorResult> SearchAsync(
         SearchMicrosoft365ToolArguments request,
         ConnectorExecutionContext context,
@@ -194,6 +196,7 @@ public sealed class Microsoft365Connector(
         IReadOnlyCollection<AiConversationMessage>? conversationHistory) =>
         conversationHistory?
             .Where(message => !string.IsNullOrWhiteSpace(message.Content))
+            .TakeLast(MaximumRetrievalHistoryMessages)
             .Select(message => new AgenticRetrievalMessage(message.Role, message.Content))
             .ToArray()
         ?? [];
