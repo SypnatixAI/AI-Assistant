@@ -52,39 +52,46 @@ public sealed class Microsoft365PendingSynchronizationService(
             return true;
         }
 
-        if (work.SourceKind == Microsoft365SourceKind.SharePointList)
+        switch (work.SourceKind)
         {
-            if (work.Type == Microsoft365SynchronizationType.Initial)
-            {
-                await listSynchronizationService.StartInitialSynchronizationAsync(
-                    work.SourceId,
-                    work.SynchronizationId,
-                    cancellationToken);
-            }
-            else
-            {
-                await listSynchronizationService.StartDeltaSynchronizationAsync(
-                    work.SourceId,
-                    work.SynchronizationId,
-                    cancellationToken);
-            }
-        }
-        else
-        {
-            if (work.Type == Microsoft365SynchronizationType.Initial)
-            {
-                await driveSynchronizationService.StartInitialSynchronizationAsync(
-                    work.SourceId,
-                    work.SynchronizationId,
-                    cancellationToken);
-            }
-            else
-            {
-                await driveSynchronizationService.StartDeltaSynchronizationAsync(
-                    work.SourceId,
-                    work.SynchronizationId,
-                    cancellationToken);
-            }
+            case Microsoft365SourceKind.SharePointList:
+                if (work.Type == Microsoft365SynchronizationType.Initial)
+                {
+                    await listSynchronizationService.StartInitialSynchronizationAsync(
+                        work.SourceId,
+                        work.SynchronizationId,
+                        cancellationToken);
+                }
+                else
+                {
+                    await listSynchronizationService.StartDeltaSynchronizationAsync(
+                        work.SourceId,
+                        work.SynchronizationId,
+                        cancellationToken);
+                }
+                break;
+
+            case Microsoft365SourceKind.SharePointDrive:
+            case Microsoft365SourceKind.OneDrive:
+                if (work.Type == Microsoft365SynchronizationType.Initial)
+                {
+                    await driveSynchronizationService.StartInitialSynchronizationAsync(
+                        work.SourceId,
+                        work.SynchronizationId,
+                        cancellationToken);
+                }
+                else
+                {
+                    await driveSynchronizationService.StartDeltaSynchronizationAsync(
+                        work.SourceId,
+                        work.SynchronizationId,
+                        cancellationToken);
+                }
+                break;
+
+            default:
+                throw new InvalidOperationException(
+                    $"Microsoft 365 source kind '{work.SourceKind}' cannot use the ingestion synchronization pipeline.");
         }
 
         return true;

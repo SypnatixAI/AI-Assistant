@@ -62,6 +62,33 @@ public sealed class Microsoft365PendingSynchronizationServiceTests
     }
 
     [Theory, AutoDomainData]
+    public async Task Given_APendingOneDriveSynchronization_When_ProcessNextAsync_Then_StartsTheDriveSynchronization(
+        Guid synchronizationId,
+        Guid sourceId,
+        Guid organizationId,
+        DateTimeOffset now,
+        CancellationToken cancellationToken)
+    {
+        // Given
+        var work = CreateWork(
+            synchronizationId,
+            sourceId,
+            organizationId,
+            Microsoft365SourceKind.OneDrive,
+            Microsoft365SynchronizationType.Initial);
+        var driveService = new StubDriveSynchronizationService();
+        var service = CreateService(work, driveService: driveService, now: now);
+
+        // When
+        var processed = await service.ProcessNextAsync(cancellationToken);
+
+        // Then
+        Assert.True(processed);
+        Assert.Equal((sourceId, synchronizationId), driveService.InitialSynchronization);
+        Assert.Equal(cancellationToken, driveService.ReceivedCancellationToken);
+    }
+
+    [Theory, AutoDomainData]
     public async Task Given_APendingIndexCleanup_When_ProcessNextAsync_Then_CleansTheSourceIndex(
         Guid synchronizationId,
         Guid sourceId,
