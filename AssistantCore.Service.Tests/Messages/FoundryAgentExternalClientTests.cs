@@ -1,4 +1,6 @@
 using AssistantCore.ExternalServices.Services.Foundry;
+using Microsoft.Agents.AI;
+using Microsoft.Extensions.AI;
 
 namespace AssistantCore.Service.Tests.Messages;
 
@@ -17,5 +19,24 @@ public sealed class FoundryAgentExternalClientTests
 
         // Then
         Assert.True(result);
+    }
+
+    [Theory, AutoDomainData]
+    public void Given_TextAndToolResult_When_GetStreamableText_Then_ReturnsTheTextFragment()
+    {
+        // Given
+        const string fragment = "Voici la réponse";
+        var update = new AgentResponseUpdate(
+            ChatRole.Assistant,
+            [
+                new TextContent(fragment),
+                new FunctionResultContent("tool-call-id", new { status = "succeeded" })
+            ]);
+
+        // When
+        var result = FoundryAgentExternalClient.GetStreamableText(update);
+
+        // Then
+        Assert.Equal(fragment, result);
     }
 }
