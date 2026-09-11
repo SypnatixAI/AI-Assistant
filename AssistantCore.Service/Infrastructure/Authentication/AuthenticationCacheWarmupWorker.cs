@@ -3,6 +3,7 @@ using System.Threading.Channels;
 using AssistantCore.Service.Application.Services.AuthenticateUser;
 using AssistantCore.Service.Application.Services.Messages.Connectors.Microsoft365;
 using AssistantCore.Service.Application.Services.Messages.Tools;
+using AssistantCore.Service.Application.Services.Microsoft365;
 
 namespace AssistantCore.Service.Infrastructure.Authentication;
 
@@ -70,6 +71,11 @@ public sealed class AuthenticationCacheWarmupWorker(
                     request.OrganizationId,
                     stoppingToken);
 
+                await EnsureCurrentUserOneDriveIndexedAsync(
+                    scope.ServiceProvider,
+                    request,
+                    stoppingToken);
+
                 if (!string.IsNullOrWhiteSpace(request.ExternalTenantId)
                     && !string.IsNullOrWhiteSpace(request.EntraUserId))
                 {
@@ -96,6 +102,39 @@ public sealed class AuthenticationCacheWarmupWorker(
             {
                 pending.TryRemove(key, out _);
             }
+        }
+    }
+
+    private async Task EnsureCurrentUserOneDriveIndexedAsync(
+        IServiceProvider serviceProvider,
+        WarmupRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(request.EntraUserId))
+        {
+            return;
+        }
+
+        try
+        {
+            var oneDriveIndexingService = serviceProvider
+                .GetRequiredService<IMicrosoft365CurrentUserOneDriveIndexingService>();
+            await oneDriveIndexingService.EnsureIndexedAsync(
+                request.OrganizationId,
+                request.EntraUserId,
+                cancellationToken);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception exception)
+        {
+            logger.LogWarning(
+                exception,
+                "Automatic OneDrive indexing failed for organization {OrganizationId} and authenticated user {EntraUserId}.",
+                request.OrganizationId,
+                request.EntraUserId);
         }
     }
 
