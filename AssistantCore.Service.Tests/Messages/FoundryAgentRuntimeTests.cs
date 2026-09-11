@@ -150,9 +150,14 @@ public sealed class FoundryAgentRuntimeTests
             new FoundryAgentClientResult("Allô !", "agent@1", 9, 2, 1),
             streamDeltas: ["Allô", " !"]);
         var runtime = CreateRuntime(client, new EmptyToolRegistry());
+        var progressMessages = new List<string>();
         var deltas = new List<string>();
         var callbacks = new AgentTurnStreamingCallbacks(
-            (_, _) => ValueTask.CompletedTask,
+            (message, _) =>
+            {
+                progressMessages.Add(message);
+                return ValueTask.CompletedTask;
+            },
             (delta, _) =>
             {
                 deltas.Add(delta);
@@ -166,6 +171,7 @@ public sealed class FoundryAgentRuntimeTests
             CancellationToken.None);
 
         // Then
+        Assert.Equal(["Préparation de la réponse…"], progressMessages);
         Assert.Equal(["Allô", " !"], deltas);
         Assert.Equal("Allô !", result.Content);
     }

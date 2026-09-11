@@ -19,6 +19,7 @@ public sealed class FoundryAgentRuntime(
     IOptions<AgentRuntimeOptions> options,
     ILogger<FoundryAgentRuntime> logger) : IAgentRuntime
 {
+    private const string PreparingResponseProgress = "Préparation de la réponse…";
     private readonly AgentRuntimeOptions _options = options.Value;
 
     public async Task<AgentTurnResult> RunAsync(
@@ -50,6 +51,7 @@ public sealed class FoundryAgentRuntime(
 
         var stopwatch = Stopwatch.StartNew();
         using var timeoutSource = CreateTurnTimeoutSource(cancellationToken);
+        await callbacks.OnProgress(PreparingResponseProgress, timeoutSource.Token);
         var context = await CreateExecutionContextAsync(request, timeoutSource.Token);
 
         var response = await foundryAgentClient.RunStreamingAsync(

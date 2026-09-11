@@ -186,11 +186,8 @@ public sealed class FoundryAgentExternalClient
                 ?.Details
                 ?? usage;
 
-            // Whitespace-only streaming fragments are significant formatting and
-            // must be preserved while empty/null updates are ignored.
-            if (!HasStreamableText(update.Text)
-                || update.Contents.OfType<FunctionCallContent>().Any()
-                || update.Contents.OfType<FunctionResultContent>().Any())
+            var streamableText = GetStreamableText(update);
+            if (streamableText is null)
             {
                 continue;
             }
@@ -203,8 +200,8 @@ public sealed class FoundryAgentExternalClient
                     stopwatch.Elapsed.TotalMilliseconds);
             }
 
-            responseText.Add(update.Text);
-            await onAnswerDelta(update.Text, cancellationToken);
+            responseText.Add(streamableText);
+            await onAnswerDelta(streamableText, cancellationToken);
         }
 
         stopwatch.Stop();
@@ -335,6 +332,14 @@ public sealed class FoundryAgentExternalClient
 
     internal static bool HasStreamableText(string? text) =>
         !string.IsNullOrEmpty(text);
+
+    /// <summary>
+    /// AgentResponseUpdate.Text concatene uniquement les TextContent. Les appels
+    /// et resultats d'outil peuvent coexister dans la mise a jour sans faire
+    /// partie de ce texte et ne doivent donc pas supprimer le fragment diffuse.
+    /// </summary>
+    internal static string? GetStreamableText(AgentResponseUpdate update) =>
+        HasStreamableText(update.Text) ? update.Text : null;
 
     private static int ToTokenCount(long? tokenCount) =>
         tokenCount is null ? 0 : checked((int)tokenCount.Value);
