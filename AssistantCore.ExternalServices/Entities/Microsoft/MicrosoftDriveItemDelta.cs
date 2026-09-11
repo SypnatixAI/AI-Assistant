@@ -11,4 +11,12 @@ public sealed record MicrosoftDriveItemDelta(
     string? MimeType,
     bool IsDeleted,
     bool IsFolder,
-    bool IsFile);
+    bool IsFile)
+{
+    /// <summary>
+    /// Drive that really owns the item. Null for regular delta items where the
+    /// source drive is already the canonical drive. Shared search results set
+    /// this from remoteItem.parentReference.driveId.
+    /// </summary>
+    public string? CanonicalDriveId { get; init; }
+}
