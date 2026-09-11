@@ -1,5 +1,6 @@
 using AssistantCore.Service.Application;
 using AssistantCore.Service.Application.Abstractions;
+using AssistantCore.Service.Application.Services.Microsoft365;
 using AssistantCore.Service.Infrastructure.Authentication;
 using AssistantCore.Service.Infrastructure.Connectors;
 using AssistantCore.Service.Infrastructure.Cors;
@@ -46,6 +47,7 @@ builder.Services.AddAuthenticationInfrastructure(builder.Configuration);
 builder.Services.AddFoundryAgentInfrastructure(builder.Configuration);
 builder.Services.AddConnectorInfrastructure(builder.Configuration);
 builder.Services.AddMicrosoft365Infrastructure(builder.Configuration);
+builder.Services.AddScoped<IMicrosoft365CurrentUserOneDriveClient, Microsoft365CurrentUserOneDriveClientAdapter>();
 builder.Services.AddDispatcher(Assembly.GetExecutingAssembly());
 builder.Services.AddPersistence(builder.Configuration);
 builder.Services.AddHealthChecks()
