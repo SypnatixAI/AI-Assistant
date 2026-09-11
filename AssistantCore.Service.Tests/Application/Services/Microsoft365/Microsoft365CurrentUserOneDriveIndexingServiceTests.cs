@@ -5,7 +5,7 @@ using AssistantCore.Repository.Repositories;
 using AssistantCore.Service.Application.Services.Microsoft365;
 using Microsoft.EntityFrameworkCore;
 
-namespace AssistantCore.Service.Tests.Application.Services.Microsoft365;
+namespace AssistantCore.Service.Tests.Microsoft365;
 
 public sealed class Microsoft365CurrentUserOneDriveIndexingServiceTests
 {
