@@ -12,14 +12,16 @@ namespace AssistantCore.Service.Infrastructure.Microsoft365;
 public sealed class Microsoft365DriveItemDeltaClientAdapter(
     MicrosoftIdentityClient identityClient,
     MicrosoftGraphDriveItemDeltaClient graphClient,
+    MicrosoftGraphSharedDriveItemSearchClient sharedItemSearchClient,
     IOptions<Microsoft365Options> options) : IMicrosoft365DriveItemDeltaClient
 {
     public IAsyncEnumerable<Microsoft365DriveItemDeltaPage> GetInitialPagesAsync(
         string tenantId,
         string driveId,
         CancellationToken cancellationToken = default) =>
-        GetPagesAsync(
+        GetPagesWithSharedItemsAsync(
             tenantId,
+            driveId,
             (configuration, accessToken) => graphClient.GetInitialPagesAsync(
                 configuration.GraphBaseUrl,
                 accessToken,
@@ -30,18 +32,27 @@ public sealed class Microsoft365DriveItemDeltaClientAdapter(
     public IAsyncEnumerable<Microsoft365DriveItemDeltaPage> GetDeltaPagesAsync(
         string tenantId,
         string deltaLink,
-        CancellationToken cancellationToken = default) =>
-        GetPagesAsync(
+        CancellationToken cancellationToken = default)
+    {
+        var driveId = TryReadDriveIdFromDeltaLink(deltaLink)
+            ?? throw new ArgumentException(
+                "The Microsoft Graph delta link does not identify a drive.",
+                nameof(deltaLink));
+
+        return GetPagesWithSharedItemsAsync(
             tenantId,
+            driveId,
             (configuration, accessToken) => graphClient.GetDeltaPagesAsync(
                 configuration.GraphBaseUrl,
                 accessToken,
                 deltaLink,
                 cancellationToken),
             cancellationToken);
+    }
 
-    private async IAsyncEnumerable<Microsoft365DriveItemDeltaPage> GetPagesAsync(
+    private async IAsyncEnumerable<Microsoft365DriveItemDeltaPage> GetPagesWithSharedItemsAsync(
         string tenantId,
+        string driveId,
         Func<Microsoft365Options, string,
             IAsyncEnumerable<AssistantCore.ExternalServices.Entities.Microsoft.MicrosoftDriveItemDeltaPage>>
             createPages,
@@ -63,7 +74,43 @@ public sealed class Microsoft365DriveItemDeltaClientAdapter(
             throw CreateApplicationException(exception);
         }
 
-        var pages = createPages(configuration, token.AccessToken);
+        await foreach (var page in ReadDeltaPagesAsync(
+                           createPages(configuration, token.AccessToken),
+                           cancellationToken))
+        {
+            yield return page;
+        }
+
+        var sharedItems = new List<Microsoft365DriveItemDelta>();
+        try
+        {
+            await foreach (var item in sharedItemSearchClient.GetSharedItemsAsync(
+                               configuration.GraphBaseUrl,
+                               token.AccessToken,
+                               driveId,
+                               cancellationToken))
+            {
+                sharedItems.Add(MapItem(item));
+            }
+        }
+        catch (MicrosoftExternalException exception)
+        {
+            throw CreateApplicationException(exception);
+        }
+
+        if (sharedItems.Count > 0)
+        {
+            // The shared discovery page deliberately has no delta link. The
+            // synchronization service retains the checkpoint returned by the
+            // regular drive delta pages while processing these canonical items.
+            yield return new Microsoft365DriveItemDeltaPage(sharedItems, DeltaLink: null);
+        }
+    }
+
+    private async IAsyncEnumerable<Microsoft365DriveItemDeltaPage> ReadDeltaPagesAsync(
+        IAsyncEnumerable<AssistantCore.ExternalServices.Entities.Microsoft.MicrosoftDriveItemDeltaPage> pages,
+        [EnumeratorCancellation] CancellationToken cancellationToken)
+    {
         await using var enumerator = pages.GetAsyncEnumerator(cancellationToken);
         while (true)
         {
@@ -84,20 +131,47 @@ public sealed class Microsoft365DriveItemDeltaClientAdapter(
 
             var page = enumerator.Current;
             yield return new Microsoft365DriveItemDeltaPage(
-                page.Items.Select(item => new Microsoft365DriveItemDelta(
-                    item.Id,
-                    item.Name,
-                    item.ETag,
-                    item.CreatedDateTime,
-                    item.LastModifiedDateTime,
-                    item.WebUrl,
-                    item.Size,
-                    item.MimeType,
-                    item.IsDeleted,
-                    item.IsFolder,
-                    item.IsFile)).ToArray(),
+                page.Items.Select(MapItem).ToArray(),
                 page.DeltaLink);
         }
+    }
+
+    private static Microsoft365DriveItemDelta MapItem(
+        AssistantCore.ExternalServices.Entities.Microsoft.MicrosoftDriveItemDelta item) =>
+        new(
+            item.Id,
+            item.Name,
+            item.ETag,
+            item.CreatedDateTime,
+            item.LastModifiedDateTime,
+            item.WebUrl,
+            item.Size,
+            item.MimeType,
+            item.IsDeleted,
+            item.IsFolder,
+            item.IsFile)
+        {
+            CanonicalDriveId = item.CanonicalDriveId
+        };
+
+    private static string? TryReadDriveIdFromDeltaLink(string deltaLink)
+    {
+        if (!Uri.TryCreate(deltaLink, UriKind.Absolute, out var uri))
+        {
+            return null;
+        }
+
+        var segments = uri.AbsolutePath
+            .Split('/', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        for (var index = 0; index < segments.Length - 1; index++)
+        {
+            if (string.Equals(segments[index], "drives", StringComparison.OrdinalIgnoreCase))
+            {
+                return Uri.UnescapeDataString(segments[index + 1]);
+            }
+        }
+
+        return null;
     }
 
     private static Exception CreateApplicationException(
