@@ -57,7 +57,7 @@ public sealed class Microsoft365PersistenceConfigurationTests
 
         Assert.NotNull(driveType);
         Assert.Equal("Microsoft365Drive", driveType.GetTableName());
-        Assert.True(driveType.FindProperty(nameof(Microsoft365Drive.SiteId))?.IsNullable);
+        Assert.True(driveType.FindProperty(nameof(Microsoft365Drive.SiteId))!.IsNullable);
         Assert.Equal(400, driveType.FindProperty(nameof(Microsoft365Drive.OwnerUserObjectId))?.GetMaxLength());
         Assert.Equal(320, driveType.FindProperty(nameof(Microsoft365Drive.OwnerUserPrincipalName))?.GetMaxLength());
         Assert.Contains(driveType.GetIndexes(), index =>
