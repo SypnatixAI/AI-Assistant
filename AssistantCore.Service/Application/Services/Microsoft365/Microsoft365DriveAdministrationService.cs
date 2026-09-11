@@ -117,5 +117,13 @@ public sealed class Microsoft365DriveAdministrationService(
             drive.DisplayName,
             drive.WebUrl,
             drive.Status.ToString(),
-            drive.IsIndexed);
+            drive.IsIndexed,
+            drive.Kind switch
+            {
+                Microsoft365SourceKind.SharePointDrive => "sharepoint",
+                Microsoft365SourceKind.OneDrive => "onedrive",
+                _ => throw new InvalidOperationException("Unsupported Microsoft 365 drive source type.")
+            },
+            drive.OwnerUserObjectId,
+            drive.OwnerUserPrincipalName);
 }
