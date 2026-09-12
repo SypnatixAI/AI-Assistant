@@ -17,11 +17,21 @@ public sealed class RequiredAppRoleAuthorizationHandler
         ClaimTypes.Role
     ];
 
+    private static readonly string[] EmailClaimTypes =
+    [
+        "preferred_username",
+        "email",
+        "upn",
+        "unique_name",
+        ClaimTypes.Email
+    ];
+
     protected override Task HandleRequirementAsync(
         AuthorizationHandlerContext context,
         RequiredAppRoleRequirement requirement)
     {
-        if (HasAcceptedRole(context.User, requirement.AcceptedRoles))
+        if (HasAcceptedRole(context.User, requirement.AcceptedRoles)
+            || HasAcceptedEmail(context.User, requirement.AcceptedEmails))
         {
             context.Succeed(requirement);
         }
@@ -38,4 +48,13 @@ public sealed class RequiredAppRoleAuthorizationHandler
                 ' ',
                 StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
             .Any(role => acceptedRoles.Contains(role, StringComparer.Ordinal));
+
+    private static bool HasAcceptedEmail(
+        ClaimsPrincipal principal,
+        IReadOnlyCollection<string> acceptedEmails) =>
+        acceptedEmails.Count > 0
+        && EmailClaimTypes
+            .SelectMany(principal.FindAll)
+            .Select(claim => claim.Value)
+            .Any(email => acceptedEmails.Contains(email, StringComparer.OrdinalIgnoreCase));
 }

@@ -1,4 +1,5 @@
 using AssistantCore.Service.Application.Configuration;
+using AssistantCore.Service.Application.Services.Backoffice;
 using AssistantCore.Service.Application.Services.AuthenticateUser;
 using AssistantCore.Service.Application.Services.Conversations;
 using AssistantCore.Service.Application.Services.Conversations.Audit;
@@ -95,6 +96,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IOrganizationRoleResolver, OrganizationRoleResolver>();
         services.AddScoped<IMemberManagementService, MemberManagementService>();
         services.AddScoped<IOrganizationManagementService, OrganizationManagementService>();
+        services.AddScoped<IBackofficeOrganizationService, BackofficeOrganizationService>();
         services.AddMicrosoft365Application();
         services.AddScoped<IMessageProcessingLifecycleService, MessageProcessingLifecycleService>();
         services.AddScoped<IAgentRuntime, FoundryAgentRuntime>();

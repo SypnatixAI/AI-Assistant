@@ -25,6 +25,7 @@ internal static class AuthorizationIntegrationTestFactory
     public const string RequiredScope = "access_as_user";
     public const string RequiredAdmissionRole = "AssistantCore.Access";
     public const string TenantAdminRole = "TenantAdmin";
+    public const string ManagementAdminRole = "AssistantCore.Management.Admin";
 
     public static WebApplicationFactory<Program> CreateFactory(bool useTestAuthentication)
     {
@@ -37,7 +38,8 @@ internal static class AuthorizationIntegrationTestFactory
                         new Dictionary<string, string?>
                         {
                             ["Microsoft365:ClientSecret"] = "integration-test-secret",
-                            ["Microsoft365:ClientStateHmacKey"] = "integration-test-client-state-hmac-key"
+                            ["Microsoft365:ClientStateHmacKey"] = "integration-test-client-state-hmac-key",
+                            ["AzureAd:ManagementAdminRole"] = ManagementAdminRole
                         }));
 
                 if (!useTestAuthentication)

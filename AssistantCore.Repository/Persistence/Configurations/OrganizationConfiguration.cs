@@ -40,6 +40,9 @@ public sealed class OrganizationConfiguration : IEntityTypeConfiguration<Organiz
             .HasMaxLength(20)
             .IsRequired();
 
+        builder.Property(organization => organization.CreatedAt)
+            .IsRequired();
+
         builder.HasMany(organization => organization.Members)
             .WithOne(member => member.Organization)
             .HasForeignKey(member => member.OrganizationId)

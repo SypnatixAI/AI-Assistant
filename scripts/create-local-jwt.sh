@@ -24,6 +24,7 @@ signing_key="$(jq -er '.Authentication.LocalJwt.SigningKey' "$CONFIGURATION_FILE
 required_scope="$(jq -er '.AzureAd.RequiredScope' "$CONFIGURATION_FILE")"
 required_admission_role="$(jq -er '.AzureAd.RequiredAdmissionRole' "$CONFIGURATION_FILE")"
 tenant_admin_role="$(jq -er '.AzureAd.TenantAdminRole' "$CONFIGURATION_FILE")"
+management_admin_role="$(jq -er '.AzureAd.ManagementAdminRole' "$CONFIGURATION_FILE")"
 issued_at="$(date +%s)"
 expires_at="$((issued_at + 28800))"
 
@@ -34,6 +35,7 @@ payload="$(jq -cn \
     --arg required_scope "$required_scope" \
     --arg required_admission_role "$required_admission_role" \
     --arg tenant_admin_role "$tenant_admin_role" \
+    --arg management_admin_role "$management_admin_role" \
     --argjson issued_at "$issued_at" \
     --argjson expires_at "$expires_at" \
     '{
@@ -47,7 +49,7 @@ payload="$(jq -cn \
         name: "Administrateur local",
         preferred_username: "admin@local.test",
         scp: $required_scope,
-        roles: [$required_admission_role, $tenant_admin_role]
+        roles: [$required_admission_role, $tenant_admin_role, $management_admin_role]
     }' | base64_url_encode)"
 unsigned_token="$header.$payload"
 signature="$(printf '%s' "$unsigned_token" \

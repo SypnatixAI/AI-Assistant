@@ -33,6 +33,25 @@ public sealed class ApiAccessOptionsValidator : IValidateOptions<ApiAccessOption
             return ValidateOptionsResult.Fail(tenantAdminRoleError);
         }
 
+        var managementAdminRoleError = ValidateSingleValue(
+            options.ManagementAdminRole,
+            nameof(ApiAccessOptions.ManagementAdminRole));
+
+        if (managementAdminRoleError is not null)
+        {
+            return ValidateOptionsResult.Fail(managementAdminRoleError);
+        }
+
+        var emailErrors = options.ManagementAdminAllowedEmails
+            .Where(string.IsNullOrWhiteSpace)
+            .Select(_ => $"{ApiAccessOptions.SectionName}:{nameof(ApiAccessOptions.ManagementAdminAllowedEmails)} cannot contain empty values.")
+            .ToArray();
+
+        if (emailErrors.Length > 0)
+        {
+            return ValidateOptionsResult.Fail(emailErrors);
+        }
+
         return ValidateOptionsResult.Success;
     }
 
