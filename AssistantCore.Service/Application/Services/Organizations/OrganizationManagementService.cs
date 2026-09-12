@@ -26,7 +26,8 @@ public sealed class OrganizationManagementService(
             Domain = normalizedDomain,
             IdentityProvider = IdentityProvider.MicrosoftEntraId,
             ExternalTenantId = null,
-            Status = RecordStatus.Active
+            Status = RecordStatus.Active,
+            CreatedAt = DateTimeOffset.UtcNow
         };
 
         return await organizationRepository.TryCreateOrganizationAsync(organization, cancellationToken)
