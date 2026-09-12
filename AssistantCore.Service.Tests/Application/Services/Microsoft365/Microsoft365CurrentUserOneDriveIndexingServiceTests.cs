@@ -45,6 +45,35 @@ public sealed class Microsoft365CurrentUserOneDriveIndexingServiceTests
         Assert.Equal(entraUserId, client.LastEntraUserId);
     }
 
+    [Theory, AutoDomainData]
+    public async Task Given_AnIndexedOneDriveMissingConnectorSource_When_EnsuringIndexing_Then_RepairsOneDriveConnectorSource(
+        Guid organizationId)
+    {
+        // Given
+        const string tenantId = "tenant-1";
+        const string entraUserId = "user-1";
+        await using var dbContext = CreateDbContext();
+        await SeedActiveConnectionAsync(dbContext, organizationId, tenantId);
+        var client = new StubCurrentUserOneDriveClient(
+            new Microsoft365CurrentUserDrive(
+                "drive-1",
+                "User OneDrive",
+                "https://contoso-my.sharepoint.com/personal/user"));
+        var service = CreateService(dbContext, client);
+        await service.EnsureIndexedAsync(organizationId, entraUserId);
+        dbContext.OrganizationConnectorSources.RemoveRange(dbContext.OrganizationConnectorSources);
+        await dbContext.SaveChangesAsync();
+
+        // When
+        await service.EnsureIndexedAsync(organizationId, entraUserId);
+
+        // Then
+        var source = Assert.Single(await dbContext.OrganizationConnectorSources.ToArrayAsync());
+        Assert.Equal(Microsoft365SourceType.OneDrive, source.SourceType);
+        Assert.Equal(RecordStatus.Active, source.Status);
+        Assert.True(source.IsIndexed);
+    }
+
     [Fact]
     public async Task Given_TheAuthenticatedUserHasNoOneDrive_When_EnsuringIndexing_Then_NothingIsPersisted()
     {

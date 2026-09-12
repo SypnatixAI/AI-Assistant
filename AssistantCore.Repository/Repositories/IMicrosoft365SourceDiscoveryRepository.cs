@@ -17,6 +17,10 @@ public interface IMicrosoft365SourceDiscoveryRepository
         Guid organizationId,
         CancellationToken cancellationToken = default) => Task.FromResult(false);
 
+    Task<bool> IsEnvironmentReadyAsync(
+        Guid organizationId,
+        CancellationToken cancellationToken = default) => Task.FromResult(false);
+
     Task<Microsoft365Site?> FindSiteAsync(
         Guid organizationId,
         string siteId,

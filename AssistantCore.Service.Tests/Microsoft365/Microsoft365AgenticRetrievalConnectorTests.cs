@@ -101,7 +101,6 @@ public sealed class Microsoft365AgenticRetrievalConnectorTests
         var connector = new Microsoft365Connector(
             new StaticMicrosoft365UserGroupResolver([entraGroupId.ToString("D")]),
             new StaticMicrosoft365SharePointGroupResolver([]),
-            new PassThroughMicrosoft365SearchAccessVerifier(),
             retrievalClient,
             CreateOptions(),
             CreateSearchOptions(),
@@ -119,8 +118,8 @@ public sealed class Microsoft365AgenticRetrievalConnectorTests
         Assert.Single(result.Evidence);
     }
 
-    [Theory, InlineAutoDomainData("document inaccessible Atlas")]
-    public async Task Given_AgenticRetrievalReturnsUnauthorizedDocument_When_SearchAsync_Then_EvidenceIsNotReturned(
+    [Theory, InlineAutoDomainData("document autorise Atlas")]
+    public async Task Given_AgenticRetrievalReturnsEvidence_When_SearchAsync_Then_KeepsSearchFilteredEvidence(
         string query,
         Guid organizationId,
         Guid memberId,
@@ -132,9 +131,8 @@ public sealed class Microsoft365AgenticRetrievalConnectorTests
         var connector = new Microsoft365Connector(
             new StaticMicrosoft365UserGroupResolver([entraGroupId.ToString("D")]),
             new StaticMicrosoft365SharePointGroupResolver([]),
-            new RejectingMicrosoft365SearchAccessVerifier(),
             new RecordingAgenticRetrievalClient(
-                CreateReference("0", "chunk-secret", "Secret", "Restricted content.")),
+                CreateReference("0", "chunk-atlas", "Atlas", "Indexed authorized content.")),
             CreateOptions(),
             CreateSearchOptions(),
             new EvidenceNormalizer(),
@@ -147,7 +145,9 @@ public sealed class Microsoft365AgenticRetrievalConnectorTests
             CancellationToken.None);
 
         // Then
-        Assert.Empty(result.Evidence);
+        var evidence = Assert.Single(result.Evidence);
+        Assert.Equal("Atlas", evidence.Title);
+        Assert.Equal("Indexed authorized content.", evidence.Content);
     }
 
     private static Microsoft365Connector CreateConnector(
@@ -157,7 +157,6 @@ public sealed class Microsoft365AgenticRetrievalConnectorTests
         new(
             new StaticMicrosoft365UserGroupResolver([entraGroupId.ToString("D")]),
             new StaticMicrosoft365SharePointGroupResolver([sharePointGroupId]),
-            new PassThroughMicrosoft365SearchAccessVerifier(),
             retrievalClient,
             CreateOptions(),
             CreateSearchOptions(),
@@ -259,31 +258,4 @@ public sealed class Microsoft365AgenticRetrievalConnectorTests
             Task.FromResult(groupIds);
     }
 
-    private sealed class PassThroughMicrosoft365SearchAccessVerifier
-        : IMicrosoft365SearchAccessVerifier
-    {
-        public Task<IReadOnlyCollection<Microsoft365SearchRecord>> KeepAuthorizedAsync(
-            Guid organizationId,
-            string externalTenantId,
-            string entraUserId,
-            IReadOnlyCollection<string> entraGroupIds,
-            IReadOnlyCollection<string> sharePointGroupIds,
-            IReadOnlyCollection<Microsoft365SearchRecord> records,
-            CancellationToken cancellationToken) =>
-            Task.FromResult(records);
-    }
-
-    private sealed class RejectingMicrosoft365SearchAccessVerifier
-        : IMicrosoft365SearchAccessVerifier
-    {
-        public Task<IReadOnlyCollection<Microsoft365SearchRecord>> KeepAuthorizedAsync(
-            Guid organizationId,
-            string externalTenantId,
-            string entraUserId,
-            IReadOnlyCollection<string> entraGroupIds,
-            IReadOnlyCollection<string> sharePointGroupIds,
-            IReadOnlyCollection<Microsoft365SearchRecord> records,
-            CancellationToken cancellationToken) =>
-            Task.FromResult<IReadOnlyCollection<Microsoft365SearchRecord>>([]);
-    }
 }

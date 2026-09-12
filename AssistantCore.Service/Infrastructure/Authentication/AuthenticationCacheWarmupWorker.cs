@@ -67,10 +67,6 @@ public sealed class AuthenticationCacheWarmupWorker(
             {
                 using var scope = scopeFactory.CreateScope();
                 var toolRegistry = scope.ServiceProvider.GetRequiredService<IAiToolRegistry>();
-                await toolRegistry.GetAvailableToolsAsync(
-                    request.OrganizationId,
-                    stoppingToken);
-
                 await EnsureCurrentUserOneDriveIndexedAsync(
                     scope.ServiceProvider,
                     request,
@@ -86,6 +82,10 @@ public sealed class AuthenticationCacheWarmupWorker(
                         request.EntraUserId,
                         stoppingToken);
                 }
+
+                await toolRegistry.GetAvailableToolsAsync(
+                    request.OrganizationId,
+                    stoppingToken);
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
             {

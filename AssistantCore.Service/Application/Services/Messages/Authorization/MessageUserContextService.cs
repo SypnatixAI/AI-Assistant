@@ -82,6 +82,6 @@ public sealed class MessageUserContextService(
                 TenantAdmissionException.TenantAdminRequired);
         }
 
-        return new MessageUserContext(organization, member);
+        return new MessageUserContext(organization, member, identity);
     }
 }

@@ -41,26 +41,26 @@ public sealed class MicrosoftGraphSharedDriveItemSearchClientTests
 
         // When
         var results = new List<AssistantCore.ExternalServices.Entities.Microsoft.MicrosoftDriveItemDelta>();
-        await foreach (var item in client.GetSharedItemsAsync(
+        await foreach (var driveItem in client.GetSharedItemsAsync(
                            "https://graph.microsoft.com/",
                            "secret-access-token",
                            "bob-drive"))
         {
-            results.Add(item);
+            results.Add(driveItem);
         }
 
         // Then
-        var item = Assert.Single(results);
-        Assert.Equal("budget-item", item.Id);
-        Assert.Equal("alice-owner-drive", item.CanonicalDriveId);
-        Assert.Equal("Budget-2027.xlsx", item.Name);
-        Assert.Equal("budget-etag", item.ETag);
-        Assert.Equal("https://contoso-my.sharepoint.com/personal/alice/Budget-2027.xlsx", item.WebUrl);
-        Assert.True(item.IsFile);
-        Assert.False(item.IsFolder);
+        var remoteItem = Assert.Single(results);
+        Assert.Equal("budget-item", remoteItem.Id);
+        Assert.Equal("alice-owner-drive", remoteItem.CanonicalDriveId);
+        Assert.Equal("Budget-2027.xlsx", remoteItem.Name);
+        Assert.Equal("budget-etag", remoteItem.ETag);
+        Assert.Equal("https://contoso-my.sharepoint.com/personal/alice/Budget-2027.xlsx", remoteItem.WebUrl);
+        Assert.True(remoteItem.IsFile);
+        Assert.False(remoteItem.IsFolder);
         Assert.Equal(
             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            item.MimeType);
+            remoteItem.MimeType);
         Assert.Equal("Bearer", handler.LastRequest?.Headers.Authorization?.Scheme);
         Assert.Equal("secret-access-token", handler.LastRequest?.Headers.Authorization?.Parameter);
         Assert.Contains("/v1.0/drives/bob-drive/search(q='')", handler.LastRequest?.RequestUri?.AbsoluteUri);
