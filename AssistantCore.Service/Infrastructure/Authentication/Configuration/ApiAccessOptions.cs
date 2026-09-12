@@ -9,4 +9,8 @@ public sealed class ApiAccessOptions
     public string RequiredAdmissionRole { get; init; } = string.Empty;
 
     public string TenantAdminRole { get; init; } = string.Empty;
+
+    public string ManagementAdminRole { get; init; } = string.Empty;
+
+    public string[] ManagementAdminAllowedEmails { get; init; } = [];
 }

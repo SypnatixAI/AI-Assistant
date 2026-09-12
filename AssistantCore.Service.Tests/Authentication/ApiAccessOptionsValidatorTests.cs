@@ -12,7 +12,8 @@ public sealed class ApiAccessOptionsValidatorTests
         {
             RequiredScope = "access_as_user",
             RequiredAdmissionRole = "AssistantCore.Access",
-            TenantAdminRole = "tenantAdmin"
+            TenantAdminRole = "tenantAdmin",
+            ManagementAdminRole = "AssistantCore.Management.Admin"
         };
 
         // When
@@ -32,7 +33,8 @@ public sealed class ApiAccessOptionsValidatorTests
         {
             RequiredScope = scope,
             RequiredAdmissionRole = "AssistantCore.Access",
-            TenantAdminRole = "tenantAdmin"
+            TenantAdminRole = "tenantAdmin",
+            ManagementAdminRole = "AssistantCore.Management.Admin"
         };
 
         // When
@@ -52,7 +54,8 @@ public sealed class ApiAccessOptionsValidatorTests
         {
             RequiredScope = "access_as_user profile",
             RequiredAdmissionRole = "AssistantCore.Access",
-            TenantAdminRole = "tenantAdmin"
+            TenantAdminRole = "tenantAdmin",
+            ManagementAdminRole = "AssistantCore.Management.Admin"
         };
 
         // When
@@ -75,7 +78,8 @@ public sealed class ApiAccessOptionsValidatorTests
         {
             RequiredScope = "access_as_user",
             RequiredAdmissionRole = role,
-            TenantAdminRole = "tenantAdmin"
+            TenantAdminRole = "tenantAdmin",
+            ManagementAdminRole = "AssistantCore.Management.Admin"
         };
 
         // When
@@ -94,7 +98,8 @@ public sealed class ApiAccessOptionsValidatorTests
         {
             RequiredScope = "access_as_user",
             RequiredAdmissionRole = "AssistantCore.Access Some.Other",
-            TenantAdminRole = "tenantAdmin"
+            TenantAdminRole = "tenantAdmin",
+            ManagementAdminRole = "AssistantCore.Management.Admin"
         };
 
         // When
@@ -117,7 +122,8 @@ public sealed class ApiAccessOptionsValidatorTests
         {
             RequiredScope = "access_as_user",
             RequiredAdmissionRole = "AssistantCore.Access",
-            TenantAdminRole = role
+            TenantAdminRole = role,
+            ManagementAdminRole = "AssistantCore.Management.Admin"
         };
 
         // When
@@ -136,7 +142,8 @@ public sealed class ApiAccessOptionsValidatorTests
         {
             RequiredScope = "access_as_user",
             RequiredAdmissionRole = "AssistantCore.Access",
-            TenantAdminRole = "tenantAdmin Some.Other"
+            TenantAdminRole = "tenantAdmin Some.Other",
+            ManagementAdminRole = "AssistantCore.Management.Admin"
         };
 
         // When
@@ -146,6 +153,52 @@ public sealed class ApiAccessOptionsValidatorTests
         Assert.True(result.Failed);
         Assert.Contains(
             "AzureAd:TenantAdminRole must be a single value without whitespace.",
+            result.Failures);
+    }
+
+    [Theory]
+    [InlineAutoDomainData("")]
+    [InlineAutoDomainData("   ")]
+    public void Given_AMissingManagementAdminRole_When_Validate_Then_ValidationFailsOnTheManagementAdminRoleKey(
+        string role)
+    {
+        // Given
+        var options = new ApiAccessOptions
+        {
+            RequiredScope = "access_as_user",
+            RequiredAdmissionRole = "AssistantCore.Access",
+            TenantAdminRole = "tenantAdmin",
+            ManagementAdminRole = role
+        };
+
+        // When
+        var result = new ApiAccessOptionsValidator().Validate(name: null, options);
+
+        // Then
+        Assert.True(result.Failed);
+        Assert.Contains("AzureAd:ManagementAdminRole is required.", result.Failures);
+    }
+
+    [Theory, InlineAutoDomainData("AssistantCore.Management.Admin Some.Other")]
+    public void Given_AManagementAdminRoleContainingSeveralValues_When_Validate_Then_ValidationFails(
+        string role)
+    {
+        // Given
+        var options = new ApiAccessOptions
+        {
+            RequiredScope = "access_as_user",
+            RequiredAdmissionRole = "AssistantCore.Access",
+            TenantAdminRole = "tenantAdmin",
+            ManagementAdminRole = role
+        };
+
+        // When
+        var result = new ApiAccessOptionsValidator().Validate(name: null, options);
+
+        // Then
+        Assert.True(result.Failed);
+        Assert.Contains(
+            "AzureAd:ManagementAdminRole must be a single value without whitespace.",
             result.Failures);
     }
 }

@@ -17,6 +17,7 @@ public static class ServiceCollectionExtensions
             options.UseSqlServer(connectionString));
 
         services.AddScoped<IOrganizationQueries, OrganizationQueries>();
+        services.AddScoped<IBackofficeOrganizationQueries, BackofficeOrganizationQueries>();
         services.AddScoped<IOrganizationMemberQueries, OrganizationMemberQueries>();
         services.AddScoped<IOrganizationConnectorQueries, OrganizationConnectorQueries>();
         services.AddScoped<IOrganizationRepository, OrganizationRepository>();
