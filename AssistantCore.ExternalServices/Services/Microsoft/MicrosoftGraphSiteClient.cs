@@ -21,14 +21,17 @@ public sealed class MicrosoftGraphSiteClient(HttpClient httpClient)
 
         if (sites.Count > 0)
         {
-            return sites;
+            return sites.Where(site => !IsPersonalOneDriveSite(site.WebUrl)).ToArray();
         }
 
-        return await ListSitesAsync(
+        var fallbackSites = await ListSitesAsync(
             graphBaseUri,
             accessToken,
             "v1.0/sites?search=*&$select=id,displayName,webUrl",
             cancellationToken);
+        return fallbackSites
+            .Where(site => !IsPersonalOneDriveSite(site.WebUrl))
+            .ToArray();
     }
 
     public async Task<MicrosoftSite> GetAsync(
@@ -113,6 +116,10 @@ public sealed class MicrosoftGraphSiteClient(HttpClient httpClient)
 
         return graphBaseUri;
     }
+
+    private static bool IsPersonalOneDriveSite(string webUrl) =>
+        Uri.TryCreate(webUrl, UriKind.Absolute, out var uri)
+        && uri.AbsolutePath.Contains("/personal/", StringComparison.OrdinalIgnoreCase);
 
     private static void EnsureTrustedGraphUri(Uri graphBaseUri, Uri pageUri)
     {

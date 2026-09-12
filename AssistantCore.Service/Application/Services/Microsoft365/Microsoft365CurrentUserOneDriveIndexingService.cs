@@ -1,4 +1,5 @@
 using AssistantCore.Repository.Repositories;
+using AssistantCore.Service.Application.Services.Messages.Tools;
 
 namespace AssistantCore.Service.Application.Services.Microsoft365;
 
@@ -7,7 +8,8 @@ public sealed class Microsoft365CurrentUserOneDriveIndexingService(
     IMicrosoft365DriveRepository driveRepository,
     IMicrosoft365SourceDiscoveryRepository sourceRepository,
     IMicrosoft365CurrentUserOneDriveClient oneDriveClient,
-    TimeProvider timeProvider) : IMicrosoft365CurrentUserOneDriveIndexingService
+    TimeProvider timeProvider,
+    IAiToolRegistry? toolRegistry = null) : IMicrosoft365CurrentUserOneDriveIndexingService
 {
     public async Task EnsureIndexedAsync(
         Guid organizationId,
@@ -47,11 +49,6 @@ public sealed class Microsoft365CurrentUserOneDriveIndexingService(
             now,
             cancellationToken);
 
-        if (savedDrive.IsIndexed)
-        {
-            return;
-        }
-
         var drive = await driveRepository.FindAsync(
             organizationId,
             externalDrive.DriveId,
@@ -60,5 +57,6 @@ public sealed class Microsoft365CurrentUserOneDriveIndexingService(
             drive,
             now,
             cancellationToken);
+        toolRegistry?.InvalidateCache(organizationId);
     }
 }

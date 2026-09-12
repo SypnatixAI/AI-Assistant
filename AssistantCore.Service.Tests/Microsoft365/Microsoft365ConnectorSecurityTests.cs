@@ -26,7 +26,6 @@ public sealed class Microsoft365ConnectorSecurityTests
         var connector = new Microsoft365Connector(
             new FailingMicrosoft365UserGroupResolver(),
             new EmptyMicrosoft365SharePointGroupResolver(),
-            new PassThroughMicrosoft365SearchAccessVerifier(),
             retrievalClient,
             new Microsoft365ConnectorOptions(10, 4000),
             CreateSearchOptions(),
@@ -62,7 +61,6 @@ public sealed class Microsoft365ConnectorSecurityTests
         var connector = new Microsoft365Connector(
             groupResolver,
             new EmptyMicrosoft365SharePointGroupResolver(),
-            new PassThroughMicrosoft365SearchAccessVerifier(),
             retrievalClient,
             new Microsoft365ConnectorOptions(10, 4000),
             CreateSearchOptions(),
@@ -100,7 +98,6 @@ public sealed class Microsoft365ConnectorSecurityTests
         var connector = new Microsoft365Connector(
             new RecordingMicrosoft365UserGroupResolver(),
             new FailingMicrosoft365SharePointGroupResolver(),
-            new PassThroughMicrosoft365SearchAccessVerifier(),
             retrievalClient,
             new Microsoft365ConnectorOptions(10, 4000),
             CreateSearchOptions(),
@@ -192,16 +189,4 @@ public sealed class Microsoft365ConnectorSecurityTests
         }
     }
 
-    private sealed class PassThroughMicrosoft365SearchAccessVerifier
-        : IMicrosoft365SearchAccessVerifier
-    {
-        public Task<IReadOnlyCollection<Microsoft365SearchRecord>> KeepAuthorizedAsync(
-            Guid organizationId,
-            string externalTenantId,
-            string entraUserId,
-            IReadOnlyCollection<string> entraGroupIds,
-            IReadOnlyCollection<string> sharePointGroupIds,
-            IReadOnlyCollection<Microsoft365SearchRecord> records,
-            CancellationToken cancellationToken) => Task.FromResult(records);
-    }
 }

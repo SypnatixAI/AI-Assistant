@@ -4,6 +4,7 @@ using AssistantCore.Repository.Repositories;
 using AssistantCore.Service.Application.Exceptions;
 using AssistantCore.Service.Application.Models.Microsoft365;
 using AssistantCore.Service.Application.Services.AuthenticateUser;
+using AssistantCore.Service.Application.Services.Messages.Tools;
 
 namespace AssistantCore.Service.Application.Services.Microsoft365;
 
@@ -15,7 +16,8 @@ public sealed class Microsoft365DriveAdministrationService(
     IMicrosoft365SiteSourcesDiscoveryService discoveryService,
     IMicrosoft365IndexedContentRepository indexedContentRepository,
     IMicrosoft365PassageIndexWriter indexWriter,
-    TimeProvider timeProvider) : IMicrosoft365DriveAdministrationService
+    TimeProvider timeProvider,
+    IAiToolRegistry? toolRegistry = null) : IMicrosoft365DriveAdministrationService
 {
     public async Task<Microsoft365SiteResponse> RegisterSiteAsync(
         string siteId,
@@ -75,6 +77,7 @@ public sealed class Microsoft365DriveAdministrationService(
                 drive,
                 timeProvider.GetUtcNow(),
                 cancellationToken);
+            toolRegistry?.InvalidateCache(organization.Id);
             var contents = await indexedContentRepository.GetBySourceAsync(
                 organization.Id,
                 drive.Id,
@@ -99,6 +102,7 @@ public sealed class Microsoft365DriveAdministrationService(
             drive,
             timeProvider.GetUtcNow(),
             cancellationToken);
+        toolRegistry?.InvalidateCache(organization.Id);
         return MapDrive(drive);
     }
 

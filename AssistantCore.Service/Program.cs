@@ -47,7 +47,6 @@ builder.Services.AddAuthenticationInfrastructure(builder.Configuration);
 builder.Services.AddFoundryAgentInfrastructure(builder.Configuration);
 builder.Services.AddConnectorInfrastructure(builder.Configuration);
 builder.Services.AddMicrosoft365Infrastructure(builder.Configuration);
-builder.Services.AddHttpClient<AssistantCore.ExternalServices.Services.Microsoft.MicrosoftGraphSharedDriveItemSearchClient>();
 builder.Services.AddScoped<IMicrosoft365CurrentUserOneDriveClient, Microsoft365CurrentUserOneDriveClientAdapter>();
 builder.Services.AddDispatcher(Assembly.GetExecutingAssembly());
 builder.Services.AddPersistence(builder.Configuration);
