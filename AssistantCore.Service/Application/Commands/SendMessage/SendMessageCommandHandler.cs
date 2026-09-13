@@ -7,6 +7,7 @@ using AssistantCore.Service.Application.Services.Messages.Authorization;
 using AssistantCore.Service.Application.Services.Messages.Lifecycle;
 using AssistantCore.Service.Application.Services.Messages.Responses;
 using AssistantCore.Service.Application.Services.Messages.Validation;
+using AssistantCore.Service.Application.Services.Usage;
 using System.Diagnostics;
 
 namespace AssistantCore.Service.Application.Commands.SendMessage;
@@ -14,6 +15,7 @@ namespace AssistantCore.Service.Application.Commands.SendMessage;
 public sealed class SendMessageCommandHandler(
     ISendMessageCommandValidator validator,
     IMessageUserContextService userContextService,
+    IUsageTrackingService usageTrackingService,
     IMessageProcessingLifecycleService lifecycleService,
     IAgentRuntime agentRuntime,
     ISendMessageResponseFactory responseFactory)
@@ -32,6 +34,9 @@ public sealed class SendMessageCommandHandler(
         {
             var validatedCommand = await validator.ValidateAsync(request, cancellationToken);
             var userContext = await userContextService.GetCurrentAsync(cancellationToken);
+            await usageTrackingService.EnsureQuotaAvailableAsync(
+                userContext.Organization.Id,
+                cancellationToken);
             processing = await lifecycleService.StartAsync(
                 validatedCommand.ConversationId,
                 validatedCommand.Message,
