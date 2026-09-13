@@ -1,6 +1,9 @@
 using AssistantCore.Repository.Domain.Entities;
 using AssistantCore.Repository.Domain.Enums;
 using AssistantCore.Repository.Queries;
+using AssistantCore.Repository.Repositories;
+using AssistantCore.Repository.Repositories.Audit;
+using AssistantCore.Service.Application.Abstractions;
 using AssistantCore.Service.Application.Exceptions;
 using AssistantCore.Service.Application.Models.Backoffice;
 using Microsoft.Extensions.Logging;
@@ -10,6 +13,9 @@ namespace AssistantCore.Service.Application.Services.Backoffice;
 public sealed class BackofficeOrganizationService(
     IBackofficeOrganizationQueries organizationQueries,
     IOrganizationMemberQueries memberQueries,
+    IAdministrativeAuditRepository administrativeAuditRepository,
+    ICurrentIdentity currentIdentity,
+    ICorrelationIdProvider correlationIdProvider,
     ILogger<BackofficeOrganizationService> logger)
     : IBackofficeOrganizationService
 {
@@ -97,8 +103,33 @@ public sealed class BackofficeOrganizationService(
         var organization = await GetRequiredOrganizationAsync(organizationId, cancellationToken);
         var member = await GetRequiredMemberAsync(organizationId, userId, cancellationToken);
         var diagnostic = Diagnose(member, organization);
-        var correlationId = Guid.NewGuid().ToString("N");
+        var correlationId = correlationIdProvider.GetCorrelationId();
         var evaluatedAt = DateTimeOffset.UtcNow;
+        var identity = currentIdentity.GetIdentity();
+
+        if (!Guid.TryParse(identity.ExternalUserId, out var actorId))
+        {
+            throw new InvalidOperationException(
+                "The authenticated management user identifier must be a GUID to create an administrative audit entry.");
+        }
+
+        var auditEntry = AdministrativeAuditEntryFactory.Create(
+            organizationId,
+            "ManagementAdmin",
+            actorId,
+            AdministrativeAuditAction.UserAccessReevaluated,
+            "OrganizationMember",
+            userId,
+            evaluatedAt,
+            new Dictionary<string, object?>(),
+            new Dictionary<string, object?>
+            {
+                ["accessAllowed"] = diagnostic.AccessAllowed,
+                ["diagnosticCode"] = diagnostic.Code
+            },
+            correlationId);
+
+        await administrativeAuditRepository.PersistAsync(auditEntry, cancellationToken);
 
         logger.LogInformation(
             "Backoffice access reevaluation. OrganizationId={OrganizationId} UserId={UserId} AccessAllowed={AccessAllowed} DiagnosticCode={DiagnosticCode} CorrelationId={CorrelationId}",
