@@ -14,7 +14,7 @@ public sealed class Microsoft365DocumentWorkConfiguration
 
         builder.Property(work => work.Id).ValueGeneratedNever();
         builder.Property(work => work.WorkType).HasConversion<string>().HasMaxLength(30).IsRequired();
-        builder.Property(work => work.SiteId).HasMaxLength(400).IsRequired();
+        builder.Property(work => work.SiteId).HasMaxLength(400);
         builder.Property(work => work.DriveId).HasMaxLength(400).IsRequired();
         builder.Property(work => work.DriveItemId).HasMaxLength(400).IsRequired();
         builder.Property(work => work.Name).HasMaxLength(1000);

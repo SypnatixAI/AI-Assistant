@@ -47,6 +47,31 @@ public sealed class MicrosoftGraphSiteClientTests
     }
 
     [Theory, AutoDomainData]
+    public async Task Given_PersonalOneDriveAmongSites_When_ListAsync_Then_ExcludesPersonalOneDrive(
+        string sharePointSiteId,
+        string personalSiteId,
+        string accessToken)
+    {
+        // Given
+        using var httpClient = new HttpClient(new StubHttpMessageHandler(_ =>
+            new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent($$"""{"value":[{"id":"{{sharePointSiteId}}","displayName":"All Company","webUrl":"https://contoso.sharepoint.com/sites/company"},{"id":"{{personalSiteId}}","displayName":"Olivier Tremblay","webUrl":"https://contoso-my.sharepoint.com/personal/olivier_tremblay_contoso_com"}]}""")
+            }));
+        var client = new MicrosoftGraphSiteClient(httpClient);
+
+        // When
+        var sites = await client.ListAsync(
+            "https://graph.microsoft.com",
+            accessToken,
+            CancellationToken.None);
+
+        // Then
+        var site = Assert.Single(sites);
+        Assert.Equal(sharePointSiteId, site.SiteId);
+    }
+
+    [Theory, AutoDomainData]
     public async Task Given_AnEmptySiteListing_When_ListAsync_Then_RetriesWithSearchWildcard(
         string fallbackSiteId,
         string accessToken)

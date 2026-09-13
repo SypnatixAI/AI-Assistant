@@ -38,8 +38,17 @@ public sealed class AiToolRegistry(
             .SelectMany(connector => CreateToolDefinitions(connector, executableTools))
             .ToArray();
 
-        memoryCache?.Set(cacheKey, tools, CacheDuration);
+        if (tools.Length > 0)
+        {
+            memoryCache?.Set(cacheKey, tools, CacheDuration);
+        }
         return tools;
+    }
+
+    public void InvalidateCache(Guid organizationId)
+    {
+        ArgumentOutOfRangeException.ThrowIfEqual(organizationId, Guid.Empty);
+        memoryCache?.Remove($"ai-tools:{organizationId:D}");
     }
 
     private static IReadOnlyCollection<AiToolDefinition> CreateToolDefinitions(

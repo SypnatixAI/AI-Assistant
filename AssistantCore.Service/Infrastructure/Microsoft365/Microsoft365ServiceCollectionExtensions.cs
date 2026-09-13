@@ -96,6 +96,7 @@ public static class Microsoft365ServiceCollectionExtensions
         services.AddHttpClient<MicrosoftGraphListSchemaClient>();
         services.AddHttpClient<MicrosoftGraphListItemDeltaClient>();
         services.AddHttpClient<MicrosoftGraphDriveItemDeltaClient>();
+        services.AddHttpClient<MicrosoftGraphSharedDriveItemSearchClient>();
         AddProtectedHttpClient<MicrosoftGraphDriveContentClient>(services);
         services.AddHttpClient<MicrosoftGraphSiteSourcesClient>();
         AddProtectedHttpClient<MicrosoftGraphSiteClient>(services);

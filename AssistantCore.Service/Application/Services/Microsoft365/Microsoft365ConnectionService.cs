@@ -8,6 +8,7 @@ using AssistantCore.Service.Application.Configuration;
 using AssistantCore.Service.Application.Exceptions;
 using AssistantCore.Service.Application.Models.Microsoft365;
 using AssistantCore.Service.Application.Services.AuthenticateUser;
+using AssistantCore.Service.Application.Services.Messages.Tools;
 using Microsoft.Extensions.Options;
 
 namespace AssistantCore.Service.Application.Services.Microsoft365;
@@ -19,7 +20,8 @@ public sealed class Microsoft365ConnectionService(
     IMicrosoft365ConsentStateProtector stateProtector,
     IMicrosoft365TechnicalTokenStore tokenStore,
     IOptions<Microsoft365Options> options,
-    TimeProvider timeProvider) : IMicrosoft365ConnectionService
+    TimeProvider timeProvider,
+    IAiToolRegistry? toolRegistry = null) : IMicrosoft365ConnectionService
 {
     public async Task<Uri> StartConsentAsync(CancellationToken cancellationToken = default)
     {
@@ -187,6 +189,7 @@ public sealed class Microsoft365ConnectionService(
             validatedTenantId,
             now,
             cancellationToken);
+        toolRegistry?.InvalidateCache(connection.OrganizationId);
         try
         {
             await tokenStore.StoreAsync(

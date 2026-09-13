@@ -5,6 +5,7 @@ using AssistantCore.Repository.Domain.Enums;
 using AssistantCore.Repository.Repositories;
 using AssistantCore.Service.Application.Exceptions;
 using AssistantCore.Service.Application.Services.AuthenticateUser;
+using AssistantCore.Service.Application.Services.Messages.Tools;
 using Microsoft.Extensions.Logging;
 
 namespace AssistantCore.Service.Application.Services.Microsoft365;
@@ -13,7 +14,8 @@ public sealed class Microsoft365ListActivationService(
     IAuthenticateUserService authenticateUserService,
     IMicrosoft365SourceDiscoveryRepository sourceDiscoveryRepository,
     TimeProvider timeProvider,
-    ILogger<Microsoft365ListActivationService> logger) : IMicrosoft365ListActivationService
+    ILogger<Microsoft365ListActivationService> logger,
+    IAiToolRegistry? toolRegistry = null) : IMicrosoft365ListActivationService
 {
     public async Task<Microsoft365List> SetIndexingAsync(
         string siteId,
@@ -91,6 +93,7 @@ public sealed class Microsoft365ListActivationService(
             }
         }
 
+        toolRegistry?.InvalidateCache(organization.Id);
         var duration = Stopwatch.GetElapsedTime(startedAt);
         logger.LogInformation(
             "Microsoft 365 list indexing updated. OrganizationId: {OrganizationId}; SiteId: {SiteId}; ListId: {ListId}; IsIndexed: {IsIndexed}; InitialSynchronizationRequests: {InitialSynchronizationRequests}; CancelledIngestionJobs: {CancelledIngestionJobs}; SubscriptionCreationRequests: {SubscriptionCreationRequests}; SubscriptionStopRequests: {SubscriptionStopRequests}; IndexCleanupRequests: {IndexCleanupRequests}; DurationMs: {DurationMs}.",

@@ -34,12 +34,68 @@ public sealed class Microsoft365DocumentWorkFactoryTests
         Assert.Equal(
             CreateExpectedDeduplicationKey(
                 organizationId,
-                sourceId,
+                drive.DriveId,
                 itemId,
                 Microsoft365DocumentIndexVersion.Create(eTag)),
             firstWork.DeduplicationKey);
         Assert.Equal("report.pdf", firstWork.Name);
         Assert.Equal(eTag, firstWork.ETag);
+    }
+
+    [Theory, AutoDomainData]
+    public void Given_TheSameCanonicalDocumentFromOwnerAndSharedView_When_Create_Then_DeduplicatesAcrossSources(
+        Guid organizationId,
+        Guid ownerSourceId,
+        Guid sharedSourceId,
+        string itemId,
+        string eTag,
+        DateTimeOffset createdAt)
+    {
+        // Given
+        const string ownerDriveId = "owner-drive-id";
+        var ownerDrive = CreateDrive(organizationId, ownerSourceId, ownerDriveId);
+        var sharedViewDrive = CreateDrive(organizationId, sharedSourceId, "recipient-drive-id");
+        var ownerItem = CreateItem(itemId, "Budget-2027.xlsx", eTag, isDeleted: false);
+        var sharedItem = CreateItem(itemId, "Budget-2027.xlsx", eTag, isDeleted: false) with
+        {
+            CanonicalDriveId = ownerDriveId
+        };
+        var factory = new Microsoft365DocumentWorkFactory();
+
+        // When
+        var ownerWork = factory.Create(ownerDrive, ownerItem, createdAt);
+        var sharedWork = factory.Create(sharedViewDrive, sharedItem, createdAt.AddSeconds(1));
+
+        // Then
+        Assert.Equal(ownerDriveId, ownerWork.DriveId);
+        Assert.Equal(ownerDriveId, sharedWork.DriveId);
+        Assert.Equal(ownerWork.DriveItemId, sharedWork.DriveItemId);
+        Assert.Equal(ownerWork.DeduplicationKey, sharedWork.DeduplicationKey);
+    }
+
+    [Theory, AutoDomainData]
+    public void Given_TheSameCanonicalDocumentInTwoOrganizations_When_Create_Then_DoesNotDeduplicateAcrossTenants(
+        Guid firstOrganizationId,
+        Guid secondOrganizationId,
+        Guid firstSourceId,
+        Guid secondSourceId,
+        string itemId,
+        string eTag,
+        DateTimeOffset createdAt)
+    {
+        // Given
+        const string canonicalDriveId = "same-drive-id";
+        var firstDrive = CreateDrive(firstOrganizationId, firstSourceId, canonicalDriveId);
+        var secondDrive = CreateDrive(secondOrganizationId, secondSourceId, canonicalDriveId);
+        var item = CreateItem(itemId, "Budget-2027.xlsx", eTag, isDeleted: false);
+        var factory = new Microsoft365DocumentWorkFactory();
+
+        // When
+        var firstWork = factory.Create(firstDrive, item, createdAt);
+        var secondWork = factory.Create(secondDrive, item, createdAt);
+
+        // Then
+        Assert.NotEqual(firstWork.DeduplicationKey, secondWork.DeduplicationKey);
     }
 
     [Theory, AutoDomainData]
@@ -112,13 +168,16 @@ public sealed class Microsoft365DocumentWorkFactoryTests
         Assert.Equal(firstWork.DeduplicationKey, replayedWork.DeduplicationKey);
     }
 
-    private static Microsoft365Drive CreateDrive(Guid organizationId, Guid sourceId) =>
+    private static Microsoft365Drive CreateDrive(
+        Guid organizationId,
+        Guid sourceId,
+        string driveId = "drive-id") =>
         new()
         {
             Id = sourceId,
             OrganizationId = organizationId,
             SiteId = "site-id",
-            DriveId = "drive-id"
+            DriveId = driveId
         };
 
     private static Microsoft365DriveItemDelta CreateItem(
@@ -141,14 +200,14 @@ public sealed class Microsoft365DocumentWorkFactoryTests
 
     private static string CreateExpectedDeduplicationKey(
         Guid organizationId,
-        Guid sourceId,
+        string driveId,
         string itemId,
         string version)
     {
         var identity = JsonSerializer.Serialize(new[]
         {
             organizationId.ToString("N"),
-            sourceId.ToString("N"),
+            driveId,
             itemId,
             version
         });

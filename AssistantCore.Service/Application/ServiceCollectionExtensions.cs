@@ -124,6 +124,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IMicrosoft365SiteDiscoveryService, Microsoft365SiteDiscoveryService>();
         services.AddScoped<IMicrosoft365SiteSelectionService, Microsoft365SiteSelectionService>();
         services.AddScoped<IMicrosoft365DriveAdministrationService, Microsoft365DriveAdministrationService>();
+        services.AddScoped<IMicrosoft365CurrentUserOneDriveIndexingService, Microsoft365CurrentUserOneDriveIndexingService>();
 
         return services;
     }

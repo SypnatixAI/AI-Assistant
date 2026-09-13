@@ -292,6 +292,10 @@ public sealed class FoundryAgentRuntimeTests
             Guid organizationId,
             CancellationToken cancellationToken) =>
             Task.FromResult<IReadOnlyCollection<AiToolDefinition>>([]);
+
+        public void InvalidateCache(Guid organizationId)
+        {
+        }
     }
 
     private sealed class StubToolRegistry(
@@ -301,6 +305,10 @@ public sealed class FoundryAgentRuntimeTests
             Guid organizationId,
             CancellationToken cancellationToken) =>
             Task.FromResult(tools);
+
+        public void InvalidateCache(Guid organizationId)
+        {
+        }
     }
 
     private sealed class RecordingToolCallValidator : IAiToolCallValidator

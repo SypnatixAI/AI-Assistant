@@ -104,9 +104,15 @@ public sealed class Microsoft365SearchAccessVerifierAdapter(
         Microsoft365SearchRecord record,
         out DocumentReference reference)
     {
-        if (string.IsNullOrWhiteSpace(record.SiteId)
-            || string.IsNullOrWhiteSpace(record.DriveId)
+        if (string.IsNullOrWhiteSpace(record.DriveId)
             || string.IsNullOrWhiteSpace(record.DriveItemId))
+        {
+            reference = default;
+            return false;
+        }
+
+        if (!string.Equals(record.SourceType, "onedrive", StringComparison.OrdinalIgnoreCase)
+            && string.IsNullOrWhiteSpace(record.SiteId))
         {
             reference = default;
             return false;
@@ -178,14 +184,14 @@ public sealed class Microsoft365SearchAccessVerifierAdapter(
     }
 
     private readonly record struct DocumentReference(
-        string SiteId,
+        string? SiteId,
         string DriveId,
         string DriveItemId);
 
     private readonly record struct AclReadCacheKey(
         Guid OrganizationId,
         string TenantId,
-        string SiteId,
+        string? SiteId,
         string DriveId,
         string DriveItemId);
 

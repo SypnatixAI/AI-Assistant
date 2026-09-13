@@ -14,7 +14,7 @@ public sealed class Microsoft365DocumentWork
 
     public Microsoft365DocumentWorkType WorkType { get; set; }
 
-    public string SiteId { get; set; } = string.Empty;
+    public string? SiteId { get; set; }
 
     public string DriveId { get; set; } = string.Empty;
 

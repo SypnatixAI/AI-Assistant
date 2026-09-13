@@ -265,7 +265,7 @@ public sealed class Microsoft365AclResolverAdapter(
     }
 
     private bool TryAddDriveIdentity(
-        string siteId,
+        string? siteId,
         MicrosoftDriveItemPermissionIdentitySet identity,
         AclAccumulator accumulator)
     {
@@ -296,7 +296,7 @@ public sealed class Microsoft365AclResolverAdapter(
         }
 
         var sharePointGroup = identity.SiteGroup ?? identity.SharePointGroup;
-        if (sharePointGroup is not null)
+        if (sharePointGroup is not null && !string.IsNullOrWhiteSpace(siteId))
         {
             return TryNormalize(
                 () => identityNormalizer.NormalizeSharePointGroupId(siteId, sharePointGroup.Id!),

@@ -7,4 +7,6 @@ public interface IAiToolRegistry
     Task<IReadOnlyCollection<AiToolDefinition>> GetAvailableToolsAsync(
         Guid organizationId,
         CancellationToken cancellationToken);
+
+    void InvalidateCache(Guid organizationId);
 }
