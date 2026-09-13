@@ -10,7 +10,6 @@ namespace AssistantCore.Service.Application.Services.Backoffice;
 public sealed class BackofficeOrganizationService(
     IBackofficeOrganizationQueries organizationQueries,
     IOrganizationMemberQueries memberQueries,
-    TimeProvider timeProvider,
     ILogger<BackofficeOrganizationService> logger)
     : IBackofficeOrganizationService
 {
@@ -99,7 +98,7 @@ public sealed class BackofficeOrganizationService(
         var member = await GetRequiredMemberAsync(organizationId, userId, cancellationToken);
         var diagnostic = Diagnose(member, organization);
         var correlationId = Guid.NewGuid().ToString("N");
-        var evaluatedAt = timeProvider.GetUtcNow();
+        var evaluatedAt = DateTimeOffset.UtcNow;
 
         logger.LogInformation(
             "Backoffice access reevaluation. OrganizationId={OrganizationId} UserId={UserId} AccessAllowed={AccessAllowed} DiagnosticCode={DiagnosticCode} CorrelationId={CorrelationId}",
