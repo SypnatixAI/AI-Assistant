@@ -58,6 +58,8 @@ public sealed class FoundryAgentRuntime(
             context.ClientRequest,
             context.ExecuteToolAsync,
             callbacks.OnAnswerDelta,
+            callbacks.OnActivityDelta,
+            callbacks.OnActivityCompleted,
             timeoutSource.Token);
 
         stopwatch.Stop();
@@ -80,7 +82,8 @@ public sealed class FoundryAgentRuntime(
             .Select(mapping => new FoundryAgentToolDefinition(
                 mapping.Key,
                 GetFoundryToolDescription(mapping.Key),
-                mapping.Value.InputSchema))
+                mapping.Value.InputSchema,
+                mapping.Value.Name))
             .ToArray();
 
         logger.LogInformation(

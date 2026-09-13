@@ -2,13 +2,15 @@ using AssistantCore.Repository.Domain.Enums;
 using AssistantCore.Repository.Repositories;
 using AssistantCore.Service.Application.Models.Microsoft365;
 using AssistantCore.Service.Application.Services.AuthenticateUser;
+using AssistantCore.Service.Application.Services.Messages.Tools;
 
 namespace AssistantCore.Service.Application.Services.Microsoft365;
 
 public sealed class Microsoft365OnboardingService(
     IAuthenticateUserService authenticateUserService,
     IMicrosoft365ConnectionRepository connectionRepository,
-    IMicrosoft365SourceDiscoveryRepository sourceRepository)
+    IMicrosoft365SourceDiscoveryRepository sourceRepository,
+    IAiToolRegistry? toolRegistry = null)
     : IMicrosoft365OnboardingService
 {
     public async Task<Microsoft365OnboardingStatus> GetStatusAsync(
@@ -37,12 +39,22 @@ public sealed class Microsoft365OnboardingService(
             && await sourceRepository.HasIndexedSourceAsync(
                 organization.Id,
                 cancellationToken);
+        var isEnvironmentReady = hasIndexedSource
+            && await sourceRepository.IsEnvironmentReadyAsync(
+                organization.Id,
+                cancellationToken);
+        var isEnvironmentReadyWithTools = isEnvironmentReady
+            && toolRegistry is not null
+            && (await toolRegistry.GetAvailableToolsAsync(
+                organization.Id,
+                cancellationToken)).Count > 0;
 
         return new Microsoft365OnboardingStatus(
             member.Role == OrganizationRole.Admin,
             connection.Status.ToString(),
             IsConsentComplete: true,
             HasSelectedSite: selectedSiteIds.Count > 0,
-            HasIndexedSource: hasIndexedSource);
+            HasIndexedSource: hasIndexedSource,
+            IsEnvironmentReady: isEnvironmentReadyWithTools);
     }
 }

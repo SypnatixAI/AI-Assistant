@@ -12,8 +12,10 @@ public sealed class Microsoft365DriveConfiguration : IEntityTypeConfiguration<Mi
 
         builder.Property(drive => drive.OrganizationId).IsRequired();
         builder.Property(drive => drive.OrganizationConnectorId).IsRequired();
-        builder.Property(drive => drive.SiteId).HasMaxLength(400).IsRequired();
+        builder.Property(drive => drive.SiteId).HasMaxLength(400);
         builder.Property(drive => drive.DriveId).HasMaxLength(400).IsRequired();
+        builder.Property(drive => drive.OwnerUserObjectId).HasMaxLength(400);
+        builder.Property(drive => drive.OwnerUserPrincipalName).HasMaxLength(320);
 
         builder.HasOne(drive => drive.Organization)
             .WithMany()
@@ -28,9 +30,13 @@ public sealed class Microsoft365DriveConfiguration : IEntityTypeConfiguration<Mi
         builder.HasIndex(drive => new
         {
             drive.OrganizationId,
-            drive.OrganizationConnectorId,
-            drive.SiteId,
             drive.DriveId
         }).IsUnique();
+
+        builder.HasIndex(drive => new
+        {
+            drive.OrganizationId,
+            drive.OwnerUserObjectId
+        });
     }
 }

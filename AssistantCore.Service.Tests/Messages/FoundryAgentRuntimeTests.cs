@@ -158,6 +158,8 @@ public sealed class FoundryAgentRuntimeTests
                 progressMessages.Add(message);
                 return ValueTask.CompletedTask;
             },
+            (_, _) => ValueTask.CompletedTask,
+            _ => ValueTask.CompletedTask,
             (delta, _) =>
             {
                 deltas.Add(delta);
@@ -274,6 +276,8 @@ public sealed class FoundryAgentRuntimeTests
             FoundryAgentClientRequest request,
             FoundryAgentToolExecutor toolExecutor,
             Func<string, CancellationToken, ValueTask> onAnswerDelta,
+            Func<string, CancellationToken, ValueTask> onActivityDelta,
+            Func<CancellationToken, ValueTask> onActivityCompleted,
             CancellationToken cancellationToken)
         {
             ReceivedRequests.Add(request);
@@ -292,6 +296,10 @@ public sealed class FoundryAgentRuntimeTests
             Guid organizationId,
             CancellationToken cancellationToken) =>
             Task.FromResult<IReadOnlyCollection<AiToolDefinition>>([]);
+
+        public void InvalidateCache(Guid organizationId)
+        {
+        }
     }
 
     private sealed class StubToolRegistry(
@@ -301,6 +309,10 @@ public sealed class FoundryAgentRuntimeTests
             Guid organizationId,
             CancellationToken cancellationToken) =>
             Task.FromResult(tools);
+
+        public void InvalidateCache(Guid organizationId)
+        {
+        }
     }
 
     private sealed class RecordingToolCallValidator : IAiToolCallValidator

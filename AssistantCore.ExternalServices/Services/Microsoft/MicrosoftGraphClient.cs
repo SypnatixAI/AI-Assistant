@@ -1,3 +1,4 @@
+using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json.Serialization;
@@ -37,6 +38,45 @@ public sealed class MicrosoftGraphClient(HttpClient httpClient)
         return new MicrosoftTenant(organization.Id, organization.DisplayName);
     }
 
+    public async Task<MicrosoftGraphUserDrive?> GetUserDriveAsync(
+        string graphBaseUrl,
+        string accessToken,
+        string entraUserId,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(entraUserId);
+
+        using var request = new HttpRequestMessage(
+            HttpMethod.Get,
+            $"{graphBaseUrl.TrimEnd('/')}/v1.0/users/{Uri.EscapeDataString(entraUserId)}/drive?$select=id,name,webUrl");
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+
+        using var response = await httpClient.SendAsync(request, cancellationToken);
+        if (response.StatusCode == HttpStatusCode.NotFound)
+        {
+            return null;
+        }
+
+        if (!response.IsSuccessStatusCode)
+        {
+            throw new MicrosoftExternalException(
+                $"Microsoft OneDrive lookup failed with status {(int)response.StatusCode}.",
+                statusCode: response.StatusCode);
+        }
+
+        var payload = await response.Content.ReadFromJsonAsync<UserDriveResponse>(cancellationToken)
+            ?? throw new MicrosoftExternalException("Microsoft OneDrive response was empty.");
+        if (string.IsNullOrWhiteSpace(payload.Id))
+        {
+            throw new MicrosoftExternalException("Microsoft OneDrive response contained an invalid drive.");
+        }
+
+        return new MicrosoftGraphUserDrive(
+            payload.Id,
+            string.IsNullOrWhiteSpace(payload.Name) ? "OneDrive" : payload.Name,
+            payload.WebUrl);
+    }
+
     /// <summary>
     /// Appel Graph representatif des permissions applicatives requises par le
     /// connecteur (Sites.Read.All). Ne retourne aucune donnee : sert uniquement
@@ -68,4 +108,14 @@ public sealed class MicrosoftGraphClient(HttpClient httpClient)
     private sealed record OrganizationItem(
         [property: JsonPropertyName("id")] string Id,
         [property: JsonPropertyName("displayName")] string? DisplayName);
+
+    private sealed record UserDriveResponse(
+        [property: JsonPropertyName("id")] string Id,
+        [property: JsonPropertyName("name")] string? Name,
+        [property: JsonPropertyName("webUrl")] string? WebUrl);
 }
+
+public sealed record MicrosoftGraphUserDrive(
+    string DriveId,
+    string DisplayName,
+    string? WebUrl);

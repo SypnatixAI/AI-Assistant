@@ -237,6 +237,37 @@ public sealed class Microsoft365SourceDiscoveryRepositoryTests
     }
 
     [Theory, AutoDomainData]
+    public async Task Given_AOneDriveActivation_When_SaveDriveActivationAsync_Then_EnablesOneDriveConnectorSource(
+        Guid databaseId,
+        DateTimeOffset requestedAt)
+    {
+        // Given
+        await using var dbContext = CreateDbContext(databaseId);
+        var site = await SeedSiteAsync(dbContext);
+        var drive = CreateDrive(site, "personal-drive-id", "User OneDrive");
+        drive.Kind = Microsoft365SourceKind.OneDrive;
+        drive.SiteId = null;
+        drive.ParentExternalResourceId = null;
+        drive.OwnerUserObjectId = Guid.NewGuid().ToString("D");
+        dbContext.Add(drive);
+        await dbContext.SaveChangesAsync();
+        var repository = new Microsoft365SourceDiscoveryRepository(dbContext);
+
+        // When
+        await repository.SaveDriveActivationAsync(
+            drive,
+            requestedAt,
+            CancellationToken.None);
+
+        // Then
+        var source = Assert.Single(await dbContext.OrganizationConnectorSources.ToArrayAsync());
+        Assert.Equal(drive.OrganizationConnectorId, source.OrganizationConnectorId);
+        Assert.Equal(Microsoft365SourceType.OneDrive, source.SourceType);
+        Assert.Equal(RecordStatus.Active, source.Status);
+        Assert.True(source.IsIndexed);
+    }
+
+    [Theory, AutoDomainData]
     public async Task Given_AnEnabledList_When_SaveListDeactivationAsync_Then_CancelsIngestionAndRequestsOneCleanup(
         Guid databaseId,
         string microsoftSubscriptionId,
@@ -334,6 +365,36 @@ public sealed class Microsoft365SourceDiscoveryRepositoryTests
         var list = Assert.Single(await dbContext.Microsoft365Lists.ToListAsync());
         Assert.Equal("Updated requests", list.DisplayName);
         Assert.Equal("https://list", list.WebUrl);
+    }
+
+    [Theory, AutoDomainData]
+    public async Task Given_ADriveAlreadyKnownForAnotherSite_When_ReconcileSiteSourcesAsync_Then_ReusesTheDrive(
+        Guid databaseId,
+        DateTimeOffset discoveredAt)
+    {
+        // Given
+        await using var dbContext = CreateDbContext(databaseId);
+        var site = await SeedSiteAsync(dbContext);
+        var drive = CreateDrive(site, "drive-id", "Documents");
+        drive.SiteId = "other-site-id";
+        drive.ParentExternalResourceId = "other-site-id";
+        dbContext.Add(drive);
+        await dbContext.SaveChangesAsync();
+        var repository = new Microsoft365SourceDiscoveryRepository(dbContext);
+
+        // When
+        await repository.ReconcileSiteSourcesAsync(
+            site,
+            [new Microsoft365SourceDiscoveryData("drive-id", "Updated documents", "https://drive")],
+            [],
+            discoveredAt);
+
+        // Then
+        var reconciledDrive = Assert.Single(await dbContext.Microsoft365Drives.ToListAsync());
+        Assert.Equal(drive.Id, reconciledDrive.Id);
+        Assert.Equal(site.SiteId, reconciledDrive.SiteId);
+        Assert.Equal(site.SiteId, reconciledDrive.ParentExternalResourceId);
+        Assert.Equal("Updated documents", reconciledDrive.DisplayName);
     }
 
     [Theory, AutoDomainData]

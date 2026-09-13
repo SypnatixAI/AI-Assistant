@@ -14,6 +14,8 @@ public interface IFoundryAgentClient
         FoundryAgentClientRequest request,
         FoundryAgentToolExecutor toolExecutor,
         Func<string, CancellationToken, ValueTask> onAnswerDelta,
+        Func<string, CancellationToken, ValueTask> onActivityDelta,
+        Func<CancellationToken, ValueTask> onActivityCompleted,
         CancellationToken cancellationToken);
 }
 
@@ -31,7 +33,8 @@ public sealed record FoundryAgentClientRequest(
 public sealed record FoundryAgentToolDefinition(
     string Name,
     string Description,
-    JsonElement InputSchema);
+    JsonElement InputSchema,
+    string? DisplayName = null);
 
 public sealed record FoundryAgentToolCall(
     string Name,

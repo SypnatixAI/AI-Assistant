@@ -17,7 +17,6 @@ namespace AssistantCore.Service.Infrastructure.Connectors.Microsoft365;
 public sealed class Microsoft365Connector(
     IMicrosoft365UserGroupResolver groupResolver,
     IMicrosoft365SharePointGroupResolver sharePointGroupResolver,
-    IMicrosoft365SearchAccessVerifier accessVerifier,
     IAgenticRetrievalClient agenticRetrievalClient,
     Microsoft365ConnectorOptions options,
     IOptions<AzureAiSearchOptions> searchOptions,
@@ -72,9 +71,6 @@ public sealed class Microsoft365Connector(
         return await SearchKnowledgeBaseAsync(
             request,
             context,
-            normalizedUserId,
-            groupIds,
-            sharePointGroupIds,
             searchParameters,
             cancellationToken);
     }
@@ -82,9 +78,6 @@ public sealed class Microsoft365Connector(
     private async Task<ConnectorResult> SearchKnowledgeBaseAsync(
         SearchMicrosoft365ToolArguments request,
         ConnectorExecutionContext context,
-        string normalizedUserId,
-        IReadOnlyCollection<string> groupIds,
-        IReadOnlyCollection<string> sharePointGroupIds,
         Microsoft365SearchParameters searchParameters,
         CancellationToken cancellationToken)
     {
@@ -127,45 +120,35 @@ public sealed class Microsoft365Connector(
                 || record.RelevanceScore >= configuration.MinimumSemanticRelevanceScore)
             .ToArray();
 
-        var accessVerificationStartedAt = TimeProvider.System.GetTimestamp();
-        var authorizedRecords = await accessVerifier.KeepAuthorizedAsync(
-            context.OrganizationId,
-            context.ExternalTenantId!,
-            normalizedUserId,
-            groupIds,
-            sharePointGroupIds,
-            records,
-            cancellationToken);
         logger?.LogInformation(
-            "Microsoft365 post-retrieval ACL stage completed in {ElapsedMilliseconds} ms with {AuthorizedCount} authorized records from {ReferenceCount} relevant references.",
-            TimeProvider.System.GetElapsedTime(accessVerificationStartedAt).TotalMilliseconds,
-            authorizedRecords.Count,
-            records.Length);
+            "Microsoft365 knowledge base relevance stage kept {RelevantCount} relevant records from {ReferenceCount} references.",
+            records.Length,
+            result.References.Count);
 
         var evidence = evidenceNormalizer.Normalize(
-            authorizedRecords.Select(MapCandidate).ToArray(),
+            records.Select(MapCandidate).ToArray(),
             new EvidenceNormalizationOptions(
                 options.MaximumContentLength,
                 options.MaximumResults));
 
-        LogAgenticRetrieval(result.Activity, result.References.Count, authorizedRecords.Count);
+        LogAgenticRetrieval(result.Activity, result.References.Count, records.Length);
         return new ConnectorResult(evidence);
     }
 
     private void LogAgenticRetrieval(
         IReadOnlyCollection<AgenticRetrievalActivity> activity,
         int recordsBeforeFiltering,
-        int recordsAfterAccessVerification)
+        int recordsAfterRelevanceFiltering)
     {
         var subqueryCount = activity.Count(item =>
             string.Equals(item.Type, "searchIndex", StringComparison.Ordinal)
             && !string.IsNullOrWhiteSpace(item.Search));
 
         logger?.LogInformation(
-            "Microsoft365 agentic retrieval completed with {SubqueryCount} observed subqueries, {RecordsBeforeFiltering} references before filtering and {RecordsAfterAccessVerification} authorized records.",
+            "Microsoft365 agentic retrieval completed with {SubqueryCount} observed subqueries, {RecordsBeforeFiltering} references before filtering and {RecordsAfterRelevanceFiltering} relevant records.",
             subqueryCount,
             recordsBeforeFiltering,
-            recordsAfterAccessVerification);
+            recordsAfterRelevanceFiltering);
     }
 
     private static void EnsureMicrosoftIdentity(ConnectorExecutionContext context)

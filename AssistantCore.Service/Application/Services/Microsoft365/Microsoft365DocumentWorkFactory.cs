@@ -24,6 +24,9 @@ public sealed class Microsoft365DocumentWorkFactory : IMicrosoft365DocumentWorkF
                 "Only a deleted item or an active Microsoft 365 file can create document work.");
         }
 
+        var canonicalDriveId = string.IsNullOrWhiteSpace(item.CanonicalDriveId)
+            ? drive.DriveId
+            : item.CanonicalDriveId;
         var workType = item.IsDeleted
             ? Microsoft365DocumentWorkType.DeleteDocument
             : Microsoft365DocumentWorkType.ProcessDocument;
@@ -38,7 +41,7 @@ public sealed class Microsoft365DocumentWorkFactory : IMicrosoft365DocumentWorkF
             drive.OrganizationId,
             workType,
             drive.SiteId,
-            drive.DriveId,
+            canonicalDriveId,
             item.Id,
             item.IsDeleted ? null : item.Name,
             item.IsDeleted ? null : item.ETag,
@@ -47,20 +50,20 @@ public sealed class Microsoft365DocumentWorkFactory : IMicrosoft365DocumentWorkF
             item.WebUrl,
             item.IsDeleted ? null : item.Size,
             item.IsDeleted ? null : item.MimeType,
-            CreateDeduplicationKey(drive.OrganizationId, drive.Id, item.Id, version),
+            CreateDeduplicationKey(drive.OrganizationId, canonicalDriveId, item.Id, version),
             createdAt);
     }
 
     private static string CreateDeduplicationKey(
         Guid organizationId,
-        Guid sourceId,
+        string driveId,
         string itemId,
         string version)
     {
         var identity = JsonSerializer.Serialize(new[]
         {
             organizationId.ToString("N"),
-            sourceId.ToString("N"),
+            driveId,
             itemId,
             version
         });

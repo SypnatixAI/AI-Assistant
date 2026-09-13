@@ -5,7 +5,7 @@ namespace AssistantCore.Repository.Repositories;
 public sealed record Microsoft365DocumentWorkData(
     Guid OrganizationId,
     Microsoft365DocumentWorkType WorkType,
-    string SiteId,
+    string? SiteId,
     string DriveId,
     string DriveItemId,
     string? Name,

@@ -43,6 +43,40 @@ public sealed class Microsoft365SearchAccessVerifierAdapterTests
     }
 
     [Theory, AutoDomainData]
+    public async Task Given_OneDriveRecordWithoutSite_When_KeepAuthorizedAsync_Then_KeepsRecord(
+        Guid organizationId,
+        Guid userId,
+        string tenantId,
+        string title,
+        string content)
+    {
+        // Given
+        var record = CreateRecord(title, content, "onedrive", siteId: null);
+        var acl = new Microsoft365Acl(
+            [userId.ToString("D")],
+            [],
+            [],
+            false,
+            false,
+            Microsoft365AclInheritance.Unique);
+        var verifier = new Microsoft365SearchAccessVerifierAdapter(
+            new AclResolverFake(new Microsoft365AclResolution.ResolvedAcl(acl)));
+
+        // When
+        var results = await verifier.KeepAuthorizedAsync(
+            organizationId,
+            tenantId,
+            userId.ToString("D"),
+            [],
+            [],
+            [record],
+            CancellationToken.None);
+
+        // Then
+        Assert.Equal([record], results);
+    }
+
+    [Theory, AutoDomainData]
     public async Task Given_FreshAclGrantsCurrentGroupOwner_When_KeepAuthorizedAsync_Then_KeepsRecord(
         Guid organizationId,
         Guid userId,
@@ -246,12 +280,16 @@ public sealed class Microsoft365SearchAccessVerifierAdapterTests
         Assert.Empty(results);
     }
 
-    private static Microsoft365SearchRecord CreateRecord(string title, string content) => new(
-        "Microsoft365",
+    private static Microsoft365SearchRecord CreateRecord(
+        string title,
+        string content,
+        string sourceType = "Microsoft365",
+        string? siteId = "site-id") => new(
+        sourceType,
         title,
         content,
         "chunk-id",
-        "site-id",
+        siteId,
         "drive-id",
         "drive-item-id",
         null,

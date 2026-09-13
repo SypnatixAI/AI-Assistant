@@ -6,4 +6,5 @@ public sealed record GetMicrosoft365OnboardingStatusResponse(
     bool IsConsentComplete,
     bool HasSelectedSite,
     bool HasIndexedSource,
-    bool IsComplete);
+    bool IsComplete,
+    bool IsEnvironmentReady = false);
