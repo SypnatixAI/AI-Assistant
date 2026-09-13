@@ -536,6 +536,11 @@ public sealed class MessageProcessingLifecycleServiceTests
         public MessageUsageResponse Response { get; init; } =
             new(0, 0, 0, 0, DateTimeOffset.UtcNow, false);
 
+        public Task EnsureQuotaAvailableAsync(
+            Guid organizationId,
+            CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
         public Task<MessageUsageResponse> RecordConsumptionAsync(
             Guid organizationId,
             Guid assistantMessageId,

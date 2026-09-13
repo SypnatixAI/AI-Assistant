@@ -5,12 +5,14 @@ using AssistantCore.Service.Application.Models.Messages;
 using AssistantCore.Service.Application.Models.Messages.AgentRuntime;
 using AssistantCore.Service.Application.Models.Messages.AiModels;
 using AssistantCore.Service.Application.Models.Messages.Lifecycle;
+using AssistantCore.Service.Application.Models.Usage;
 using AssistantCore.Service.Application.Services.Messages.AgentRuntime;
 using AssistantCore.Service.Application.Services.Messages.Authorization;
 using AssistantCore.Service.Application.Services.Messages.Lifecycle;
 using AssistantCore.Service.Application.Services.Messages.Responses;
 using AssistantCore.Service.Application.Services.Messages.Streaming;
 using AssistantCore.Service.Application.Services.Messages.Validation;
+using AssistantCore.Service.Application.Services.Usage;
 
 namespace AssistantCore.Service.Tests.Messages;
 
@@ -34,6 +36,7 @@ public sealed class SendMessageCommandHandlerTests
         var handler = new SendMessageCommandHandler(
             new StubCommandValidator(operations),
             new StubUserContextService(operations, userContext),
+            new StubUsageTrackingService(operations),
             lifecycle,
             agentRuntime,
             new StubResponseFactory(operations, expectedResponse));
@@ -47,6 +50,7 @@ public sealed class SendMessageCommandHandlerTests
             [
                 "Validate",
                 "ResolveUser",
+                "CheckQuota",
                 "StartProcessing",
                 "RunAgent",
                 "CompleteProcessing",
@@ -232,6 +236,7 @@ public sealed class SendMessageCommandHandlerTests
         var handler = new SendMessageCommandHandler(
             new StubCommandValidator(operations, expectedException),
             new StubUserContextService(operations, userContext),
+            new StubUsageTrackingService(operations),
             new StubLifecycleService(operations, processing, completedProcessing),
             new StubAgentRuntime(operations, agentTurnResult),
             new StubResponseFactory(operations, response));
@@ -261,6 +266,7 @@ public sealed class SendMessageCommandHandlerTests
         var handler = new SendMessageCommandHandler(
             new StubCommandValidator(operations),
             new StubUserContextService(operations, userContext),
+            new StubUsageTrackingService(operations),
             lifecycle,
             new StubAgentRuntime(operations, agentTurnResult, expectedException),
             new StubResponseFactory(operations, response));
@@ -272,9 +278,41 @@ public sealed class SendMessageCommandHandlerTests
         // Then
         Assert.Same(expectedException, exception);
         Assert.Equal(
-            ["Validate", "ResolveUser", "StartProcessing", "RunAgent"],
+            ["Validate", "ResolveUser", "CheckQuota", "StartProcessing", "RunAgent"],
             operations);
         Assert.Equal("message_generation_failed", lifecycle.ReceivedFailure?.ErrorCode);
+    }
+
+    [Theory, AutoDomainData]
+    public async Task Given_AnExhaustedOrganizationQuota_When_HandleAsync_Then_RejectsBeforeStartingProcessing(
+        SendMessageCommand command,
+        MessageUserContext userContext,
+        StartedMessageProcessing processing,
+        AgentTurnResult agentTurnResult,
+        CompletedMessageProcessing completedProcessing,
+        SendMessageResponse response)
+    {
+        // Given
+        var operations = new List<string>();
+        var quotaException = new OrganizationTokenQuotaExceededException(
+            DateTimeOffset.Parse("2026-09-01T00:00:00Z"));
+        var lifecycle = new StubLifecycleService(operations, processing, completedProcessing);
+        var handler = new SendMessageCommandHandler(
+            new StubCommandValidator(operations),
+            new StubUserContextService(operations, userContext),
+            new StubUsageTrackingService(operations, quotaException),
+            lifecycle,
+            new StubAgentRuntime(operations, agentTurnResult),
+            new StubResponseFactory(operations, response));
+
+        // When
+        var exception = await Record.ExceptionAsync(() =>
+            handler.HandleAsync(command, CancellationToken.None));
+
+        // Then
+        Assert.Same(quotaException, exception);
+        Assert.Equal(["Validate", "ResolveUser", "CheckQuota"], operations);
+        Assert.Null(lifecycle.ReceivedFailure);
     }
 
     private static SendMessageStreamCommandHandler CreateStreamHandler(
@@ -302,6 +340,35 @@ public sealed class SendMessageCommandHandlerTests
         }
 
         return receivedEvents;
+    }
+
+    private sealed class StubUsageTrackingService(
+        List<string> operations,
+        Exception? ensureQuotaException = null) : IUsageTrackingService
+    {
+        public Task EnsureQuotaAvailableAsync(
+            Guid organizationId,
+            CancellationToken cancellationToken = default)
+        {
+            operations.Add("CheckQuota");
+            return ensureQuotaException is null
+                ? Task.CompletedTask
+                : Task.FromException(ensureQuotaException);
+        }
+
+        public Task<MessageUsageResponse> RecordConsumptionAsync(
+            Guid organizationId,
+            Guid assistantMessageId,
+            long inputTokens,
+            long outputTokens,
+            DateTimeOffset occurredAt,
+            CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
+        public Task<TokenUsageResponse> GetCurrentUsageAsync(
+            Guid organizationId,
+            CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
     }
 
     private sealed class StubCommandValidator(
