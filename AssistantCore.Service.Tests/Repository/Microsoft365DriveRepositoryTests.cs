@@ -41,10 +41,19 @@ public sealed class Microsoft365DriveRepositoryTests
         // Given
         var firstOrganizationId = Guid.NewGuid();
         var secondOrganizationId = Guid.NewGuid();
+        var firstConnection = CreateConnection(firstOrganizationId);
+        var secondConnection = CreateConnection(secondOrganizationId);
         await using var dbContext = CreateDbContext();
         var repository = new Microsoft365DriveRepository(dbContext);
+
+        dbContext.OrganizationConnectors.AddRange(
+            CreateConnector(firstConnection),
+            CreateConnector(secondConnection));
+        dbContext.Microsoft365Connections.AddRange(firstConnection, secondConnection);
+        await dbContext.SaveChangesAsync();
+
         await repository.SaveOneDriveAsync(
-            CreateConnection(firstOrganizationId),
+            firstConnection,
             "same-drive",
             "owner-1",
             null,
@@ -52,7 +61,7 @@ public sealed class Microsoft365DriveRepositoryTests
             null,
             DateTimeOffset.UtcNow);
         await repository.SaveOneDriveAsync(
-            CreateConnection(secondOrganizationId),
+            secondConnection,
             "same-drive",
             "owner-2",
             null,
@@ -108,6 +117,12 @@ public sealed class Microsoft365DriveRepositoryTests
         Id = Guid.NewGuid(),
         OrganizationId = organizationId,
         OrganizationConnectorId = Guid.NewGuid()
+    };
+
+    private static OrganizationConnector CreateConnector(Microsoft365Connection connection) => new()
+    {
+        Id = connection.OrganizationConnectorId,
+        OrganizationId = connection.OrganizationId
     };
 
     private static AssistantCoreDbContext CreateDbContext()
