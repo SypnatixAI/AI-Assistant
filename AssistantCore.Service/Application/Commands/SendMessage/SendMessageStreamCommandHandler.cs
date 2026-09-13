@@ -108,6 +108,8 @@ public sealed class SendMessageStreamCommandHandler(
         ChannelWriter<SendMessageStreamEvent> writer) =>
         new(
             async (message, token) => await WriteProgressEventAsync(writer, message, token),
+            async (delta, token) => await WriteActivityDeltaEventAsync(writer, delta, token),
+            async token => await WriteActivityCompletedEventAsync(writer, token),
             async (delta, token) => await WriteAnswerDeltaEventAsync(writer, delta, token));
 
     private static async ValueTask WriteProgressEventAsync(
@@ -128,6 +130,25 @@ public sealed class SendMessageStreamCommandHandler(
             new SendMessageStreamEvent(
                 SendMessageStreamEvent.AnswerDelta,
                 new { Delta = delta }),
+            cancellationToken);
+
+    private static async ValueTask WriteActivityDeltaEventAsync(
+        ChannelWriter<SendMessageStreamEvent> writer,
+        string delta,
+        CancellationToken cancellationToken) =>
+        await writer.WriteAsync(
+            new SendMessageStreamEvent(
+                SendMessageStreamEvent.ActivityDelta,
+                new { Delta = delta }),
+            cancellationToken);
+
+    private static async ValueTask WriteActivityCompletedEventAsync(
+        ChannelWriter<SendMessageStreamEvent> writer,
+        CancellationToken cancellationToken) =>
+        await writer.WriteAsync(
+            new SendMessageStreamEvent(
+                SendMessageStreamEvent.ActivityCompleted,
+                new { }),
             cancellationToken);
 
     /// <summary>

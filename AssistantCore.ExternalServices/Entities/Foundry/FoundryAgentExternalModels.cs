@@ -15,7 +15,8 @@ public sealed record FoundryAgentExternalMessage(
 public sealed record FoundryAgentExternalToolDefinition(
     string Name,
     string Description,
-    JsonElement InputSchema);
+    JsonElement InputSchema,
+    string? DisplayName = null);
 
 public sealed record FoundryAgentExternalToolCall(
     string Name,

@@ -27,6 +27,8 @@ public sealed class FoundryAgentClientAdapter(
         FoundryAgentClientRequest request,
         FoundryAgentToolExecutor toolExecutor,
         Func<string, CancellationToken, ValueTask> onAnswerDelta,
+        Func<string, CancellationToken, ValueTask> onActivityDelta,
+        Func<CancellationToken, ValueTask> onActivityCompleted,
         CancellationToken cancellationToken)
     {
         var result = await externalClient.RunStreamingAsync(
@@ -35,6 +37,8 @@ public sealed class FoundryAgentClientAdapter(
                 new FoundryAgentToolCall(toolCall.Name, toolCall.Arguments),
                 token),
             onAnswerDelta,
+            onActivityDelta,
+            onActivityCompleted,
             cancellationToken);
 
         return MapResult(result);
@@ -49,7 +53,8 @@ public sealed class FoundryAgentClientAdapter(
                 .Select(tool => new FoundryAgentExternalToolDefinition(
                     tool.Name,
                     tool.Description,
-                    tool.InputSchema))
+                    tool.InputSchema,
+                    tool.DisplayName))
                 .ToArray(),
             request.ConversationId);
 

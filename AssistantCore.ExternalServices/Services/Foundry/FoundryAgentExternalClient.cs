@@ -97,14 +97,18 @@ public sealed class FoundryAgentExternalClient
         FoundryAgentExternalRequest request,
         Func<FoundryAgentExternalToolCall, CancellationToken, Task<string>> toolExecutor,
         Func<string, CancellationToken, ValueTask> onAnswerDelta,
+        Func<string, CancellationToken, ValueTask> onActivityDelta,
+        Func<CancellationToken, ValueTask> onActivityCompleted,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(request);
         ArgumentNullException.ThrowIfNull(toolExecutor);
         ArgumentNullException.ThrowIfNull(onAnswerDelta);
+        ArgumentNullException.ThrowIfNull(onActivityDelta);
+        ArgumentNullException.ThrowIfNull(onActivityCompleted);
 
         await ValidateConfigurationOnceAsync(cancellationToken);
-        var agent = CreateAgent(request.Tools, toolExecutor);
+        var agent = CreateAgent(request.Tools, toolExecutor, onActivityDelta, onActivityCompleted);
 
         if (request.ConversationId == Guid.Empty)
         {
@@ -114,6 +118,8 @@ public sealed class FoundryAgentExternalClient
                 session: null,
                 includeHistory: true,
                 onAnswerDelta,
+                onActivityDelta,
+                onActivityCompleted,
                 cancellationToken);
         }
 
@@ -131,6 +137,8 @@ public sealed class FoundryAgentExternalClient
                 sessionState.Session,
                 includeHistory: isNewSession,
                 onAnswerDelta,
+                onActivityDelta,
+                onActivityCompleted,
                 cancellationToken);
 
             _logger.LogInformation(
@@ -156,6 +164,8 @@ public sealed class FoundryAgentExternalClient
         AgentSession? session,
         bool includeHistory,
         Func<string, CancellationToken, ValueTask> onAnswerDelta,
+        Func<string, CancellationToken, ValueTask> onActivityDelta,
+        Func<CancellationToken, ValueTask> onActivityCompleted,
         CancellationToken cancellationToken)
     {
         var responseText = new List<string>();
@@ -257,10 +267,16 @@ public sealed class FoundryAgentExternalClient
 
     private AIAgent CreateAgent(
         IReadOnlyCollection<FoundryAgentExternalToolDefinition> toolDefinitions,
-        Func<FoundryAgentExternalToolCall, CancellationToken, Task<string>> toolExecutor)
+        Func<FoundryAgentExternalToolCall, CancellationToken, Task<string>> toolExecutor,
+        Func<string, CancellationToken, ValueTask>? onActivityDelta = null,
+        Func<CancellationToken, ValueTask>? onActivityCompleted = null)
     {
         var tools = toolDefinitions
-            .Select(definition => CreateTool(definition, toolExecutor))
+            .Select(definition => CreateTool(
+                definition,
+                toolExecutor,
+                onActivityDelta,
+                onActivityCompleted))
             .Cast<AITool>()
             .ToArray();
 
@@ -279,22 +295,41 @@ public sealed class FoundryAgentExternalClient
 
     private static AIFunction CreateTool(
         FoundryAgentExternalToolDefinition definition,
-        Func<FoundryAgentExternalToolCall, CancellationToken, Task<string>> toolExecutor)
+        Func<FoundryAgentExternalToolCall, CancellationToken, Task<string>> toolExecutor,
+        Func<string, CancellationToken, ValueTask>? onActivityDelta,
+        Func<CancellationToken, ValueTask>? onActivityCompleted)
     {
         async Task<string> InvokeAsync(
             AIFunctionArguments arguments,
             CancellationToken cancellationToken)
         {
+            if (onActivityDelta is not null)
+            {
+                await onActivityDelta(
+                    GetToolStartedMessage(definition),
+                    cancellationToken);
+            }
+
             var values = arguments.ToDictionary(
                 item => item.Key,
                 item => item.Value,
                 StringComparer.Ordinal);
             var serializedArguments = JsonSerializer.SerializeToElement(values);
-            return await toolExecutor(
-                new FoundryAgentExternalToolCall(
-                    definition.Name,
-                    serializedArguments),
-                cancellationToken);
+            try
+            {
+                return await toolExecutor(
+                    new FoundryAgentExternalToolCall(
+                        definition.Name,
+                        serializedArguments),
+                    cancellationToken);
+            }
+            finally
+            {
+                if (onActivityCompleted is not null)
+                {
+                    await onActivityCompleted(cancellationToken);
+                }
+            }
         }
 
         var function = AIFunctionFactory.Create(
@@ -306,6 +341,45 @@ public sealed class FoundryAgentExternalClient
             });
 
         return new JsonSchemaFunction(function, definition.InputSchema);
+    }
+
+    private static string GetToolStartedMessage(
+        FoundryAgentExternalToolDefinition definition) =>
+        $"{HumanizeToolName(definition.DisplayName ?? definition.Name)}…";
+
+    private static string HumanizeToolName(string toolName)
+    {
+        var words = new List<string>();
+        var currentWord = new List<char>();
+        foreach (var character in toolName)
+        {
+            if (character is '_' or '-' or ' ')
+            {
+                AddCurrentWord();
+                continue;
+            }
+
+            if (char.IsUpper(character) && currentWord.Count > 0)
+            {
+                AddCurrentWord();
+            }
+
+            currentWord.Add(character);
+        }
+
+        AddCurrentWord();
+        return string.Join(' ', words);
+
+        void AddCurrentWord()
+        {
+            if (currentWord.Count == 0)
+            {
+                return;
+            }
+
+            words.Add(new string(currentWord.ToArray()).ToLowerInvariant());
+            currentWord.Clear();
+        }
     }
 
     private static IReadOnlyCollection<ChatMessage> CreateMessages(

@@ -139,6 +139,45 @@ public sealed class SendMessageCommandHandlerTests
     }
 
     [Theory, AutoDomainData]
+    public async Task Given_AnActivityUpdate_When_HandleAsyncStreaming_Then_ReturnsActivityEvents(
+        SendMessageCommand command,
+        MessageUserContext userContext,
+        StartedMessageProcessing processing,
+        AgentTurnResult agentTurnResult,
+        CompletedMessageProcessing completedProcessing,
+        SendMessageResponse response)
+    {
+        // Given
+        const string activityMessage = "Recherche dans les informations autorisées…";
+        var handler = CreateStreamHandler(
+            [],
+            userContext,
+            processing,
+            completedProcessing,
+            new StubAgentRuntime(
+                [],
+                agentTurnResult,
+                activityMessage: activityMessage),
+            response);
+
+        // When
+        var events = await handler.HandleAsync(
+            new SendMessageStreamCommand(command.ConversationId, command.Message),
+            CancellationToken.None);
+        var receivedEvents = await ReadAllAsync(events);
+
+        // Then
+        var activityEvent = Assert.Single(receivedEvents, streamEvent =>
+            streamEvent.Name == SendMessageStreamEvent.ActivityDelta);
+        Assert.Equal(
+            activityMessage,
+            activityEvent.Data.GetType().GetProperty("Delta")?.GetValue(activityEvent.Data));
+        Assert.Contains(
+            receivedEvents,
+            streamEvent => streamEvent.Name == SendMessageStreamEvent.ActivityCompleted);
+    }
+
+    [Theory, AutoDomainData]
     public async Task Given_AProviderTimeout_When_HandleAsyncStreaming_Then_ReturnsTheTimeoutErrorCode(
         SendMessageCommand command,
         MessageUserContext userContext,
@@ -341,7 +380,8 @@ public sealed class SendMessageCommandHandlerTests
         List<string> operations,
         AgentTurnResult result,
         Exception? exception = null,
-        string? progressMessage = null) : IAgentRuntime
+        string? progressMessage = null,
+        string? activityMessage = null) : IAgentRuntime
     {
         public AgentTurnRequest? ReceivedRequest { get; private set; }
 
@@ -366,6 +406,11 @@ public sealed class SendMessageCommandHandlerTests
             if (progressMessage is not null)
             {
                 await callbacks.OnProgress(progressMessage, cancellationToken);
+            }
+            if (activityMessage is not null)
+            {
+                await callbacks.OnActivityDelta(activityMessage, cancellationToken);
+                await callbacks.OnActivityCompleted(cancellationToken);
             }
 
             return exception is null
