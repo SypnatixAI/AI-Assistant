@@ -22,6 +22,7 @@ public sealed class GetMicrosoft365OnboardingStatusCommandHandler(
             status.IsConsentComplete,
             status.HasSelectedSite,
             status.HasIndexedSource,
-            status.IsComplete);
+            status.IsComplete,
+            status.IsEnvironmentReady);
     }
 }

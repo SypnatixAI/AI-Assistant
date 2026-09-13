@@ -8,6 +8,7 @@ using AssistantCore.Service.Application.Configuration;
 using AssistantCore.Service.Application.Exceptions;
 using AssistantCore.Service.Application.Models.Microsoft365;
 using AssistantCore.Service.Application.Services.AuthenticateUser;
+using AssistantCore.Service.Application.Services.Messages.Tools;
 using Microsoft.Extensions.Options;
 
 namespace AssistantCore.Service.Application.Services.Microsoft365;
@@ -19,7 +20,8 @@ public sealed class Microsoft365ConnectionService(
     IMicrosoft365ConsentStateProtector stateProtector,
     IMicrosoft365TechnicalTokenStore tokenStore,
     IOptions<Microsoft365Options> options,
-    TimeProvider timeProvider) : IMicrosoft365ConnectionService
+    TimeProvider timeProvider,
+    IAiToolRegistry? toolRegistry = null) : IMicrosoft365ConnectionService
 {
     public async Task<Uri> StartConsentAsync(CancellationToken cancellationToken = default)
     {
@@ -55,7 +57,9 @@ public sealed class Microsoft365ConnectionService(
     {
         if (string.IsNullOrWhiteSpace(state))
         {
-            throw new BadRequestException("Microsoft 365 consent state is required.");
+            throw new Microsoft365ConsentException(
+                "Microsoft 365 consent state is required.",
+                Microsoft365ConsentException.AdminConsentIncomplete);
         }
 
         Microsoft365ConsentState consentState;
@@ -65,29 +69,39 @@ public sealed class Microsoft365ConnectionService(
         }
         catch (Exception exception) when (exception is CryptographicException or FormatException or JsonException)
         {
-            throw new BadRequestException("Microsoft 365 consent state is invalid.");
+            throw new Microsoft365ConsentException(
+                "Microsoft 365 consent state is invalid.",
+                Microsoft365ConsentException.AdminConsentIncomplete);
         }
 
         var now = timeProvider.GetUtcNow();
         if (consentState.ExpiresAt <= now)
         {
-            throw new BadRequestException("Microsoft 365 consent state has expired.");
+            throw new Microsoft365ConsentException(
+                "Microsoft 365 consent state has expired.",
+                Microsoft365ConsentException.AdminConsentIncomplete);
         }
 
         var connection = await connectionRepository.FindConsentAsync(
             consentState.OrganizationId,
             ComputeStateHash(state),
             cancellationToken)
-            ?? throw new BadRequestException("Microsoft 365 consent state is invalid or has already been replaced.");
+            ?? throw new Microsoft365ConsentException(
+                "Microsoft 365 consent state is invalid or has already been replaced.",
+                Microsoft365ConsentException.AdminConsentIncomplete);
 
         if (connection.ConsentStateConsumedAt is not null)
         {
-            throw new BadRequestException("Microsoft 365 consent state has already been used.");
+            throw new Microsoft365ConsentException(
+                "Microsoft 365 consent state has already been used.",
+                Microsoft365ConsentException.AdminConsentIncomplete);
         }
 
         if (connection.ConsentStateExpiresAt is null || connection.ConsentStateExpiresAt <= now)
         {
-            throw new BadRequestException("Microsoft 365 consent state has expired.");
+            throw new Microsoft365ConsentException(
+                "Microsoft 365 consent state has expired.",
+                Microsoft365ConsentException.AdminConsentIncomplete);
         }
 
         if (!string.IsNullOrWhiteSpace(microsoftError) || !adminConsent)
@@ -97,12 +111,16 @@ public sealed class Microsoft365ConnectionService(
                 "MicrosoftConsentDenied",
                 now,
                 cancellationToken);
-            throw new BadRequestException("Microsoft 365 consent was not granted.");
+            throw new Microsoft365ConsentException(
+                "Microsoft 365 consent was not granted.",
+                Microsoft365ConsentException.AdminConsentRefused);
         }
 
         if (!Guid.TryParse(tenantId, out var parsedTenantId) || parsedTenantId == Guid.Empty)
         {
-            throw new BadRequestException("Microsoft 365 tenant is required.");
+            throw new Microsoft365ConsentException(
+                "Microsoft 365 tenant is required.",
+                Microsoft365ConsentException.AdminConsentIncomplete);
         }
 
         var validatedTenantId = parsedTenantId.ToString("D");
@@ -120,14 +138,50 @@ public sealed class Microsoft365ConnectionService(
                 "MicrosoftAdminConsentValidationFailed",
                 now,
                 cancellationToken);
-            throw;
+            throw new Microsoft365ConsentException(
+                "Microsoft 365 consent could not be validated.",
+                Microsoft365ConsentException.AdminConsentValidationFailed);
         }
+
         if (await connectionRepository.IsTenantConnectedToAnotherOrganizationAsync(
                 consentState.OrganizationId,
                 validatedTenantId,
                 cancellationToken))
         {
-            throw new BadRequestException("Microsoft 365 tenant is already connected to another organization.");
+            throw new Microsoft365ConsentException(
+                "Microsoft 365 tenant is already connected to another organization.",
+                Microsoft365ConsentException.WrongTenant);
+        }
+
+        bool permissionsVerified;
+        try
+        {
+            permissionsVerified = await consentClient.VerifyRequiredPermissionsAsync(
+                exchange.AccessToken,
+                cancellationToken);
+        }
+        catch (Microsoft365ExternalException)
+        {
+            await connectionRepository.MarkConsentErrorAsync(
+                connection,
+                "MicrosoftAdminConsentValidationFailed",
+                now,
+                cancellationToken);
+            throw new Microsoft365ConsentException(
+                "Microsoft 365 consent could not be validated.",
+                Microsoft365ConsentException.AdminConsentValidationFailed);
+        }
+
+        if (!permissionsVerified)
+        {
+            await connectionRepository.MarkConsentErrorAsync(
+                connection,
+                "MicrosoftRequiredPermissionsMissing",
+                now,
+                cancellationToken);
+            throw new Microsoft365ConsentException(
+                "Microsoft 365 required permissions are missing.",
+                Microsoft365ConsentException.MissingRequiredPermissions);
         }
 
         await connectionRepository.CompleteConsentAsync(
@@ -135,6 +189,7 @@ public sealed class Microsoft365ConnectionService(
             validatedTenantId,
             now,
             cancellationToken);
+        toolRegistry?.InvalidateCache(connection.OrganizationId);
         try
         {
             await tokenStore.StoreAsync(

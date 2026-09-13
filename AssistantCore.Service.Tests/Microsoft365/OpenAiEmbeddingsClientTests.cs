@@ -45,4 +45,42 @@ public sealed class OpenAiEmbeddingsClientTests
         Assert.Equal(2, payload.RootElement.GetProperty("dimensions").GetInt32());
         Assert.Equal(2, payload.RootElement.GetProperty("input").GetArrayLength());
     }
+
+    [Theory, AutoDomainData]
+    public async Task Given_AzureOpenAiDeployment_When_CreateAsync_Then_UsesDeploymentRouteAndApiKey(
+        string apiKey,
+        string input)
+    {
+        // Given
+        HttpRequestMessage? capturedRequest = null;
+        using var httpClient = new HttpClient(new StubHttpMessageHandler(request =>
+        {
+            capturedRequest = request;
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent("""
+                    {"data":[{"index":0,"embedding":[0.1,0.2]}]}
+                    """)
+            };
+        }));
+        var client = new OpenAiEmbeddingsClient(httpClient);
+
+        // When
+        await client.CreateAsync(
+            "https://embedding.openai.azure.com/",
+            apiKey,
+            "text-embedding-3-small",
+            2,
+            [input],
+            CancellationToken.None,
+            "m365-text-embedding-3-small",
+            "2024-06-01");
+
+        // Then
+        Assert.Equal(
+            "https://embedding.openai.azure.com/openai/deployments/m365-text-embedding-3-small/embeddings?api-version=2024-06-01",
+            capturedRequest!.RequestUri!.AbsoluteUri);
+        Assert.Equal(apiKey, capturedRequest.Headers.GetValues("api-key").Single());
+        Assert.Null(capturedRequest.Headers.Authorization);
+    }
 }

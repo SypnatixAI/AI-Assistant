@@ -2,6 +2,7 @@
 
 ## Table des matières
 
+- [Métrique vectorielle et migration](#vector-metric-migration)
 - [But](#m365-sharepoint-purpose)
 - [Résultat attendu](#m365-sharepoint-result)
 - [Périmètre de la première version](#m365-sharepoint-scope)
@@ -17,6 +18,7 @@
 - [Renouvellement des webhooks](#m365-sharepoint-webhook-renewal)
 - [Synchronisation initiale](#m365-sharepoint-initial-sync)
 - [Synchronisation des changements](#m365-sharepoint-delta-sync)
+- [Réindexation administrative d’un client](#m365-sharepoint-admin-reindex)
 - [Traitement par le worker](#m365-sharepoint-worker)
 - [Téléchargement et extraction](#m365-sharepoint-extraction)
 - [Traitement des archives](#m365-sharepoint-archives)
@@ -100,6 +102,8 @@ La première version couvre :
 - les permissions accordées à des groupes Microsoft Entra;
 - les utilisateurs invités externes autorisés dans le tenant du client;
 - les liens « Toute personne disposant du lien »;
+- les liens « Personnes de l’organisation disposant du lien »;
+- les liens destinés à des personnes précises;
 - les tests avec le tenant Microsoft 365 fictif.
 
 La première version ne couvre pas :
@@ -339,7 +343,8 @@ connexion Microsoft 365.
 
 Le service retrouve l'utilisateur et son organisation depuis le JWT. Aucun
 `organizationId` n'est accepté depuis la requête. Il vérifie ensuite que le
-membre possède le rôle `Admin`; sinon, il retourne `403 Forbidden`.
+jeton contient `AssistantCore.Access` et `tenantAdmin`; sinon, il retourne
+`403 Forbidden`. Le rôle indicatif conservé en base n'autorise pas cette action.
 
 Le service génère un `state` contenant l'organisation, un nonce aléatoire et
 une expiration courte. Le `state` est chiffré et signé. Seule son empreinte est
@@ -383,6 +388,27 @@ seule : l'adapter Infrastructure demande un token applicatif à ce tenant avec
 le flow `client_credentials`, appelle Microsoft Graph avec ce token et vérifie
 que Graph retourne le même tenant. Le service refuse aussi ce tenant s'il est
 déjà associé à une autre organisation.
+
+Un consentement accordé ne prouve pas à lui seul que les permissions requises
+par le connecteur sont réellement utilisables : elles peuvent avoir été
+retirées après coup, ou l'administrateur peut avoir accordé un consentement
+partiel. Avant d'activer la connexion, le service effectue donc un appel Graph
+représentatif (`GET /v1.0/sites?search=*&$top=1`) avec le token applicatif
+obtenu. Cet appel ne lit aucune donnée utile : il sert uniquement à vérifier
+que `Sites.Read.All` est effectivement utilisable. Un refus `403` de Microsoft
+Graph interrompt l'activation; tout autre échec technique est traité comme une
+validation impossible.
+
+Chacun de ces refus est exposé à l'appelant via un code d'erreur métier stable
+plutôt qu'un simple message :
+
+| Code | Situation |
+| --- | --- |
+| `admin_consent_incomplete` | `state` absent, invalide, expiré ou déjà utilisé |
+| `admin_consent_refused` | Microsoft indique une erreur ou `admin_consent=False` |
+| `wrong_tenant` | le tenant validé est déjà connecté à une autre organisation |
+| `admin_consent_validation_failed` | l'acquisition du token applicatif ou l'appel Graph de vérification échoue techniquement |
+| `missing_required_permissions` | l'appel Graph représentatif est refusé (`403`) : permissions absentes ou retirées |
 
 Après un retour valide, la connexion devient :
 
@@ -453,9 +479,8 @@ Authorization: Bearer <JWT AssistantCore>
 ```
 
 Le controller transmet une commande au `IDispatcher`. Le handler appelle le
-service de connexion, qui retrouve l'organisation depuis le JWT et refuse un
-membre non administrateur. Aucun `organizationId` n'est accepté dans la
-requête.
+service de connexion, qui retrouve l'organisation depuis le JWT et exige le
+claim `tenantAdmin`. Aucun `organizationId` n'est accepté dans la requête.
 
 Le service recherche la connexion avec son identifiant et l'organisation
 courante. Une connexion appartenant à une autre organisation est traitée comme
@@ -563,16 +588,18 @@ recommencer.
 L'administrateur peut cocher et décocher plusieurs sites avant de confirmer sa
 sélection. La confirmation ajoute automatiquement toutes les bibliothèques et
 toutes les listes compatibles des sites retenus. Le bouton permettant d'accéder
-au chat apparaît dès qu'au moins un site a été préparé; il n'existe aucune
-troisième étape obligatoire.
+au chat apparaît dès qu'au moins un site a été préparé et qu'au moins une de ses
+bibliothèques ou listes est activée pour l'indexation; il n'existe aucune
+troisième action manuelle obligatoire.
 Lors des connexions suivantes, une organisation déjà
 configurée arrive directement dans le chat. Un membre non administrateur voit
 un écran d'attente clair tant que la configuration doit encore être terminée
 par un administrateur.
 
 Cette règle n'est pas seulement une présentation frontend : tant que
-l'onboarding n'est pas terminé (consentement valide et au moins un site
-sélectionné), le backend refuse `403 Forbidden` avec le code métier
+l'onboarding n'est pas terminé (consentement valide, au moins un site
+sélectionné et au moins une source enfant activée), le backend refuse
+`403 Forbidden` avec le code métier
 `tenant_admin_required` à tout appel d'un membre qui ne possède pas le rôle
 Entra `tenantAdmin`, y compris `authenticateUser` lui-même. Un membre avec
 `tenantAdmin` reste toujours admis, que la configuration soit terminée ou non.
@@ -580,7 +607,7 @@ Une fois l'onboarding termine, `tenantAdmin` cesse d'etre requis pour les
 membres standards : voir [Authenticate User](../authentification/authenticate-user.md#auth-admission-policy)
 pour la regle complete de derivation du role et de la politique d'admission.
 
-Après l'onboarding, un membre possédant le rôle `Admin` retrouve le même écran
+Après l'onboarding, un membre dont le jeton contient `tenantAdmin` retrouve le même écran
 depuis le menu de la SPA pour retirer ou ajouter des contenus. Ce réglage est
 facultatif et ne bloque pas le chat. Le backend continue de refuser les actions
 administratives aux autres membres.
@@ -629,7 +656,11 @@ POST /api/microsoft365/sites/{siteId}
 Le backend valide de nouveau le site auprès de Graph avant de l'enregistrer.
 Il découvre ensuite ses bibliothèques et ses listes compatibles, les active et
 crée le travail nécessaire à leur première synchronisation. La SPA considère
-alors l'onboarding comme terminé sans demander une sélection supplémentaire.
+alors l'onboarding comme terminé sans demander une sélection supplémentaire,
+mais uniquement si au moins une source enfant est effectivement activée. Si la
+découverte s'interrompt après l'enregistrement du site, la même sélection peut
+être relancée : les lignes valides sont réutilisées et les travaux initiaux ou
+souscriptions manquants sont recréés sans doublon.
 
 Voir un site dans la liste ne l'ajoute pas à onPremia. Seul le choix explicite
 de l'administrateur autorise ses contenus compatibles.
@@ -652,6 +683,12 @@ Lorsqu’un site est activé :
 4. activer automatiquement chaque contenu compatible;
 5. créer une synchronisation initiale pour chaque contenu activé;
 6. créer une souscription par bibliothèque ou liste lorsque cela est supporté.
+
+Ces opérations sont idempotentes. Une source déjà activée est tout de même
+réconciliée afin de réparer un travail initial absent ou définitivement échoué.
+Le worker peut aussi reprendre une synchronisation restée `Running` après un
+arrêt lorsque son lease a expiré. Il n'est jamais nécessaire de vider la base
+pour reprendre ce flow.
 
 Le choix du site autorise donc tout son contenu compatible, y compris les
 listes non masquées qui ne sont ni des listes système ni des bibliothèques de
@@ -780,6 +817,13 @@ Le traitement doit couvrir :
 Pour Excel, conserver les noms des feuilles et transformer les cellules utiles
 en texte structuré. Les formules peuvent être indexées avec leur dernière
 valeur enregistrée. Le worker ne doit pas recalculer un classeur.
+
+L’indexation textuelle sert à retrouver un classeur ou une information
+ponctuelle. Lorsqu’une question exige un agrégat ou un filtre sur toutes les
+lignes, l’outil `AnalyzeSpreadsheet` télécharge le classeur autorisé et utilise
+un analyseur déterministe. Le fichier est localisé grâce à son entrée indexée,
+mais les calculs ne dépendent pas du nombre de passages retournés par la
+recherche sémantique et n’envoient pas le fichier complet au modèle.
 
 Pour PowerPoint, conserver le numéro de diapositive, le titre, le texte et les
 notes lorsque celles-ci sont disponibles.
@@ -985,6 +1029,27 @@ Pour chaque notification :
 Le webhook ne fait jamais confiance à un `organizationId` fourni dans la
 notification. Il retrouve l’organisation depuis la souscription enregistrée.
 
+### Protection du `clientState`
+
+Le `clientState` original n'est jamais stocké : Microsoft Graph ne l'exige
+jamais pour renouveler une souscription (seules l'expiration et l'URL de
+notification sont renvoyées lors d'un renouvellement), donc seule sa capacité
+à être vérifié est nécessaire. La base ne conserve qu'un HMAC-SHA256 du
+`clientState`, calculé avec une clé secrète qui n'est jamais stockée en SQL
+(comme `ClientSecret`, via la configuration/Key Vault). La comparaison à la
+réception d'une notification se fait en temps constant
+(`CryptographicOperations.FixedTimeEquals`) pour ne pas exposer d'information
+via le temps de réponse. Aucune valeur de `clientState` n'est jamais journalisée.
+
+Un `clientState` protégé est irréversible par construction : il ne peut donc
+pas être migré vers un nouvel algorithme ou une nouvelle clé sans connaître la
+valeur d'origine. Si l'algorithme ou la clé change, les souscriptions
+existantes sont marquées pour être recréées proprement (suppression de
+l'abonnement Microsoft Graph existant puis nouvelle souscription avec un
+nouveau `clientState`) par le traitement planifié de renouvellement, qui
+déclenche aussi une réconciliation complète pour couvrir toute notification
+manquée pendant la bascule.
+
 <a id="m365-sharepoint-webhook-renewal"></a>
 ## Renouvellement des webhooks
 
@@ -1069,6 +1134,122 @@ son checkpoint à la fois.
 Pour une liste, le webhook ne contient pas toutes les nouvelles valeurs. Il
 réveille uniquement la synchronisation delta. Une réconciliation planifiée
 relance aussi le delta afin de couvrir une notification perdue.
+
+<a id="m365-sharepoint-admin-reindex"></a>
+## Réindexation administrative d’un client
+
+L’équipe Synaptix doit pouvoir relancer une indexation complète depuis sa
+future interface d’administration interne. Cette opération sert notamment à
+reprendre les documents restés en échec après une correction du connecteur,
+des permissions Microsoft 365 ou du pipeline d’ingestion.
+
+Cette capacité n’est jamais exposée dans l’application du client. Un
+administrateur du tenant client, même autorisé à configurer Microsoft 365, ne
+peut pas la déclencher. Seul un opérateur Synaptix authentifié et autorisé dans
+l’interface interne peut agir sur une autre organisation.
+
+### Déclenchement
+
+L’opérateur Synaptix :
+
+1. ouvre la fiche d’une organisation cliente dans l’interface interne;
+2. consulte les sources SharePoint de cette organisation;
+3. clique sur `Relancer l’indexation SharePoint`;
+4. confirme l’opération;
+5. reçoit l’identifiant et l’état initial de la réindexation.
+
+La commande vise toutes les bibliothèques SharePoint activées pour
+l’indexation dans cette organisation. L’interface affiche clairement le nom du
+client et le nombre de bibliothèques concernées avant la confirmation.
+
+La requête interne contient l’identifiant de l’organisation. Le backend
+retrouve lui-même ses connexions et ses sources : il n’accepte pas des
+identifiants de bibliothèques appartenant à une autre organisation. Une
+réponse acceptée retourne un identifiant d’opération et l’état `Pending`.
+
+### Flow backend et worker
+
+La requête suit le chemin obligatoire :
+
+```text
+Interface d’administration Synaptix
+  -> Controller interne
+  -> IDispatcher
+  -> CommandHandler
+  -> Service applicatif de réindexation
+  -> Persistence
+  -> Worker d’ingestion Microsoft 365
+```
+
+Le controller vérifie l’authentification interne et transmet uniquement la
+commande au dispatcher. Le handler orchestre l’appel au service applicatif. Le
+service :
+
+1. vérifie que l’opérateur possède le droit interne de réindexer les contenus;
+2. charge l’organisation, sa connexion Microsoft 365 active et ses
+   bibliothèques activées pour l’indexation;
+3. refuse la demande si une réindexation complète est déjà en cours pour cette
+   organisation;
+4. crée une opération suivie et une synchronisation complète `Pending` pour
+   chaque bibliothèque admissible;
+5. enregistre l’identité de l’opérateur, l’organisation ciblée, la date et le
+   motif facultatif;
+6. retourne immédiatement l’identifiant de l’opération sans attendre le
+   traitement des documents.
+
+Le worker réclame ensuite chaque synchronisation. Il relit toute la
+bibliothèque depuis Microsoft Graph sans dépendre de l’ancien `deltaLink`. Il
+crée un nouveau travail pour chaque version courante, y compris lorsqu’un
+travail portant le même document ou la même version avait terminé en
+`PermanentFailure`. Les clés de déduplication distinguent la nouvelle opération
+tout en empêchant les doublons à l’intérieur de celle-ci.
+
+Chaque document repasse par le pipeline normal : téléchargement, extraction,
+résolution des permissions, découpage, embeddings et écriture dans Azure AI
+Search. Les permissions sont donc recalculées à partir de l’état courant dans
+SharePoint. Un document ne devient jamais visible grâce à une ancienne ACL.
+
+La réindexation n’efface pas l’index au démarrage. Les passages valides restent
+disponibles jusqu’au remplacement réussi de leur document. À la fin du
+parcours, les contenus qui n’existent plus dans SharePoint sont retirés. Le
+nouveau checkpoint delta devient actif uniquement lorsque la synchronisation
+complète a enregistré toutes ses pages durablement.
+
+### Suivi et résultat
+
+L’interface interne peut relire l’état de l’opération et affiche au minimum :
+
+- `Pending`, `Running`, `Succeeded`, `TemporaryFailure` ou
+  `PermanentFailure`;
+- le nombre de bibliothèques terminées et le nombre total;
+- les nombres de documents découverts, traités, ignorés et en échec;
+- les heures de demande, de début et de fin;
+- un code d’erreur exploitable sans contenu documentaire sensible.
+
+Une reprise technique du même message ou du même lot reste idempotente. Une
+erreur temporaire est retentée par le worker. Une erreur permanente sur un
+document est visible dans le bilan sans empêcher les autres documents ou
+bibliothèques de terminer.
+
+Avant l’opération, certains documents du client peuvent être absents ou
+obsolètes dans Azure AI Search, notamment après un ancien échec permanent.
+Après une opération réussie, toutes les versions courantes et autorisées des
+bibliothèques activées ont été retraitées, les documents supprimés ont été
+retirés et la synchronisation delta normale peut reprendre depuis le nouveau
+checkpoint.
+
+### Limites
+
+La première version de cette commande :
+
+- agit sur toutes les bibliothèques activées d’une organisation, pas sur un
+  dossier ou un document isolé;
+- ne réindexe pas les listes SharePoint ni les OneDrive individuels;
+- ne permet pas à un administrateur client de déclencher l’opération;
+- ne permet pas deux réindexations complètes simultanées pour la même
+  organisation;
+- ne contourne jamais les permissions Microsoft 365 ni les règles de sécurité
+  d’Azure AI Search.
 
 <a id="m365-sharepoint-worker"></a>
 ## Traitement par le worker
@@ -1389,7 +1570,8 @@ Le worker lui transmet seulement :
 - le titre utile;
 - le texte du passage.
 
-La configuration indique :
+En certification, les embeddings sont produits par le déploiement Azure OpenAI
+`m365-text-embedding-3-small` dans `canadacentral`. La configuration indique :
 
 - le fournisseur;
 - le modèle;
@@ -1400,6 +1582,12 @@ La configuration indique :
 
 Le nombre de dimensions du champ Azure AI Search doit correspondre exactement
 au modèle utilisé.
+
+Le profil `m365-vector-profile` référence le vectorizer
+`m365-azure-openai-vectorizer`. Ce vectorizer transforme les requêtes en
+vecteurs avec exactement le même endpoint, le même déploiement et le même
+modèle que le worker d’indexation. Les clés restent dans Azure Key Vault et ne
+sont pas stockées dans la définition Bicep ou les fichiers de configuration.
 
 Changer de modèle ou de dimensions demande la création d’un nouvel index ou
 une réindexation complète contrôlée.
@@ -1438,6 +1626,7 @@ Champs proposés :
 | `allowedGroupIds` | groupes Entra autorisés |
 | `allowedSharePointGroupIds` | groupes SharePoint autorisés |
 | `hasAnonymousLink` | présence d’un lien anonyme |
+| `hasOrganizationLink` | présence d’un lien réservé aux personnes de l’organisation qui possèdent le lien |
 | `aclFingerprint` | empreinte canonique des permissions |
 | `isAvailable` | passage entièrement publié et consultable |
 | `contentVector` | embedding du passage |
@@ -1446,11 +1635,12 @@ Champs proposés :
 
 `organizationId`, `sourceType`, `siteId`, `driveId`, `documentId`,
 `allowedUserIds`, `allowedGroupIds`, `allowedSharePointGroupIds`,
-`hasAnonymousLink` et `isAvailable` sont filtrables.
+`hasAnonymousLink`, `hasOrganizationLink` et `isAvailable` sont filtrables.
 
 `organizationId`, `allowedUserIds`, `allowedGroupIds`,
-`allowedSharePointGroupIds` et `hasAnonymousLink` ne sont pas récupérables dans
-Azure AI Search et ne sont donc pas retournés dans les résultats normaux.
+`allowedSharePointGroupIds`, `hasAnonymousLink` et `hasOrganizationLink` ne
+sont pas récupérables dans Azure AI Search et ne sont donc pas retournés dans
+les résultats normaux.
 Chaque recherche impose également `isAvailable = true`.
 
 `contentVector` utilise un profil vectoriel compatible avec le modèle
@@ -1533,8 +1723,18 @@ L’adapter Infrastructure choisit la source de permissions selon le contenu :
 
 L’adapter transforme les réponses externes en `Microsoft365Acl`. Pour un
 utilisateur ou un groupe Entra provenant de SharePoint REST, il utilise
-uniquement `AadObjectId`. Un principal qui ne fournit pas d’identifiant stable
-et une permission qui ne peut pas être représentée produisent `Unresolved`.
+uniquement `AadObjectId`.
+
+Chaque autorisation additive est évaluée séparément. Une autorisation connue
+et représentable reste utilisable même lorsqu’une autre autorisation du même
+document utilise un type de partage plus restrictif ou encore inconnu. Une
+autorisation inconnue est ignorée comme source d’accès et n’élargit jamais
+l’ACL. Si aucune autorisation fiable ne peut être représentée, le résultat est
+`Unresolved` et le document reste invisible.
+
+Pour les liens destinés à des personnes précises (`scope=users`), seuls les
+utilisateurs ou groupes possédant un identifiant Microsoft stable sont ajoutés
+à l’ACL. Une adresse courriel ou un nom affiché ne suffit jamais.
 
 Les appels Graph utilisent un token Graph. Les appels REST SharePoint utilisent
 un token limité à l’origine du tenant SharePoint concerné. Les clients HTTP
@@ -1575,10 +1775,9 @@ changements hérités qui pourraient ne pas produire une notification fiable.
 <a id="m365-sharepoint-local-groups"></a>
 ### Groupes SharePoint locaux
 
-Cette capacité est documentée pour une livraison ultérieure. Elle ne fait pas
-partie du périmètre actuel. Tant qu’elle n’est pas implémentée, un contenu dont
-le seul accès passe par un groupe SharePoint local reste invisible dans les
-résultats AssistantCore.
+Cette capacité permet à AssistantCore de retrouver un contenu dont l’accès
+passe par un groupe SharePoint local, après avoir confirmé que le membre
+authentifié appartient encore à ce groupe au moment de la recherche.
 
 Un groupe SharePoint local est créé dans un site SharePoint précis. Les groupes
 par défaut `Membres`, `Visiteurs` et `Propriétaires` du site sont des exemples
@@ -1653,7 +1852,8 @@ identifiants dans `allowedSharePointGroupIds` pour chaque passage concerné.
    applicatif`. Lorsque le modèle choisit l’outil Microsoft 365, le connecteur
    Infrastructure reçoit le contexte d’exécution déjà validé.
 3. Le connecteur récupère d’abord les groupes Microsoft Entra du membre avec
-   Microsoft Graph.
+   Microsoft Graph. Il récupère aussi les groupes Microsoft 365 dont ce membre
+   est propriétaire.
 4. Pour chaque site SharePoint autorisé dans l’organisation, un adapter
    Infrastructure demande un token limité à l’origine
    `https://<tenant>.sharepoint.com/.default`.
@@ -1680,6 +1880,12 @@ ET
 )
 ```
 
+Les claims SharePoint terminés par `_o` représentent uniquement les
+propriétaires d’un groupe Microsoft 365. Ils sont indexés sous la forme
+`m365go:<groupId>` et comparés aux groupes réellement possédés par le membre.
+Ils ne sont jamais remplacés par le simple identifiant Entra du groupe, car ce
+remplacement donnerait incorrectement l’accès à tous ses membres.
+
 #### Authentification SharePoint
 
 Microsoft Graph continue d’utiliser le secret client existant. L’API REST
@@ -1704,10 +1910,13 @@ l’accès.
 Les modifications de membres d’un groupe SharePoint doivent être détectées par
 une réconciliation planifiée et testées séparément.
 
-Un token refusé, un certificat absent ou expiré, une permission SharePoint
-manquante, une réponse partielle ou une indisponibilité de SharePoint fait
-échouer la recherche Microsoft 365 de manière contrôlée. Le backend ne retire
-jamais le filtre pour maintenir artificiellement la disponibilité.
+Sans certificat configuré, les contenus accessibles uniquement par un groupe
+SharePoint local restent invisibles, sans retirer les protections existantes
+pour les utilisateurs et groupes Entra. Lorsqu’un certificat est configuré,
+un token refusé, un certificat expiré, une permission SharePoint manquante, une
+réponse partielle ou une indisponibilité de SharePoint fait échouer la
+résolution. Le backend ne retire jamais le filtre pour maintenir
+artificiellement la disponibilité.
 
 ### Utilisateurs invités externes
 
@@ -1726,6 +1935,19 @@ Une adresse courriel externe seule ne constitue jamais une autorisation.
 
 Une invitation SharePoint non encore acceptée ne donne pas accès au document
 dans AssistantCore.
+
+### Liens « Personnes de l’organisation disposant du lien »
+
+Un lien de portée `organization` est fondé sur deux conditions : la personne
+appartient au tenant et elle possède le lien. Il ne doit donc pas être converti
+en droit de découverte accordé à tous les membres de l’organisation.
+
+Le document est indexé avec `hasOrganizationLink=true`. Ce champ décrit le
+type de partage et participe à l’empreinte des permissions, mais il n’accorde
+pas à lui seul l’accès dans une recherche normale. Les autorisations
+utilisateur et groupe présentes sur le même document continuent d’être
+appliquées normalement. Une future recherche initiée depuis le lien exact doit
+valider ce lien auprès de Microsoft avant d’utiliser ce droit.
 
 ### Liens « Toute personne disposant du lien »
 
@@ -1804,6 +2026,13 @@ Réessayer avec une attente progressive :
 - erreur temporaire Azure AI Search;
 - indisponibilité Azure Service Bus.
 
+Une ACL momentanément impossible à résoudre reste également récupérable. Le
+Worker effectue les premières reprises avec le délai normal des documents. Une
+fois le nombre habituel de tentatives atteint, il conserve le travail en échec
+temporaire et utilise l’intervalle long de réconciliation ACL. Une correction
+de permission ou la prise en charge d’un nouveau type de partage ne laisse donc
+pas définitivement le document hors de l’index.
+
 Respecter `Retry-After` lorsqu’il est fourni.
 
 ### Erreurs permanentes
@@ -1812,7 +2041,6 @@ Ne pas réessayer indéfiniment :
 
 - format non supporté;
 - document chiffré;
-- permissions impossibles à représenter;
 - site retiré;
 - consentement supprimé;
 - configuration invalide.
@@ -1848,6 +2076,9 @@ Configuration non secrète attendue :
     "ClientId": "<application-multitenant>",
     "AuthorityBaseUrl": "https://login.microsoftonline.com",
     "GraphBaseUrl": "https://graph.microsoft.com",
+    "SharePointCertificatePath": "",
+    "SharePointCertificateBase64": "",
+    "SharePointGroupCacheMinutes": 5,
     "ConsentCallbackUrl": "https://<api>/api/microsoft365/consent/callback",
     "ConsentSuccessRedirectUrl": "https://<frontend>/microsoft365/consent/success",
     "ConsentErrorRedirectUrl": "https://<frontend>/microsoft365/consent/error",
@@ -1888,6 +2119,10 @@ Le démarrage refuse une URL non HTTPS, un `ClientId` vide, un secret absent ou
 une durée de `state` hors de la plage de 1 à 60 minutes. Le secret reste absent
 des fichiers versionnés et provient de `user-secrets` en local.
 
+`SharePointCertificatePath` et `SharePointCertificateBase64` sont mutuellement
+exclusifs. Le chemin est utilisé en local. CERTIF injecte le PFX encodé en
+Base64 et son mot de passe depuis Key Vault.
+
 La valeur `Dimensions` est un exemple et doit correspondre au modèle
 réellement choisi.
 
@@ -1898,6 +2133,8 @@ Le secret de l’App Registration Microsoft 365 est configuré sans être ajout�
 
 ```bash
 dotnet user-secrets --project AssistantCore.Service set "Microsoft365:ClientSecret" "<secret>"
+dotnet user-secrets --project AssistantCore.Service set "Microsoft365:SharePointCertificatePath" "<chemin-absolu-du-pfx>"
+dotnet user-secrets --project AssistantCore.Service set "Microsoft365:SharePointCertificatePassword" "<mot-de-passe-du-pfx>"
 dotnet user-secrets --project AssistantCore.Service set "AzureSearch:ApiKey" "<clé>"
 ```
 
@@ -2140,9 +2377,10 @@ Ne jamais utiliser de données réelles dans ce test.
 <a id="m365-sharepoint-local-groups-testing"></a>
 ### Test 20 — Guide détaillé des groupes SharePoint locaux
 
-Ce scénario sera exécuté lorsque la capacité sortira du backlog. Il exige un
-tenant de certification, deux utilisateurs de test, un site sans données
-sensibles, un index Azure AI Search dédié et un certificat App-Only valide.
+Ce scénario valide la résolution des appartenances aux groupes SharePoint
+locaux. Il exige un tenant de certification, deux utilisateurs de test, un site
+sans données sensibles, un index Azure AI Search dédié et un certificat
+App-Only valide.
 
 #### Préparer Entra ID et AssistantCore
 
@@ -2212,8 +2450,8 @@ sensibles, un index Azure AI Search dédié et un certificat App-Only valide.
 
 #### Vérifier les erreurs de sécurité
 
-1. retirer temporairement le chemin du certificat et vérifier que la recherche
-   échoue explicitement sans appeler Azure AI Search avec un filtre incomplet;
+1. retirer temporairement le chemin du certificat et vérifier que les contenus
+   accessibles uniquement par un groupe SharePoint local restent invisibles;
 2. utiliser un certificat expiré ou non enregistré et vérifier un échec
    contrôlé sans donnée sensible dans les logs;
 3. retirer le consentement `SharePoint -> Sites.Read.All` et vérifier que le
@@ -2337,3 +2575,37 @@ La fonctionnalité est terminée seulement si :
 - [Exécuter une recherche vectorielle](https://learn.microsoft.com/en-us/azure/search/vector-search-how-to-query)
 - [Exécuter une recherche hybride](https://learn.microsoft.com/en-us/azure/search/hybrid-search-how-to-query)
 - [Émulateur Azure Service Bus](https://learn.microsoft.com/azure/service-bus-messaging/overview-emulator)
+
+
+<a id="vector-metric-migration"></a>
+## Métrique vectorielle et migration
+
+`Rag:VectorSearch:Metric` vaut explicitement `cosine`, cohérent avec la stratégie
+actuelle `text-embedding-3-small`. Une autre métrique est rejetée. Azure recommande
+cosine pour les embeddings Azure OpenAI :
+[création d'un index vectoriel](https://learn.microsoft.com/en-us/azure/search/vector-search-how-to-create-index).
+Le score Semantic Ranker (0 à 4) reste distinct du score de recherche hybride :
+[fonctionnement du Semantic Ranker](https://learn.microsoft.com/en-us/azure/search/semantic-search-overview).
+
+Le service et le Worker doivent recevoir la même configuration Rag et AzureSearch.
+L'initialisation écrit `hnswParameters.metric` dans le profil `m365-hnsw`. Si l'index
+existant déclare une métrique différente, elle échoue avant toute écriture avec une
+instruction de migration. Aucun index n'est supprimé automatiquement. Une définition
+historique sans métrique explicite reçoit désormais cosine ; si Azure refuse cette
+mise à jour, utiliser la migration ci-dessous plutôt que supprimer l'index actif.
+
+Pour migrer une métrique incompatible : créer un nouvel index sous un autre nom,
+configurer un Worker pour alimenter ce nouvel index, puis effectuer une réingestion
+complète des sources et ACL (ne pas se limiter aux deltas ou aux versions déjà
+marquées comme indexées). Vérifier la complétude, les permissions et les résultats
+avant de basculer `AzureSearch:IndexName` pour les lecteurs et les writers. Conserver
+l'ancien index pour revenir à l'ancienne configuration en cas de problème. Ne le
+supprimer qu'après validation opérationnelle. La migration et le basculement Azure
+restent des opérations explicites de déploiement ; le démarrage ne les effectue pas.
+
+Voir [Évaluation automatisée de l’agent et de la recherche](../../../recherche/rag-agentique/evaluation-automatisee.md#flow).
+### PDF et images
+
+Les PDF sont d'abord lus avec leur couche de texte native. L'OCR Azure AI Vision Read est utilise uniquement lorsqu'une page est vide ou contient moins de texte que le seuil configure. Pour un PDF mixte, les pages lisibles restent natives et seules les pages insuffisantes sont remplacees par leur resultat OCR.
+
+Les images sont envoyees a Azure AI Vision Read uniquement pour les formats autorises. Un resultat sans texte retourne `NoIndexableContent`; un timeout ou une indisponibilite du fournisseur conserve un statut technique explicite et ne doit pas etre transforme en contenu vide indexable. Les images et textes complets ne sont jamais journalises.

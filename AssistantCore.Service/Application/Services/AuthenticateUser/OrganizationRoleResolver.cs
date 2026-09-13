@@ -14,14 +14,14 @@ public sealed class OrganizationRoleResolver(IOptions<OrganizationRoleOptions> o
             options.Value.RequiredAdmissionRole,
             StringComparer.Ordinal);
 
-        if (!hasAdmission)
-        {
-            throw new ForbiddenException("Organization member access denied.");
-        }
-
         var hasTenantAdmin = appRoles.Contains(
             options.Value.TenantAdminRole,
             StringComparer.Ordinal);
+
+        if (!hasAdmission && !hasTenantAdmin)
+        {
+            throw new ForbiddenException("Organization member access denied.");
+        }
 
         return hasTenantAdmin ? OrganizationRole.Admin : OrganizationRole.User;
     }

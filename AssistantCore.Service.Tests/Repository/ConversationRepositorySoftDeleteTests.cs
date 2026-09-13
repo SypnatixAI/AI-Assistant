@@ -8,6 +8,8 @@ namespace AssistantCore.Service.Tests.Repository;
 
 public sealed class ConversationRepositorySoftDeleteTests
 {
+    private const string CorrelationId = "request-8f812";
+
     [Theory, AutoDomainData]
     public async Task Given_AVisibleConversation_When_SoftDeleteConversationAsync_Then_MarksItDeletedAndSchedulesThePurge(
         Guid organizationId,
@@ -24,7 +26,8 @@ public sealed class ConversationRepositorySoftDeleteTests
         await using var dbContext = CreateDbContext();
         dbContext.Conversations.Add(conversation);
         await dbContext.SaveChangesAsync();
-        var repository = new ConversationRepository(dbContext);
+        var administrativeAuditRepository = new RecordingAdministrativeAuditRepository();
+        var repository = new ConversationRepository(dbContext, administrativeAuditRepository);
 
         // When
         var status = await repository.SoftDeleteConversationAsync(
@@ -32,7 +35,8 @@ public sealed class ConversationRepositorySoftDeleteTests
             ownerMemberId,
             conversation.Id,
             deletedAt,
-            purgeAfter);
+            purgeAfter,
+            CorrelationId);
 
         // Then
         Assert.Equal(ConversationDeleteStatus.Deleted, status);
@@ -44,6 +48,14 @@ public sealed class ConversationRepositorySoftDeleteTests
         Assert.Equal(organizationId, request.OrganizationId);
         Assert.Equal(purgeAfter, request.PurgeAfter);
         Assert.Equal(ConversationPurgeStatus.Pending, request.Status);
+
+        var entry = Assert.Single(administrativeAuditRepository.StagedEntries);
+        Assert.Equal(organizationId, entry.OrganizationId);
+        Assert.Equal(AdministrativeAuditAction.ConversationDeleted, entry.Action);
+        Assert.Equal(ownerMemberId, entry.ActorId);
+        Assert.Equal(conversation.Id, entry.TargetId);
+        Assert.Equal(deletedAt, entry.OccurredAt);
+        Assert.Equal(CorrelationId, entry.CorrelationId);
     }
 
     [Theory, AutoDomainData]
@@ -61,13 +73,15 @@ public sealed class ConversationRepositorySoftDeleteTests
         await using var dbContext = CreateDbContext();
         dbContext.Conversations.Add(conversation);
         await dbContext.SaveChangesAsync();
-        var repository = new ConversationRepository(dbContext);
+        var administrativeAuditRepository = new RecordingAdministrativeAuditRepository();
+        var repository = new ConversationRepository(dbContext, administrativeAuditRepository);
         await repository.SoftDeleteConversationAsync(
             organizationId,
             ownerMemberId,
             conversation.Id,
             deletedAt,
-            deletedAt.AddDays(30));
+            deletedAt.AddDays(30),
+            CorrelationId);
 
         // When
         var status = await repository.SoftDeleteConversationAsync(
@@ -75,7 +89,8 @@ public sealed class ConversationRepositorySoftDeleteTests
             ownerMemberId,
             conversation.Id,
             deletedAt.AddDays(1),
-            deletedAt.AddDays(31));
+            deletedAt.AddDays(31),
+            CorrelationId);
 
         // Then
         Assert.Equal(ConversationDeleteStatus.AlreadyDeleted, status);
@@ -86,6 +101,7 @@ public sealed class ConversationRepositorySoftDeleteTests
         var persisted = await dbContext.Conversations.AsNoTracking()
             .SingleAsync(candidate => candidate.Id == conversation.Id);
         Assert.Equal(deletedAt, persisted.DeletedAt);
+        Assert.Single(administrativeAuditRepository.StagedEntries);
     }
 
     [Theory, AutoDomainData]
@@ -104,7 +120,7 @@ public sealed class ConversationRepositorySoftDeleteTests
         await using var dbContext = CreateDbContext();
         dbContext.Conversations.Add(conversation);
         await dbContext.SaveChangesAsync();
-        var repository = new ConversationRepository(dbContext);
+        var repository = new ConversationRepository(dbContext, new StubAdministrativeAuditRepository());
 
         // When
         var status = await repository.SoftDeleteConversationAsync(
@@ -112,7 +128,8 @@ public sealed class ConversationRepositorySoftDeleteTests
             ownerMemberId,
             conversation.Id,
             deletedAt,
-            deletedAt.AddDays(30));
+            deletedAt.AddDays(30),
+            CorrelationId);
 
         // Then
         Assert.Equal(ConversationDeleteStatus.NotFound, status);

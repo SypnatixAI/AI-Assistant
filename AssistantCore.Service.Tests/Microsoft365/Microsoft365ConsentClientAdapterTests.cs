@@ -128,6 +128,57 @@ public sealed class Microsoft365ConsentClientAdapterTests
         Assert.Equal(3, graphRequestCount);
     }
 
+    [Theory, AutoDomainData]
+    public async Task Given_GraphAcceptsTheRepresentativeCall_When_VerifyRequiredPermissionsAsync_Then_ReturnsTrue(
+        string accessToken)
+    {
+        // Given
+        using var httpClient = new HttpClient(new StubHttpMessageHandler(request =>
+            new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(JsonSerializer.Serialize(new { value = Array.Empty<object>() }))
+            }));
+        var adapter = CreateAdapter(httpClient);
+
+        // When
+        var result = await adapter.VerifyRequiredPermissionsAsync(accessToken, CancellationToken.None);
+
+        // Then
+        Assert.True(result);
+    }
+
+    [Theory, AutoDomainData]
+    public async Task Given_GraphRefusesWithForbidden_When_VerifyRequiredPermissionsAsync_Then_ReturnsFalse(
+        string accessToken)
+    {
+        // Given
+        using var httpClient = new HttpClient(new StubHttpMessageHandler(
+            request => new HttpResponseMessage(HttpStatusCode.Forbidden)));
+        var adapter = CreateAdapter(httpClient);
+
+        // When
+        var result = await adapter.VerifyRequiredPermissionsAsync(accessToken, CancellationToken.None);
+
+        // Then
+        Assert.False(result);
+    }
+
+    [Theory, AutoDomainData]
+    public async Task Given_GraphFailsUnexpectedly_When_VerifyRequiredPermissionsAsync_Then_ThrowsExternalException(
+        string accessToken)
+    {
+        // Given
+        using var httpClient = new HttpClient(new StubHttpMessageHandler(
+            request => new HttpResponseMessage(HttpStatusCode.InternalServerError)));
+        var adapter = CreateAdapter(httpClient);
+
+        // When
+        var action = () => adapter.VerifyRequiredPermissionsAsync(accessToken, CancellationToken.None);
+
+        // Then
+        await Assert.ThrowsAsync<Microsoft365ExternalException>(action);
+    }
+
     private static HttpClient CreateHttpClient(string graphTenantId, string accessToken) =>
         new(new StubHttpMessageHandler(request =>
             request.RequestUri?.Host == "login.microsoftonline.com"

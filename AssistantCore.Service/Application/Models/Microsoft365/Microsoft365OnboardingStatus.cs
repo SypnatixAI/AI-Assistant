@@ -5,8 +5,9 @@ public sealed record Microsoft365OnboardingStatus(
     string ConnectionStatus,
     bool IsConsentComplete,
     bool HasSelectedSite,
-    bool HasIndexedSource)
+    bool HasIndexedSource,
+    bool IsEnvironmentReady = false)
 {
     public bool IsComplete =>
-        IsConsentComplete && HasSelectedSite;
+        IsConsentComplete && HasSelectedSite && HasIndexedSource;
 }

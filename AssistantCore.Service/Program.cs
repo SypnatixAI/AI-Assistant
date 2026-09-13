@@ -1,11 +1,12 @@
 using AssistantCore.Service.Application;
 using AssistantCore.Service.Application.Abstractions;
+using AssistantCore.Service.Application.Services.Microsoft365;
 using AssistantCore.Service.Infrastructure.Authentication;
-using AssistantCore.Service.Infrastructure.AiModels;
 using AssistantCore.Service.Infrastructure.Connectors;
 using AssistantCore.Service.Infrastructure.Cors;
 using AssistantCore.Service.Infrastructure.Microsoft365;
 using AssistantCore.Service.Infrastructure.Health;
+using AssistantCore.Service.Infrastructure.Foundry;
 using AssistantCore.Service.Middleware;
 using AssistantCore.Repository.Persistence;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
@@ -43,9 +44,10 @@ builder.Services.AddSwaggerGen(options =>
 });
 builder.Services.AddApplication(builder.Configuration);
 builder.Services.AddAuthenticationInfrastructure(builder.Configuration);
-builder.Services.AddAiModelInfrastructure(builder.Configuration);
+builder.Services.AddFoundryAgentInfrastructure(builder.Configuration);
 builder.Services.AddConnectorInfrastructure(builder.Configuration);
 builder.Services.AddMicrosoft365Infrastructure(builder.Configuration);
+builder.Services.AddScoped<IMicrosoft365CurrentUserOneDriveClient, Microsoft365CurrentUserOneDriveClientAdapter>();
 builder.Services.AddDispatcher(Assembly.GetExecutingAssembly());
 builder.Services.AddPersistence(builder.Configuration);
 builder.Services.AddHealthChecks()
@@ -54,10 +56,10 @@ builder.Services.AddHealthChecks()
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.
-if (app.Environment.IsDevelopment()
-    || app.Environment.IsEnvironment("Local")
-    || app.Environment.IsEnvironment("LocalLive")
-    || app.Environment.IsEnvironment("Dev"))
+if (builder.Environment.IsDevelopment()
+    || builder.Environment.IsEnvironment("Local")
+    || builder.Environment.IsEnvironment("LocalLive")
+    || builder.Environment.IsEnvironment("Dev"))
 {
     app.UseSwagger();
     app.UseSwaggerUI();

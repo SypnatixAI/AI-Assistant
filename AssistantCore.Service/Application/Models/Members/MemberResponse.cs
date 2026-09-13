@@ -7,7 +7,8 @@ public sealed record MemberResponse(
     string DisplayName,
     string Email,
     string Role,
-    string Status)
+    string Status,
+    int Version)
 {
     public static MemberResponse FromMember(OrganizationMember member) =>
         new(
@@ -15,5 +16,6 @@ public sealed record MemberResponse(
             member.Name,
             member.Email,
             member.Role.ToString(),
-            member.Status.ToString());
+            member.Status.ToString(),
+            member.Version);
 }

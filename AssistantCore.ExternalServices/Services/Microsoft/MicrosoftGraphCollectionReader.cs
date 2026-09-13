@@ -38,7 +38,8 @@ internal sealed class MicrosoftGraphCollectionReader(HttpClient httpClient)
         string accessToken,
         Func<TItem, TResult> map,
         string resourceName,
-        [EnumeratorCancellation] CancellationToken cancellationToken)
+        [EnumeratorCancellation] CancellationToken cancellationToken,
+        IReadOnlyCollection<string>? preferValues = null)
     {
         var visitedPageUris = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         Uri? pageUri = firstPageUri;
@@ -55,7 +56,8 @@ internal sealed class MicrosoftGraphCollectionReader(HttpClient httpClient)
                 pageUri,
                 accessToken,
                 resourceName,
-                cancellationToken);
+                cancellationToken,
+                preferValues);
 
             var deltaLink = ValidateOpaqueContinuationLink(
                 firstPageUri,
@@ -72,7 +74,8 @@ internal sealed class MicrosoftGraphCollectionReader(HttpClient httpClient)
         Uri pageUri,
         string accessToken,
         string resourceName,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        IReadOnlyCollection<string>? preferValues)
     {
         var attempt = 0;
         while (true)
@@ -80,6 +83,10 @@ internal sealed class MicrosoftGraphCollectionReader(HttpClient httpClient)
             attempt++;
             using var request = new HttpRequestMessage(HttpMethod.Get, pageUri);
             request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+            if (preferValues is { Count: > 0 })
+            {
+                request.Headers.TryAddWithoutValidation("Prefer", string.Join(", ", preferValues));
+            }
 
             using var response = await httpClient.SendAsync(request, cancellationToken);
             if (!response.IsSuccessStatusCode)

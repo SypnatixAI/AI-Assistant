@@ -10,6 +10,7 @@ public sealed record Microsoft365Acl
         IReadOnlyCollection<string> allowedEntraGroupIds,
         IReadOnlyCollection<string> allowedSharePointGroupIds,
         bool hasAnonymousLink,
+        bool hasOrganizationLink,
         Microsoft365AclInheritance inheritance)
     {
         AllowedEntraUserIds = NormalizeIdentifiers(
@@ -22,6 +23,7 @@ public sealed record Microsoft365Acl
             allowedSharePointGroupIds,
             nameof(allowedSharePointGroupIds));
         HasAnonymousLink = hasAnonymousLink;
+        HasOrganizationLink = hasOrganizationLink;
         Inheritance = inheritance;
         Fingerprint = CreateFingerprint();
     }
@@ -33,6 +35,8 @@ public sealed record Microsoft365Acl
     public IReadOnlyCollection<string> AllowedSharePointGroupIds { get; }
 
     public bool HasAnonymousLink { get; }
+
+    public bool HasOrganizationLink { get; }
 
     public Microsoft365AclInheritance Inheritance { get; }
 
@@ -68,6 +72,7 @@ public sealed record Microsoft365Acl
             WriteIdentifiers(writer, "allowedEntraGroupIds", AllowedEntraGroupIds);
             WriteIdentifiers(writer, "allowedSharePointGroupIds", AllowedSharePointGroupIds);
             writer.WriteBoolean("hasAnonymousLink", HasAnonymousLink);
+            writer.WriteBoolean("hasOrganizationLink", HasOrganizationLink);
             writer.WriteNumber("inheritance", (int)Inheritance);
             writer.WriteEndObject();
         }

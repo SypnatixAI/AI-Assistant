@@ -77,6 +77,33 @@ public sealed class Microsoft365ConsentClientAdapter(
         throw new InvalidOperationException("Microsoft tenant validation did not complete.");
     }
 
+    public async Task<bool> VerifyRequiredPermissionsAsync(
+        string accessToken,
+        CancellationToken cancellationToken = default)
+    {
+        var configuration = options.Value;
+        EnsureConfigured(configuration);
+
+        try
+        {
+            await graphClient.VerifyRequiredPermissionsAsync(
+                configuration.GraphBaseUrl,
+                accessToken,
+                cancellationToken);
+            return true;
+        }
+        catch (MicrosoftExternalException exception) when (exception.StatusCode == HttpStatusCode.Forbidden)
+        {
+            return false;
+        }
+        catch (MicrosoftExternalException exception)
+        {
+            throw new Microsoft365ExternalException(
+                "Microsoft 365 permission verification could not be completed.",
+                exception);
+        }
+    }
+
     private static void EnsureConfigured(Microsoft365Options configuration)
     {
         if (string.IsNullOrWhiteSpace(configuration.ClientId)

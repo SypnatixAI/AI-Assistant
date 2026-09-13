@@ -24,7 +24,7 @@ public sealed class ConversationRepositoryDeletedVisibilityTests
         await using var dbContext = CreateDbContext();
         dbContext.Conversations.Add(conversation);
         await dbContext.SaveChangesAsync();
-        var repository = new ConversationRepository(dbContext);
+        var repository = new ConversationRepository(dbContext, new StubAdministrativeAuditRepository());
 
         // When
         var found = await repository.FindConversationAsync(
@@ -50,7 +50,7 @@ public sealed class ConversationRepositoryDeletedVisibilityTests
         await using var dbContext = CreateDbContext();
         dbContext.Conversations.Add(conversation);
         await dbContext.SaveChangesAsync();
-        var repository = new ConversationRepository(dbContext);
+        var repository = new ConversationRepository(dbContext, new StubAdministrativeAuditRepository());
 
         // When
         var found = await repository.FindConversationAsync(
@@ -80,7 +80,7 @@ public sealed class ConversationRepositoryDeletedVisibilityTests
         dbContext.Conversations.Add(conversation);
         dbContext.Messages.Add(message);
         await dbContext.SaveChangesAsync();
-        var repository = new ConversationRepository(dbContext);
+        var repository = new ConversationRepository(dbContext, new StubAdministrativeAuditRepository());
 
         // When
         var page = await repository.ListMessagesAsync(
@@ -114,7 +114,7 @@ public sealed class ConversationRepositoryDeletedVisibilityTests
         await using var dbContext = CreateDbContext();
         dbContext.Conversations.AddRange(visibleConversation, deletedConversation);
         await dbContext.SaveChangesAsync();
-        var repository = new ConversationRepository(dbContext);
+        var repository = new ConversationRepository(dbContext, new StubAdministrativeAuditRepository());
 
         // When
         var page = await repository.ListConversationsAsync(
@@ -148,7 +148,7 @@ public sealed class ConversationRepositoryDeletedVisibilityTests
         await using var dbContext = CreateDbContext();
         dbContext.Conversations.Add(conversation);
         await dbContext.SaveChangesAsync();
-        var repository = new ConversationRepository(dbContext);
+        var repository = new ConversationRepository(dbContext, new StubAdministrativeAuditRepository());
 
         // When
         var added = await repository.AddUserMessageAsync(
@@ -181,7 +181,7 @@ public sealed class ConversationRepositoryDeletedVisibilityTests
         await using var dbContext = CreateDbContext();
         dbContext.Conversations.AddRange(visibleConversation, deletedConversation);
         await dbContext.SaveChangesAsync();
-        var repository = new ConversationRepository(dbContext);
+        var repository = new ConversationRepository(dbContext, new StubAdministrativeAuditRepository());
 
         // When
         var page = await repository.ListConversationsAsync(

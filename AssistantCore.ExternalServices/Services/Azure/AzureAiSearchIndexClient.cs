@@ -1,4 +1,6 @@
 using System.Net;
+using System.Text.Json;
+using System.Diagnostics;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using AssistantCore.ExternalServices.Entities.Azure;
@@ -31,9 +33,18 @@ public sealed class AzureAiSearchIndexClient
         string? apiKey,
         int embeddingDimensions,
         string semanticConfigurationName,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        string vectorMetric = "cosine",
+        string? knowledgeSourceName = null,
+        string? knowledgeBaseName = null,
+        string retrievalReasoningEffort = "minimal",
+        string vectorizerName = "m365-azure-openai-vectorizer",
+        AzureOpenAiModelConfiguration? vectorizerModel = null,
+        AzureOpenAiModelConfiguration? planningModel = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(semanticConfigurationName);
+        if (vectorMetric != "cosine") throw new ArgumentException("The configured embedding strategy requires cosine.", nameof(vectorMetric));
+        Activity.Current?.SetTag("rag.vector.metric", vectorMetric);
 
         var uri = new Uri(
             new Uri(endpoint),
@@ -47,6 +58,23 @@ public sealed class AzureAiSearchIndexClient
                 $"Azure AI Search index validation failed with status {(int)existing.StatusCode}.");
         }
 
+        if (existing.IsSuccessStatusCode)
+        {
+            using var definition = await JsonDocument.ParseAsync(await existing.Content.ReadAsStreamAsync(cancellationToken), cancellationToken: cancellationToken);
+            if (definition.RootElement.TryGetProperty("vectorSearch", out var vectorSearch)
+                && vectorSearch.TryGetProperty("algorithms", out var algorithms))
+            {
+                foreach (var algorithm in algorithms.EnumerateArray())
+                {
+                    if (algorithm.GetProperty("name").GetString() == "m365-hnsw"
+                        && algorithm.TryGetProperty("hnswParameters", out var parameters)
+                        && parameters.TryGetProperty("metric", out var metric)
+                        && metric.GetString() != vectorMetric)
+                        throw new AzureAiSearchExternalException("Vector metric migration requires a new index and full reingestion; the existing index was not changed.");
+                }
+            }
+        }
+
         var fields = AzureAiSearchMicrosoft365IndexDefinition.CreateFields()
             .Select(field => CreateField(field, embeddingDimensions))
             .ToArray();
@@ -58,8 +86,33 @@ public sealed class AzureAiSearchIndexClient
                 fields,
                 vectorSearch = new
                 {
-                    algorithms = new[] { new { name = "m365-hnsw", kind = "hnsw" } },
-                    profiles = new[] { new { name = "m365-vector-profile", algorithm = "m365-hnsw" } }
+                    algorithms = new[] { new { name = "m365-hnsw", kind = "hnsw", hnswParameters = new { metric = vectorMetric } } },
+                    profiles = new[]
+                    {
+                        new
+                        {
+                            name = "m365-vector-profile",
+                            algorithm = "m365-hnsw",
+                            vectorizer = vectorizerModel is null ? null : vectorizerName
+                        }
+                    },
+                    vectorizers = vectorizerModel is null
+                        ? null
+                        : new[]
+                        {
+                            new
+                            {
+                                name = vectorizerName,
+                                kind = "azureOpenAI",
+                                azureOpenAIParameters = new
+                                {
+                                    resourceUri = vectorizerModel.ResourceUri,
+                                    deploymentId = vectorizerModel.DeploymentId,
+                                    modelName = vectorizerModel.ModelName,
+                                    apiKey = vectorizerModel.ApiKey
+                                }
+                            }
+                        }
                 },
                 semantic = new
                 {
@@ -85,6 +138,137 @@ public sealed class AzureAiSearchIndexClient
         {
             throw new AzureAiSearchExternalException(
                 $"Azure AI Search index creation failed with status {(int)created.StatusCode}.");
+        }
+
+        if (!string.IsNullOrWhiteSpace(knowledgeSourceName)
+            && !string.IsNullOrWhiteSpace(knowledgeBaseName))
+        {
+            await EnsureKnowledgeSourceCreatedAsync(
+                endpoint,
+                indexName,
+                apiKey,
+                knowledgeSourceName,
+                cancellationToken);
+            await EnsureKnowledgeBaseCreatedAsync(
+                endpoint,
+                apiKey,
+                knowledgeSourceName,
+                knowledgeBaseName,
+                retrievalReasoningEffort,
+                planningModel,
+                cancellationToken);
+        }
+    }
+
+    private async Task EnsureKnowledgeSourceCreatedAsync(
+        string endpoint,
+        string indexName,
+        string? apiKey,
+        string knowledgeSourceName,
+        CancellationToken cancellationToken)
+    {
+        using var request = new HttpRequestMessage(
+            HttpMethod.Put,
+            new Uri(
+                new Uri(endpoint),
+                $"/knowledgesources/{Uri.EscapeDataString(knowledgeSourceName)}?api-version=2026-08-01-preview"))
+        {
+            Content = JsonContent.Create(new
+            {
+                name = knowledgeSourceName,
+                kind = "searchIndex",
+                description = "Microsoft 365 indexed content knowledge source for Synaptix.",
+                encryptionKey = (object?)null,
+                searchIndexParameters = new
+                {
+                    searchIndexName = indexName,
+                    searchFields = new[]
+                    {
+                        new { name = "title" },
+                        new { name = "content" }
+                    },
+                    sourceDataFields = new[]
+                    {
+                        new { name = "chunkId" },
+                        new { name = "sourceType" },
+                        new { name = "title" },
+                        new { name = "content" },
+                        new { name = "siteId" },
+                        new { name = "driveId" },
+                        new { name = "driveItemId" },
+                        new { name = "url" },
+                        new { name = "modifiedAt" }
+                    }
+                }
+            })
+        };
+        await AuthorizeAsync(request, apiKey, cancellationToken);
+        using var response = await httpClient.SendAsync(request, cancellationToken);
+        if (!response.IsSuccessStatusCode)
+        {
+            var errorBody = await response.Content.ReadAsStringAsync(cancellationToken);
+            throw new AzureAiSearchExternalException(
+                $"Azure AI Search knowledge source creation failed with status {(int)response.StatusCode}: {errorBody}");
+        }
+    }
+
+    private async Task EnsureKnowledgeBaseCreatedAsync(
+        string endpoint,
+        string? apiKey,
+        string knowledgeSourceName,
+        string knowledgeBaseName,
+        string retrievalReasoningEffort,
+        AzureOpenAiModelConfiguration? planningModel,
+        CancellationToken cancellationToken)
+    {
+        using var request = new HttpRequestMessage(
+            HttpMethod.Put,
+            new Uri(
+                new Uri(endpoint),
+                $"/knowledgebases/{Uri.EscapeDataString(knowledgeBaseName)}?api-version=2026-08-01-preview"))
+        {
+            Content = JsonContent.Create(new
+            {
+                name = knowledgeBaseName,
+                description = "Synaptix knowledge base for authorized Microsoft 365 retrieval.",
+                knowledgeSources = new[]
+                {
+                    new
+                    {
+                        name = knowledgeSourceName
+                    }
+                },
+                outputMode = "extractiveData",
+                retrievalReasoningEffort = new
+                {
+                    kind = retrievalReasoningEffort
+                },
+                models = planningModel is null
+                    ? null
+                    : new[]
+                    {
+                        new
+                        {
+                            kind = "azureOpenAI",
+                            azureOpenAIParameters = new
+                            {
+                                resourceUri = planningModel.ResourceUri,
+                                deploymentId = planningModel.DeploymentId,
+                                modelName = planningModel.ModelName,
+                                apiKey = planningModel.ApiKey
+                            }
+                        }
+                    },
+                encryptionKey = (object?)null
+            })
+        };
+        await AuthorizeAsync(request, apiKey, cancellationToken);
+        using var response = await httpClient.SendAsync(request, cancellationToken);
+        if (!response.IsSuccessStatusCode)
+        {
+            var errorBody = await response.Content.ReadAsStringAsync(cancellationToken);
+            throw new AzureAiSearchExternalException(
+                $"Azure AI Search knowledge base creation failed with status {(int)response.StatusCode}: {errorBody}");
         }
     }
 

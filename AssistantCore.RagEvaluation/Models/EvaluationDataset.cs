@@ -16,13 +16,15 @@ public sealed record RagEvaluationCase(
     IReadOnlyCollection<string> Modes,
     IReadOnlyCollection<EvaluationDocument> Documents,
     EvaluationExpectation Expected,
-    EvaluationFixture Fixture);
+    EvaluationFixture Fixture,
+    bool AdaptiveComparisonOnly = false);
 
 public sealed record EvaluationDocument(
     string Reference,
     string Title,
     string Content,
-    bool Allowed = true);
+    bool Allowed = true,
+    double? SemanticScore = null);
 
 public sealed record EvaluationExpectation(
     EvaluationOutcome Outcome,
@@ -37,7 +39,8 @@ public sealed record EvaluationFixture(
     string Answer,
     IReadOnlyCollection<IReadOnlyCollection<string>> RetrievalRounds,
     IReadOnlyCollection<string> CitedSourceReferences,
-    IReadOnlyCollection<string> SearchQueries);
+    IReadOnlyCollection<string> SearchQueries,
+    IReadOnlyCollection<string>? CorrectedSourceReferences = null);
 
 [JsonConverter(typeof(JsonStringEnumConverter<EvaluationOutcome>))]
 public enum EvaluationOutcome

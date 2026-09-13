@@ -21,7 +21,7 @@ public sealed class ConversationRepositoryListMessagesTests
         dbContext.Messages.Add(ownMessage);
         dbContext.Messages.Add(CreateMessage(otherConversationId, baseTime));
         await dbContext.SaveChangesAsync();
-        var repository = new ConversationRepository(dbContext);
+        var repository = new ConversationRepository(dbContext, new StubAdministrativeAuditRepository());
 
         // When
         var page = await repository.ListMessagesAsync(
@@ -46,7 +46,7 @@ public sealed class ConversationRepositoryListMessagesTests
         }
 
         await dbContext.SaveChangesAsync();
-        var repository = new ConversationRepository(dbContext);
+        var repository = new ConversationRepository(dbContext, new StubAdministrativeAuditRepository());
 
         // When
         var page = await repository.ListMessagesAsync(
@@ -71,7 +71,7 @@ public sealed class ConversationRepositoryListMessagesTests
         }
 
         await dbContext.SaveChangesAsync();
-        var repository = new ConversationRepository(dbContext);
+        var repository = new ConversationRepository(dbContext, new StubAdministrativeAuditRepository());
 
         // When
         var page = await repository.ListMessagesAsync(
@@ -97,7 +97,7 @@ public sealed class ConversationRepositoryListMessagesTests
         await using var dbContext = CreateDbContext();
         dbContext.Messages.AddRange(oldest, newest, middle);
         await dbContext.SaveChangesAsync();
-        var repository = new ConversationRepository(dbContext);
+        var repository = new ConversationRepository(dbContext, new StubAdministrativeAuditRepository());
 
         // When
         var page = await repository.ListMessagesAsync(
@@ -121,7 +121,7 @@ public sealed class ConversationRepositoryListMessagesTests
         await using var dbContext = CreateDbContext();
         dbContext.Messages.AddRange(higherId, lowerId);
         await dbContext.SaveChangesAsync();
-        var repository = new ConversationRepository(dbContext);
+        var repository = new ConversationRepository(dbContext, new StubAdministrativeAuditRepository());
 
         // When
         var page = await repository.ListMessagesAsync(
@@ -144,7 +144,7 @@ public sealed class ConversationRepositoryListMessagesTests
         await using var dbContext = CreateDbContext();
         dbContext.Messages.AddRange(messages);
         await dbContext.SaveChangesAsync();
-        var repository = new ConversationRepository(dbContext);
+        var repository = new ConversationRepository(dbContext, new StubAdministrativeAuditRepository());
 
         // When: first page (most recent 3, i.e. minutes 3,4,5) then the older page
         var firstPage = await repository.ListMessagesAsync(
@@ -185,7 +185,7 @@ public sealed class ConversationRepositoryListMessagesTests
         await using var dbContext = CreateDbContext();
         dbContext.Messages.AddRange(messageWithSources, messageWithoutSources);
         await dbContext.SaveChangesAsync();
-        var repository = new ConversationRepository(dbContext);
+        var repository = new ConversationRepository(dbContext, new StubAdministrativeAuditRepository());
 
         // When
         var page = await repository.ListMessagesAsync(
@@ -219,7 +219,7 @@ public sealed class ConversationRepositoryListMessagesTests
         dbContext.Conversations.Add(archivedConversation);
         dbContext.Messages.Add(CreateMessage(archivedConversation.Id, DateTimeOffset.UtcNow));
         await dbContext.SaveChangesAsync();
-        var repository = new ConversationRepository(dbContext);
+        var repository = new ConversationRepository(dbContext, new StubAdministrativeAuditRepository());
 
         // When
         var conversation = await repository.FindConversationAsync(
@@ -257,7 +257,7 @@ public sealed class ConversationRepositoryListMessagesTests
         }
 
         await dbContext.SaveChangesAsync();
-        var repository = new ConversationRepository(dbContext);
+        var repository = new ConversationRepository(dbContext, new StubAdministrativeAuditRepository());
 
         // When
         var page = await repository.ListMessagesAsync(

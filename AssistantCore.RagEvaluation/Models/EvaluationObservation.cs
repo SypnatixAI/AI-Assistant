@@ -45,6 +45,6 @@ public sealed record EvaluationSummary(
 public sealed record EvaluationReport(
     DateTimeOffset GeneratedAtUtc,
     string Mode,
-    string Model,
+    string AgentIdentifier,
     EvaluationSummary Summary,
     IReadOnlyCollection<CaseEvaluationResult> Results);

@@ -1,11 +1,15 @@
 using AssistantCore.Repository.Domain.Entities;
 using AssistantCore.Repository.Domain.Enums;
 using AssistantCore.Repository.Persistence;
+using AssistantCore.Repository.Repositories;
+using AssistantCore.Repository.Repositories.Audit;
 using Microsoft.EntityFrameworkCore;
 
 namespace AssistantCore.Repository.Queries;
 
-public sealed class OrganizationMemberQueries(AssistantCoreDbContext dbContext) : IOrganizationMemberQueries
+public sealed class OrganizationMemberQueries(
+    AssistantCoreDbContext dbContext,
+    IAdministrativeAuditRepository administrativeAuditRepository) : IOrganizationMemberQueries
 {
     public async Task<IReadOnlyCollection<OrganizationMember>> GetMembers(
         Guid organizationId,
@@ -17,6 +21,25 @@ public sealed class OrganizationMemberQueries(AssistantCoreDbContext dbContext) 
             .OrderBy(member => member.Name)
             .ThenBy(member => member.Email)
             .ToListAsync(cancellationToken);
+    }
+
+    public async Task<OrganizationMemberWithOrganization?> FindMemberWithOrganization(
+        IdentityProvider identityProvider,
+        string externalOrganizationId,
+        string externalUserId,
+        CancellationToken cancellationToken = default)
+    {
+        return await dbContext.OrganizationMembers
+            .AsNoTracking()
+            .Where(member =>
+                member.IdentityProvider == identityProvider
+                && member.ExternalUserId == externalUserId
+                && member.Organization.IdentityProvider == identityProvider
+                && member.Organization.ExternalTenantId == externalOrganizationId)
+            .Select(member => new OrganizationMemberWithOrganization(
+                member.Organization,
+                member))
+            .SingleOrDefaultAsync(cancellationToken);
     }
 
     public async Task<OrganizationMember?> FindMember(
@@ -91,6 +114,9 @@ public sealed class OrganizationMemberQueries(AssistantCoreDbContext dbContext) 
     public async Task<OrganizationMember> UpdateRole(
         OrganizationMember member,
         OrganizationRole role,
+        Guid actorId,
+        DateTimeOffset occurredAt,
+        string correlationId,
         CancellationToken cancellationToken = default)
     {
         if (member.Role == role)
@@ -98,10 +124,84 @@ public sealed class OrganizationMemberQueries(AssistantCoreDbContext dbContext) 
             return member;
         }
 
+        var previousRole = member.Role;
         dbContext.OrganizationMembers.Attach(member);
         member.Role = role;
+
+        administrativeAuditRepository.Stage(AdministrativeAuditEntryFactory.Create(
+            member.OrganizationId,
+            AdministrativeAuditSubjectTypes.Member,
+            actorId,
+            AdministrativeAuditAction.MemberRoleChanged,
+            AdministrativeAuditSubjectTypes.Member,
+            member.Id,
+            occurredAt,
+            new Dictionary<string, object?> { ["role"] = previousRole.ToString() },
+            new Dictionary<string, object?> { ["role"] = role.ToString() },
+            correlationId));
+
         await dbContext.SaveChangesAsync(cancellationToken);
         return member;
+    }
+
+    public async Task<MemberUpdateResult> UpdateStatus(
+        Guid organizationId,
+        Guid memberId,
+        RecordStatus status,
+        int? expectedVersion,
+        Guid actorId,
+        DateTimeOffset occurredAt,
+        string correlationId,
+        CancellationToken cancellationToken = default)
+    {
+        var member = await dbContext.OrganizationMembers
+            .SingleOrDefaultAsync(
+                candidate =>
+                    candidate.Id == memberId
+                    && candidate.OrganizationId == organizationId,
+                cancellationToken);
+
+        if (member is null)
+        {
+            return MemberUpdateResult.NotFound;
+        }
+
+        if (expectedVersion is not null && member.Version != expectedVersion)
+        {
+            return MemberUpdateResult.VersionConflict;
+        }
+
+        if (member.Status == status)
+        {
+            return MemberUpdateResult.Updated(member);
+        }
+
+        var previousStatus = member.Status;
+        member.Status = status;
+        member.Version += 1;
+
+        administrativeAuditRepository.Stage(AdministrativeAuditEntryFactory.Create(
+            organizationId,
+            AdministrativeAuditSubjectTypes.Member,
+            actorId,
+            AdministrativeAuditAction.MemberStatusChanged,
+            AdministrativeAuditSubjectTypes.Member,
+            member.Id,
+            occurredAt,
+            new Dictionary<string, object?> { ["status"] = previousStatus.ToString() },
+            new Dictionary<string, object?> { ["status"] = status.ToString() },
+            correlationId));
+
+        try
+        {
+            await dbContext.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            return MemberUpdateResult.VersionConflict;
+        }
+
+        return MemberUpdateResult.Updated(member);
     }
 
     public async Task RecordSuccessfulAuthenticationAsync(

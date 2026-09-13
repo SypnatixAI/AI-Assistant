@@ -34,6 +34,20 @@ public sealed class Microsoft365SecurityIdentityNormalizerTests
         Assert.Equal(objectId.ToString("D"), result);
     }
 
+    [Theory, AutoDomainData]
+    public void Given_AnEntraGroupOwnerObjectId_When_NormalizeEntraGroupOwnerId_Then_ReturnsScopedIdentifier(
+        Guid groupObjectId)
+    {
+        // Given
+        var normalizer = new Microsoft365SecurityIdentityNormalizer();
+
+        // When
+        var result = normalizer.NormalizeEntraGroupOwnerId(groupObjectId.ToString("B"));
+
+        // Then
+        Assert.Equal($"m365go:{groupObjectId:D}", result);
+    }
+
     [Theory]
     [InlineAutoDomainData("Ada Lovelace")]
     [InlineAutoDomainData("ada@contoso.com")]

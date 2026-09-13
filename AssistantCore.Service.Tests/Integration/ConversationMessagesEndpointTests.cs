@@ -190,8 +190,8 @@ public sealed class ConversationMessagesEndpointTests
                     configuration.AddIntegrationTestDefaults().AddInMemoryCollection(
                         new Dictionary<string, string?>
                         {
-                            ["AiModels:Providers:OpenAI:ApiKey"] = "integration-test-secret",
-                            ["Microsoft365:ClientSecret"] = "integration-test-secret"
+                            ["Microsoft365:ClientSecret"] = "integration-test-secret",
+                            ["Microsoft365:ClientStateHmacKey"] = "integration-test-client-state-hmac-key"
                         }));
                 builder.ConfigureTestServices(services =>
                 {

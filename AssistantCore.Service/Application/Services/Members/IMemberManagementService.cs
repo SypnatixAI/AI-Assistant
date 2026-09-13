@@ -11,4 +11,10 @@ public interface IMemberManagementService
         Guid memberId,
         string role,
         CancellationToken cancellationToken = default);
+
+    Task<OrganizationMember> UpdateMemberStatusAsync(
+        Guid memberId,
+        string status,
+        int? expectedVersion,
+        CancellationToken cancellationToken = default);
 }

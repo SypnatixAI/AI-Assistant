@@ -48,6 +48,10 @@ public sealed class OrganizationMemberConfiguration : IEntityTypeConfiguration<O
             .HasMaxLength(20)
             .IsRequired();
 
+        builder.Property(member => member.Version)
+            .IsConcurrencyToken()
+            .IsRequired();
+
         builder.HasIndex(member => new { member.OrganizationId, member.Email })
             .IsUnique();
 

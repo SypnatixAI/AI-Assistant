@@ -59,6 +59,7 @@ public sealed class Microsoft365PassageIndexingServiceTests
             [],
             [],
             false,
+            false,
             Microsoft365AclInheritance.Unique);
         var operations = new List<string>();
         var writer = new RecordingIndexWriter(operations);

@@ -111,6 +111,8 @@ public sealed class LocalJwtAuthenticationTests
             .WithWebHostBuilder(builder =>
             {
                 builder.UseEnvironment("Local");
+                builder.ConfigureAppConfiguration(configuration =>
+                    configuration.AddIntegrationTestDefaults());
                 builder.ConfigureTestServices(services =>
                 {
                     services.RemoveAll<IDispatcher>();

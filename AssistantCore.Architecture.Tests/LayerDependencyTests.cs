@@ -1,12 +1,13 @@
 using AssistantCore.ExternalServices;
-using AssistantCore.ExternalServices.Services.OpenAI;
 using AssistantCore.ExternalServices.Services.Microsoft;
 using AssistantCore.ExternalServices.Services.Azure;
 using AssistantCore.Repository.Domain.Entities;
-using AssistantCore.Service.Application.Services.Messages.AiModels.Providers.OpenAI;
 using AssistantCore.Service.Controllers;
-using AssistantCore.Service.Infrastructure.AiModels.OpenAI;
 using AssistantCore.Service.Infrastructure.Microsoft365;
+using AssistantCore.Service.Infrastructure.Foundry;
+using AssistantCore.Service.Application.Services.Messages.AgentRuntime;
+using AssistantCore.Service.Application.Services.Messages.Tabular;
+using AssistantCore.ExternalServices.Services.Foundry;
 using AssistantCore.Service.Application.Services.Microsoft365;
 using NetArchTest.Rules;
 using Xunit;
@@ -15,6 +16,36 @@ namespace AssistantCore.Architecture.Tests;
 
 public sealed class LayerDependencyTests
 {
+    [Fact]
+    public void Given_SpreadsheetAnalysis_When_ValidateExternalCallChain_Then_UsesApplicationInterfacesAndAdapters()
+    {
+        // Given
+        var serviceType = typeof(Microsoft365SpreadsheetAnalysisService);
+        var workbookReaderType = typeof(ISpreadsheetWorkbookReader);
+        var workbookReaderAdapterType = typeof(SpreadsheetWorkbookReaderAdapter);
+        var externalReaderType = typeof(MicrosoftExcelTableReaderClient);
+
+        // When
+        var violations = new List<string>();
+        if (!HasConstructorParameter(serviceType, workbookReaderType))
+        {
+            violations.Add("Spreadsheet analysis must depend on the application workbook reader interface.");
+        }
+
+        if (!workbookReaderType.IsAssignableFrom(workbookReaderAdapterType))
+        {
+            violations.Add("The spreadsheet workbook adapter must implement the application interface.");
+        }
+
+        if (!HasConstructorParameter(workbookReaderAdapterType, externalReaderType))
+        {
+            violations.Add("The spreadsheet workbook adapter must call the external Excel reader.");
+        }
+
+        // Then
+        Assert.Empty(violations);
+    }
+
     [Fact]
     public void Given_ApplicationServices_When_ValidateApplicationServiceDependencies_Then_ControllersAreForbidden()
     {
@@ -120,20 +151,30 @@ public sealed class LayerDependencyTests
     }
 
     [Fact]
-    public void Given_OpenAiProvider_When_ValidateOpenAiExternalCallChain_Then_ProviderUsesAdapterAndExternalClient()
+    public void Given_FoundryAgentRuntime_When_ValidateFoundryExternalCallChain_Then_RuntimeUsesAdapterAndExternalClient()
     {
         // Given
-        var providerType = typeof(OpenAiModelProvider);
-        var applicationClientType = typeof(IOpenAiResponsesClient);
-        var adapterType = typeof(OpenAiResponsesClientAdapter);
-        var externalClientType = typeof(OpenAiResponsesClient);
+        var runtimeType = typeof(FoundryAgentRuntime);
+        var applicationClientType = typeof(IFoundryAgentClient);
+        var adapterType = typeof(FoundryAgentClientAdapter);
+        var externalClientType = typeof(FoundryAgentExternalClient);
 
         // When
-        var violations = ValidateOpenAiExternalCallChain(
-            providerType,
-            applicationClientType,
-            adapterType,
-            externalClientType);
+        var violations = new List<string>();
+        if (!HasConstructorParameter(runtimeType, applicationClientType))
+        {
+            violations.Add($"{runtimeType.FullName} must depend on {applicationClientType.FullName}.");
+        }
+
+        if (!applicationClientType.IsAssignableFrom(adapterType))
+        {
+            violations.Add($"{adapterType.FullName} must implement {applicationClientType.FullName}.");
+        }
+
+        if (!HasConstructorParameter(adapterType, externalClientType))
+        {
+            violations.Add($"{adapterType.FullName} must depend on {externalClientType.FullName}.");
+        }
 
         // Then
         Assert.Empty(violations);
@@ -351,7 +392,9 @@ public sealed class LayerDependencyTests
             .HaveDependencyOnAny(
                 "AssistantCore.ExternalServices",
                 "Azure.Identity",
+                "Azure.AI.Projects",
                 "Azure.Messaging.ServiceBus",
+                "Microsoft.Agents.AI.Foundry",
                 "OpenAI.Responses",
                 "System.ClientModel")
             .GetResult();
@@ -382,7 +425,9 @@ public sealed class LayerDependencyTests
             .HaveDependencyOnAny(
                 "AssistantCore.ExternalServices.Services",
                 "Azure.Identity",
+                "Azure.AI.Projects",
                 "Azure.Messaging.ServiceBus",
+                "Microsoft.Agents.AI.Foundry",
                 "OpenAI.Responses",
                 "System.ClientModel")
             .GetResult();
@@ -405,32 +450,6 @@ public sealed class LayerDependencyTests
             .GetResult();
 
         return result.FailingTypeNames ?? [];
-    }
-
-    private static IReadOnlyCollection<string> ValidateOpenAiExternalCallChain(
-        Type providerType,
-        Type applicationClientType,
-        Type adapterType,
-        Type externalClientType)
-    {
-        var violations = new List<string>();
-
-        if (!HasConstructorParameter(providerType, applicationClientType))
-        {
-            violations.Add($"{providerType.FullName} must depend on {applicationClientType.FullName}.");
-        }
-
-        if (!applicationClientType.IsAssignableFrom(adapterType))
-        {
-            violations.Add($"{adapterType.FullName} must implement {applicationClientType.FullName}.");
-        }
-
-        if (!HasConstructorParameter(adapterType, externalClientType))
-        {
-            violations.Add($"{adapterType.FullName} must depend on {externalClientType.FullName}.");
-        }
-
-        return violations;
     }
 
     private static bool HasConstructorParameter(Type type, Type parameterType) =>

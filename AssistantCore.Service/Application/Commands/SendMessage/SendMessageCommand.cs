@@ -5,5 +5,4 @@ namespace AssistantCore.Service.Application.Commands.SendMessage;
 
 public sealed record SendMessageCommand(
     Guid? ConversationId,
-    string Message,
-    string? Model) : IRequest<SendMessageResponse>;
+    string Message) : IRequest<SendMessageResponse>;

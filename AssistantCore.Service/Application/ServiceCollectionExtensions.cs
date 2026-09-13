@@ -1,22 +1,23 @@
 using AssistantCore.Service.Application.Configuration;
+using AssistantCore.Service.Application.Services.Backoffice;
 using AssistantCore.Service.Application.Services.AuthenticateUser;
 using AssistantCore.Service.Application.Services.Conversations;
 using AssistantCore.Service.Application.Services.Conversations.Audit;
 using AssistantCore.Service.Application.Services.Conversations.Pagination;
 using AssistantCore.Service.Application.Services.Members;
 using AssistantCore.Service.Application.Services.Messages;
+using AssistantCore.Service.Application.Services.Messages.AgentRuntime;
 using AssistantCore.Service.Application.Services.Messages.Authorization;
-using AssistantCore.Service.Application.Services.Messages.Evidence;
 using AssistantCore.Service.Application.Services.Messages.Lifecycle;
-using AssistantCore.Service.Application.Services.Messages.Memory;
-using AssistantCore.Service.Application.Services.Messages.Orchestration;
 using AssistantCore.Service.Application.Services.Messages.Responses;
 using AssistantCore.Service.Application.Services.Messages.Streaming;
+using AssistantCore.Service.Application.Services.Messages.Tabular;
 using AssistantCore.Service.Application.Services.Messages.Tools;
 using AssistantCore.Service.Application.Services.Messages.Validation;
 using AssistantCore.Service.Application.Services.Microsoft365;
 using AssistantCore.Service.Application.Services.Organizations;
 using AssistantCore.Service.Application.Services.TenantAdmission;
+using AssistantCore.Service.Application.Services.Usage;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -40,19 +41,14 @@ public static class ServiceCollectionExtensions
                 options => options.MaximumMessageLength > 0,
                 $"{MessagesOptions.SectionName}:{nameof(MessagesOptions.MaximumMessageLength)} must be greater than zero.")
             .ValidateOnStart();
-        services.AddOptions<MessageOrchestrationOptions>()
-            .Bind(configuration.GetSection(MessageOrchestrationOptions.SectionName))
+        services.AddOptions<AgentRuntimeOptions>()
+            .Bind(configuration.GetSection(AgentRuntimeOptions.SectionName))
             .Validate(
                 options => options.MaximumExecutionTimeSeconds > 0
-                    && options.MaximumToolCalls > 0
-                    && options.MaximumModelTokens > 0
-                    && options.MaximumEstimatedCost > 0
-                    && options.RetrievalCandidateLimit > 0
-                    && options.FinalEvidenceLimit > 0
-                    && options.MaximumContextSize > 0
-                    && options.MaximumRepeatedToolCalls > 0
-                    && options.MaximumParallelToolCalls > 0,
-                $"Every value in {MessageOrchestrationOptions.SectionName} must be greater than zero.")
+                    && options.RetrievalCandidateLimit is >= 50 and <= 200
+                    && options.FinalEvidenceLimit is >= 1 and <= 50
+                    && options.FinalEvidenceLimit <= options.RetrievalCandidateLimit,
+                $"{AgentRuntimeOptions.SectionName} requires a candidate limit from 50 to 200 and a final evidence limit from 1 to 50 that does not exceed it.")
             .ValidateOnStart();
         services.AddOptions<ConversationListingOptions>()
             .Bind(configuration.GetSection(ConversationListingOptions.SectionName))
@@ -79,6 +75,13 @@ public static class ServiceCollectionExtensions
                     && !string.IsNullOrWhiteSpace(options.TenantAdminRole),
                 $"{OrganizationRoleOptions.SectionName}:{nameof(OrganizationRoleOptions.RequiredAdmissionRole)} and {nameof(OrganizationRoleOptions.TenantAdminRole)} are required.")
             .ValidateOnStart();
+        services.AddOptions<UsageOptions>()
+            .Bind(configuration.GetSection(UsageOptions.SectionName))
+            .Validate(
+                options => options.DefaultMonthlyTokenLimit > 0,
+                $"{UsageOptions.SectionName}:{nameof(UsageOptions.DefaultMonthlyTokenLimit)} must be greater than zero.")
+            .ValidateOnStart();
+        services.AddScoped<IUsageTrackingService, UsageTrackingService>();
         services.AddScoped<ISendMessageCommandValidator, SendMessageCommandValidator>();
         services.AddSingleton<IConversationCursorCodec, ConversationCursorCodec>();
         services.AddSingleton<IConversationMessageCursorCodec, ConversationMessageCursorCodec>();
@@ -93,24 +96,19 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IOrganizationRoleResolver, OrganizationRoleResolver>();
         services.AddScoped<IMemberManagementService, MemberManagementService>();
         services.AddScoped<IOrganizationManagementService, OrganizationManagementService>();
+        services.AddScoped<IBackofficeOrganizationService, BackofficeOrganizationService>();
         services.AddMicrosoft365Application();
         services.AddScoped<IMessageProcessingLifecycleService, MessageProcessingLifecycleService>();
-        services.AddScoped<IConversationMemorySummaryService, ConversationMemorySummaryService>();
-        services.AddScoped<IMessageToolOrchestrator, MessageToolOrchestrator>();
+        services.AddScoped<IAgentRuntime, FoundryAgentRuntime>();
         services.AddSingleton<ISendMessageResponseFactory, SendMessageResponseFactory>();
         services.AddScoped<IMessageStreamErrorReporter, MessageStreamErrorReporter>();
-        services.AddScoped<IAiModelTurnService, AiModelTurnService>();
-        services.AddScoped<IToolCallBatchExecutor, ToolCallBatchExecutor>();
-        services.AddScoped<IOrchestrationContinuationPolicy, OrchestrationContinuationPolicy>();
-        services.AddScoped<IOrchestrationResultBuilder, OrchestrationResultBuilder>();
-        services.AddSingleton<IEvidenceCitationResolver, EvidenceCitationResolver>();
-        services.AddSingleton<IToolCallFingerprintGenerator, ToolCallFingerprintGenerator>();
-        services.AddSingleton<IAiToolFailureWarningFactory, AiToolFailureWarningFactory>();
         services.AddScoped<IAiToolRegistry, AiToolRegistry>();
         services.AddScoped<IAiToolArgumentSchemaValidator, AiToolArgumentSchemaValidator>();
         services.AddScoped<IAiToolArgumentSecurityValidator, AiToolArgumentSecurityValidator>();
         services.AddScoped<IAiToolDateRangeValidator, AiToolDateRangeValidator>();
         services.AddScoped<IAiToolCallValidator, AiToolCallValidator>();
+        services.AddScoped<IMicrosoft365SpreadsheetAnalysisService, Microsoft365SpreadsheetAnalysisService>();
+        services.AddSingleton<ISpreadsheetAnalysisEngine, SpreadsheetAnalysisEngine>();
 
         return services;
     }
@@ -126,6 +124,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IMicrosoft365SiteDiscoveryService, Microsoft365SiteDiscoveryService>();
         services.AddScoped<IMicrosoft365SiteSelectionService, Microsoft365SiteSelectionService>();
         services.AddScoped<IMicrosoft365DriveAdministrationService, Microsoft365DriveAdministrationService>();
+        services.AddScoped<IMicrosoft365CurrentUserOneDriveIndexingService, Microsoft365CurrentUserOneDriveIndexingService>();
 
         return services;
     }
@@ -153,6 +152,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<
             IMicrosoft365PendingSynchronizationService,
             Microsoft365PendingSynchronizationService>();
+        services.AddScoped<IMicrosoft365IndexCleanupService, Microsoft365IndexCleanupService>();
         services.AddScoped<
             IMicrosoft365ContentAclSynchronizationService,
             Microsoft365ContentAclSynchronizationService>();

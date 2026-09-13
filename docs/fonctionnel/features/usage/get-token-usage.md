@@ -41,13 +41,14 @@ Pour le MVP, le quota est :
 - exprimé en jetons réellement déclarés par les fournisseurs de modèles
 - consommé par tous les appels au modèle nécessaires à une question
 
-Une orchestration peut appeler le modèle plusieurs fois pour demander des
+L’agent Foundry peut effectuer plusieurs appels au modèle pour demander des
 outils et produire la réponse finale. Les jetons de tous ces appels comptent.
 
 Le quota commercial est différent :
 
 - de la taille maximale du contexte d'un modèle
-- de `Messages:Orchestration:MaximumModelTokens`, qui protège une seule demande
+- de `Messages:AgentRuntime:MaximumExecutionTimeSeconds`, qui borne la durée
+  technique d’une seule demande
 - d'une estimation affichée avant l'envoi
 
 Le montant exact du quota et le jour de renouvellement proviennent de la

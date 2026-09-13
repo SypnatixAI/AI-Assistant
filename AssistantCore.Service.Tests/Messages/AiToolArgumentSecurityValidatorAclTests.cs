@@ -11,6 +11,7 @@ public sealed class AiToolArgumentSecurityValidatorAclTests
     [InlineAutoDomainData("allowedGroupIds")]
     [InlineAutoDomainData("allowedSharePointGroupIds")]
     [InlineAutoDomainData("hasAnonymousLink")]
+    [InlineAutoDomainData("hasOrganizationLink")]
     [InlineAutoDomainData("aclFingerprint")]
     public void Given_AnAclFieldFromTheModel_When_Validate_Then_RejectsTheToolCall(
         string fieldName,

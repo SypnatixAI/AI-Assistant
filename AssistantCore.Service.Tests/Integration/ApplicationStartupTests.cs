@@ -13,15 +13,9 @@ public sealed class ApplicationStartupTests
 {
     [Theory]
     [InlineAutoDomainData("MaximumExecutionTimeSeconds")]
-    [InlineAutoDomainData("MaximumToolCalls")]
-    [InlineAutoDomainData("MaximumModelTokens")]
-    [InlineAutoDomainData("MaximumEstimatedCost")]
     [InlineAutoDomainData("RetrievalCandidateLimit")]
     [InlineAutoDomainData("FinalEvidenceLimit")]
-    [InlineAutoDomainData("MaximumContextSize")]
-    [InlineAutoDomainData("MaximumRepeatedToolCalls")]
-    [InlineAutoDomainData("MaximumParallelToolCalls")]
-    public void Given_AnInvalidOrchestrationLimit_When_CreateClient_Then_StartupFails(
+    public void Given_AnInvalidAgentRuntimeLimit_When_CreateClient_Then_StartupFails(
         string optionName)
     {
         // Given
@@ -33,9 +27,9 @@ public sealed class ApplicationStartupTests
                     configuration.AddIntegrationTestDefaults().AddInMemoryCollection(
                         new Dictionary<string, string?>
                         {
-                            [$"Messages:Orchestration:{optionName}"] = "0",
-                            ["AiModels:Providers:OpenAI:ApiKey"] = "integration-test-secret",
-                            ["Microsoft365:ClientSecret"] = "integration-test-secret"
+                            [$"Messages:AgentRuntime:{optionName}"] = "0",
+                            ["Microsoft365:ClientSecret"] = "integration-test-secret",
+                            ["Microsoft365:ClientStateHmacKey"] = "integration-test-client-state-hmac-key"
                         }));
             });
 
@@ -45,9 +39,67 @@ public sealed class ApplicationStartupTests
 
         // Then
         Assert.Contains(
-            "Messages:Orchestration",
+            "Messages:AgentRuntime",
             exception.Message,
             StringComparison.Ordinal);
+    }
+
+    [Theory, InlineAutoDomainData("medium")]
+    public void Given_UnsupportedKnowledgeBaseReasoning_When_CreateClient_Then_StartupFails(
+        string reasoningEffort)
+    {
+        // Given
+        using var factory = new WebApplicationFactory<Program>()
+            .WithWebHostBuilder(builder =>
+            {
+                builder.UseEnvironment(Environments.Development);
+                builder.ConfigureAppConfiguration(configuration =>
+                    configuration.AddIntegrationTestDefaults().AddInMemoryCollection(
+                        new Dictionary<string, string?>
+                        {
+                            ["AzureSearch:KnowledgeBaseRetrievalReasoningEffort"] = reasoningEffort,
+                            ["Microsoft365:ClientSecret"] = "integration-test-secret",
+                            ["Microsoft365:ClientStateHmacKey"] = "integration-test-client-state-hmac-key"
+                        }));
+            });
+
+        // When
+        var exception = Assert.Throws<OptionsValidationException>(() => factory.CreateClient());
+
+        // Then
+        Assert.Contains("minimal, low or auto retrieval reasoning", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineAutoDomainData("low")]
+    [InlineAutoDomainData("auto")]
+    public void Given_ModelBackedKnowledgeBaseReasoningWithPlanningModel_When_CreateClient_Then_StartupSucceeds(
+        string reasoningEffort)
+    {
+        // Given
+        using var factory = new WebApplicationFactory<Program>()
+            .WithWebHostBuilder(builder =>
+            {
+                builder.UseEnvironment(Environments.Development);
+                builder.ConfigureAppConfiguration(configuration =>
+                    configuration.AddIntegrationTestDefaults().AddInMemoryCollection(
+                        new Dictionary<string, string?>
+                        {
+                            ["AzureSearch:KnowledgeBaseRetrievalReasoningEffort"] = reasoningEffort,
+                            ["AzureSearch:PlanningModelEndpoint"] = "https://planning.openai.azure.com",
+                            ["AzureSearch:PlanningModelDeploymentName"] = "gpt-5-mini",
+                            ["AzureSearch:PlanningModelName"] = "gpt-5-mini",
+                            ["AzureSearch:PlanningModelApiKey"] = "integration-test-key",
+                            ["Microsoft365:ClientSecret"] = "integration-test-secret",
+                            ["Microsoft365:ClientStateHmacKey"] = "integration-test-client-state-hmac-key"
+                        }));
+            });
+
+        // When
+        using var client = factory.CreateClient();
+
+        // Then
+        Assert.NotNull(client);
     }
 
     [Theory]
@@ -66,8 +118,8 @@ public sealed class ApplicationStartupTests
                         new Dictionary<string, string?>
                         {
                             ["Messages:MaximumMessageLength"] = maximumMessageLength.ToString(),
-                            ["AiModels:Providers:OpenAI:ApiKey"] = "integration-test-secret",
-                            ["Microsoft365:ClientSecret"] = "integration-test-secret"
+                            ["Microsoft365:ClientSecret"] = "integration-test-secret",
+                            ["Microsoft365:ClientStateHmacKey"] = "integration-test-client-state-hmac-key"
                         }));
             });
 
@@ -83,7 +135,7 @@ public sealed class ApplicationStartupTests
     }
 
     [Fact]
-    public void Given_AnInvalidAiModelConfiguration_When_CreateClient_Then_StartupFailsWithTheInvalidField()
+    public void Given_AClientSecretMissing_When_CreateClient_Then_Microsoft365StartupFails()
     {
         // Given
         using var factory = new WebApplicationFactory<Program>()
@@ -94,37 +146,8 @@ public sealed class ApplicationStartupTests
                     configuration.AddIntegrationTestDefaults().AddInMemoryCollection(
                         new Dictionary<string, string?>
                         {
-                            ["AiModels:Providers:OpenAI:ApiKey"] = string.Empty,
-                            ["Microsoft365:ClientSecret"] = "integration-test-secret"
-                        }));
-            });
-
-        // When
-        var exception = Assert.Throws<OptionsValidationException>(() =>
-            factory.CreateClient());
-
-        // Then
-        Assert.Contains(
-            "AiModels:Providers:OpenAI:ApiKey",
-            exception.Message,
-            StringComparison.Ordinal);
-    }
-
-    [Theory, AutoDomainData]
-    public void Given_AClientSecretMissing_When_CreateClient_Then_Microsoft365StartupFails(
-        string openAiSecret)
-    {
-        // Given
-        using var factory = new WebApplicationFactory<Program>()
-            .WithWebHostBuilder(builder =>
-            {
-                builder.UseEnvironment(Environments.Development);
-                builder.ConfigureAppConfiguration(configuration =>
-                    configuration.AddIntegrationTestDefaults().AddInMemoryCollection(
-                        new Dictionary<string, string?>
-                        {
-                            ["AiModels:Providers:OpenAI:ApiKey"] = openAiSecret,
-                            ["Microsoft365:ClientSecret"] = string.Empty
+                            ["Microsoft365:ClientSecret"] = string.Empty,
+                            ["Microsoft365:ClientStateHmacKey"] = "integration-test-client-state-hmac-key"
                         }));
             });
 
@@ -138,8 +161,7 @@ public sealed class ApplicationStartupTests
 
     [Theory, InlineAutoDomainData(0)]
     public void Given_AnInvalidSynchronizationLease_When_CreateClient_Then_Microsoft365StartupFails(
-        int synchronizationLeaseMinutes,
-        string openAiSecret)
+        int synchronizationLeaseMinutes)
     {
         // Given
         using var factory = new WebApplicationFactory<Program>()
@@ -150,8 +172,8 @@ public sealed class ApplicationStartupTests
                     configuration.AddIntegrationTestDefaults().AddInMemoryCollection(
                         new Dictionary<string, string?>
                         {
-                            ["AiModels:Providers:OpenAI:ApiKey"] = openAiSecret,
                             ["Microsoft365:ClientSecret"] = "integration-test-secret",
+                            ["Microsoft365:ClientStateHmacKey"] = "integration-test-client-state-hmac-key",
                             ["Microsoft365:SynchronizationLeaseMinutes"] = synchronizationLeaseMinutes.ToString()
                         }));
             });
@@ -166,8 +188,7 @@ public sealed class ApplicationStartupTests
 
     [Theory, InlineAutoDomainData(0)]
     public void Given_AnInvalidSynchronizationInterval_When_CreateClient_Then_Microsoft365StartupFails(
-        int synchronizationIntervalMinutes,
-        string openAiSecret)
+        int synchronizationIntervalMinutes)
     {
         // Given
         using var factory = new WebApplicationFactory<Program>()
@@ -178,8 +199,8 @@ public sealed class ApplicationStartupTests
                     configuration.AddIntegrationTestDefaults().AddInMemoryCollection(
                         new Dictionary<string, string?>
                         {
-                            ["AiModels:Providers:OpenAI:ApiKey"] = openAiSecret,
                             ["Microsoft365:ClientSecret"] = "integration-test-secret",
+                            ["Microsoft365:ClientStateHmacKey"] = "integration-test-client-state-hmac-key",
                             ["Microsoft365:SynchronizationIntervalMinutes"] = synchronizationIntervalMinutes.ToString()
                         }));
             });
@@ -204,8 +225,8 @@ public sealed class ApplicationStartupTests
                     configuration.AddIntegrationTestDefaults().AddInMemoryCollection(
                         new Dictionary<string, string?>
                         {
-                            ["AiModels:Providers:OpenAI:ApiKey"] = "integration-test-secret",
-                            ["Microsoft365:ClientSecret"] = "integration-test-secret"
+                            ["Microsoft365:ClientSecret"] = "integration-test-secret",
+                            ["Microsoft365:ClientStateHmacKey"] = "integration-test-client-state-hmac-key"
                         }));
             });
 
@@ -237,8 +258,8 @@ public sealed class ApplicationStartupTests
                     configuration.AddIntegrationTestDefaults().AddInMemoryCollection(
                         new Dictionary<string, string?>
                         {
-                            ["AiModels:Providers:OpenAI:ApiKey"] = "integration-test-secret",
                             ["Microsoft365:ClientSecret"] = "integration-test-secret",
+                            ["Microsoft365:ClientStateHmacKey"] = "integration-test-client-state-hmac-key",
                             ["ServiceBus:Enabled"] = "false"
                         }));
             });
@@ -264,8 +285,8 @@ public sealed class ApplicationStartupTests
                     configuration.AddIntegrationTestDefaults().AddInMemoryCollection(
                         new Dictionary<string, string?>
                         {
-                            ["AiModels:Providers:OpenAI:ApiKey"] = "integration-test-secret",
                             ["Microsoft365:ClientSecret"] = "integration-test-secret",
+                            ["Microsoft365:ClientStateHmacKey"] = "integration-test-client-state-hmac-key",
                             ["ServiceBus:Enabled"] = "true",
                             ["ServiceBus:FullyQualifiedNamespace"] = "assistant-test.servicebus.windows.net"
                         }));

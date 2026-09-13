@@ -63,6 +63,7 @@ fi
 
 ASPNETCORE_ENVIRONMENT="$LOCAL_LIVE_ENVIRONMENT" \
     ASPNETCORE_URLS="https://localhost:7292;http://localhost:5043" \
+    AZURE_TOKEN_CREDENTIALS=AzureCliCredential \
     ConnectionStrings__AssistantCoreDatabase="$DATABASE_CONNECTION_STRING" \
     dotnet run --no-build --no-launch-profile --project "$SERVICE_PROJECT" &
 API_PID=$!

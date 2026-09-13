@@ -132,6 +132,15 @@ internal sealed class StubOrganizationMemberQueries : IOrganizationMemberQueries
 
     public int UpdateRoleCallCount { get; private set; }
 
+    public int UpdateStatusCallCount { get; private set; }
+
+    public RecordStatus? ReceivedStatus { get; private set; }
+
+    public int? ReceivedExpectedVersion { get; private set; }
+
+    public MemberUpdateResult UpdateStatusResult { get; set; } =
+        MemberUpdateResult.NotFound;
+
     public int RecordSuccessfulAuthenticationCallCount { get; private set; }
 
     public Guid? ReceivedAuthenticatedMemberId { get; private set; }
@@ -183,17 +192,51 @@ internal sealed class StubOrganizationMemberQueries : IOrganizationMemberQueries
         return Task.FromResult(FoundMember);
     }
 
+    public Guid? ReceivedActorId { get; private set; }
+
+    public DateTimeOffset? ReceivedOccurredAt { get; private set; }
+
+    public string? ReceivedCorrelationId { get; private set; }
+
     public Task<OrganizationMember> UpdateRole(
         OrganizationMember member,
         OrganizationRole role,
+        Guid actorId,
+        DateTimeOffset occurredAt,
+        string correlationId,
         CancellationToken cancellationToken = default)
     {
         UpdateRoleCallCount++;
         UpdatedMember = member;
         ReceivedRole = role;
+        ReceivedActorId = actorId;
+        ReceivedOccurredAt = occurredAt;
+        ReceivedCorrelationId = correlationId;
         ReceivedCancellationToken = cancellationToken;
         member.Role = role;
         return Task.FromResult(member);
+    }
+
+    public Task<MemberUpdateResult> UpdateStatus(
+        Guid organizationId,
+        Guid memberId,
+        RecordStatus status,
+        int? expectedVersion,
+        Guid actorId,
+        DateTimeOffset occurredAt,
+        string correlationId,
+        CancellationToken cancellationToken = default)
+    {
+        UpdateStatusCallCount++;
+        ReceivedOrganizationId = organizationId;
+        ReceivedMemberId = memberId;
+        ReceivedStatus = status;
+        ReceivedExpectedVersion = expectedVersion;
+        ReceivedActorId = actorId;
+        ReceivedOccurredAt = occurredAt;
+        ReceivedCorrelationId = correlationId;
+        ReceivedCancellationToken = cancellationToken;
+        return Task.FromResult(UpdateStatusResult);
     }
 
     public Task RecordSuccessfulAuthenticationAsync(

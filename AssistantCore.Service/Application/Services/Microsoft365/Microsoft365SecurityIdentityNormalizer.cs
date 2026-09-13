@@ -5,11 +5,16 @@ namespace AssistantCore.Service.Application.Services.Microsoft365;
 public sealed class Microsoft365SecurityIdentityNormalizer
     : IMicrosoft365SecurityIdentityNormalizer
 {
+    public const string EntraGroupOwnerPrefix = "m365go:";
+
     public string NormalizeEntraUserId(string objectId) =>
         NormalizeEntraObjectId(objectId, nameof(objectId));
 
     public string NormalizeEntraGroupId(string objectId) =>
         NormalizeEntraObjectId(objectId, nameof(objectId));
+
+    public string NormalizeEntraGroupOwnerId(string objectId) =>
+        $"{EntraGroupOwnerPrefix}{NormalizeEntraObjectId(objectId, nameof(objectId))}";
 
     public string NormalizeSharePointGroupId(
         string siteId,

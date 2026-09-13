@@ -76,6 +76,7 @@ public sealed class AzureAiSearchPassageAclClient
                 ["allowedGroupIds"] = passage.AllowedGroupIds,
                 ["allowedSharePointGroupIds"] = passage.AllowedSharePointGroupIds,
                 ["hasAnonymousLink"] = passage.HasAnonymousLink,
+                ["hasOrganizationLink"] = passage.HasOrganizationLink,
                 ["aclFingerprint"] = passage.AclFingerprint,
                 ["isAvailable"] = passage.IsAvailable
             }),
@@ -116,6 +117,7 @@ public sealed class AzureAiSearchPassageAclClient
                 ["allowedGroupIds"] = update.AllowedGroupIds,
                 ["allowedSharePointGroupIds"] = update.AllowedSharePointGroupIds,
                 ["hasAnonymousLink"] = update.HasAnonymousLink,
+                ["hasOrganizationLink"] = update.HasOrganizationLink,
                 ["aclFingerprint"] = update.AclFingerprint,
                 ["isAvailable"] = false
             }),

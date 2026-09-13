@@ -3,11 +3,11 @@ using AssistantCore.Repository.Domain.Enums;
 using AssistantCore.Repository.Repositories;
 using AssistantCore.Service.Application.Exceptions;
 using AssistantCore.Service.Application.Models.Messages;
-using AssistantCore.Service.Application.Models.Messages.AiModels;
+using AssistantCore.Service.Application.Models.Messages.AgentRuntime;
 using AssistantCore.Service.Application.Models.Messages.Lifecycle;
-using AssistantCore.Service.Application.Models.Messages.Orchestration;
+using AssistantCore.Service.Application.Models.Usage;
 using AssistantCore.Service.Application.Services.Messages.Lifecycle;
-using AssistantCore.Service.Application.Services.Messages.Memory;
+using AssistantCore.Service.Application.Services.Usage;
 
 namespace AssistantCore.Service.Tests.Messages;
 
@@ -24,6 +24,7 @@ public sealed class MessageProcessingLifecycleServiceTests
         var repository = new RecordingConversationRepository();
         var service = new MessageProcessingLifecycleService(
             repository,
+            new StubUsageTrackingService(),
             new StubTimeProvider(now));
         using var cancellationTokenSource = new CancellationTokenSource();
 
@@ -69,6 +70,7 @@ public sealed class MessageProcessingLifecycleServiceTests
         var repository = new RecordingConversationRepository();
         var service = new MessageProcessingLifecycleService(
             repository,
+            new StubUsageTrackingService(),
             new StubTimeProvider(now));
 
         // When
@@ -108,6 +110,7 @@ public sealed class MessageProcessingLifecycleServiceTests
         };
         var service = new MessageProcessingLifecycleService(
             repository,
+            new StubUsageTrackingService(),
             new StubTimeProvider(now));
 
         // When
@@ -133,6 +136,7 @@ public sealed class MessageProcessingLifecycleServiceTests
         var repository = new RecordingConversationRepository();
         var service = new MessageProcessingLifecycleService(
             repository,
+            new StubUsageTrackingService(),
             new StubTimeProvider(now));
         var longMessage = new string('a', 250);
 
@@ -167,6 +171,7 @@ public sealed class MessageProcessingLifecycleServiceTests
         };
         var service = new MessageProcessingLifecycleService(
             repository,
+            new StubUsageTrackingService(),
             new StubTimeProvider(now));
         using var cancellationTokenSource = new CancellationTokenSource();
 
@@ -203,6 +208,7 @@ public sealed class MessageProcessingLifecycleServiceTests
         var repository = new RecordingConversationRepository();
         var service = new MessageProcessingLifecycleService(
             repository,
+            new StubUsageTrackingService(),
             new StubTimeProvider(DateTimeOffset.UtcNow));
 
         // When
@@ -238,6 +244,7 @@ public sealed class MessageProcessingLifecycleServiceTests
         };
         var service = new MessageProcessingLifecycleService(
             repository,
+            new StubUsageTrackingService(),
             new StubTimeProvider(DateTimeOffset.UtcNow));
 
         // When
@@ -267,6 +274,7 @@ public sealed class MessageProcessingLifecycleServiceTests
         var repository = new RecordingConversationRepository();
         var service = new MessageProcessingLifecycleService(
             repository,
+            new StubUsageTrackingService(),
             new StubTimeProvider(DateTimeOffset.UtcNow));
 
         // When
@@ -284,7 +292,7 @@ public sealed class MessageProcessingLifecycleServiceTests
     }
 
     [Theory, AutoDomainData]
-    public async Task Given_AValidOrchestrationResult_When_CompleteAsync_Then_PersistsAssistantResponseSourcesAndWarnings(
+    public async Task Given_AValidAgentTurn_When_CompleteAsync_Then_PersistsAssistantResponseSourcesAndWarnings(
         StartedMessageProcessing processing,
         DateTimeOffset completedAt)
     {
@@ -297,38 +305,36 @@ public sealed class MessageProcessingLifecycleServiceTests
             "inventory-item-1",
             null,
             completedAt.AddMinutes(-1));
-        var orchestrationResult = new MessageOrchestrationResult(
+        var agentTurnResult = new AgentTurnResult(
             "There are 248 units available.",
             "gpt",
             [evidence],
             ["Quebec inventory was unavailable."],
-            new OrchestrationExecutionUsage(
+            new AgentTurnUsage(
                 TimeSpan.FromSeconds(2),
                 InputTokens: 100,
                 OutputTokens: 20,
                 ModelCallCount: 2,
-                ToolCallCount: 1,
-                EstimatedCost: 0.01m,
-                ContextSize: 100,
-                RepeatedToolCallCount: 0));
+                ToolCallCount: 1));
         var repository = new RecordingConversationRepository();
         var service = new MessageProcessingLifecycleService(
             repository,
+            new StubUsageTrackingService(),
             new StubTimeProvider(completedAt));
         using var cancellationTokenSource = new CancellationTokenSource();
 
         // When
         var result = await service.CompleteAsync(
             processing,
-            orchestrationResult,
+            agentTurnResult,
             cancellationTokenSource.Token);
 
         // Then
         Assert.NotNull(repository.CompletedAssistantMessage);
         Assert.Equal(MessageRole.Assistant, repository.CompletedAssistantMessage.Role);
         Assert.Equal(MessageProcessingStatus.Completed, repository.CompletedAssistantMessage.ProcessingStatus);
-        Assert.Equal(orchestrationResult.Answer, repository.CompletedAssistantMessage.Content);
-        Assert.Equal(orchestrationResult.ModelName, repository.CompletedAssistantMessage.Model);
+        Assert.Equal(agentTurnResult.Content, repository.CompletedAssistantMessage.Content);
+        Assert.Equal(agentTurnResult.ModelName, repository.CompletedAssistantMessage.Model);
         Assert.Equal(completedAt, repository.CompletedAssistantMessage.CreatedAt);
         var persistedSource = Assert.Single(repository.CompletedSources);
         Assert.Equal(evidence.SourceType, persistedSource.SourceType);
@@ -343,34 +349,47 @@ public sealed class MessageProcessingLifecycleServiceTests
     }
 
     [Theory, AutoDomainData]
-    public async Task Given_ANonEmptyAiMemory_When_CompleteAsync_Then_PersistsTheAiGeneratedSummary(
+    public async Task Given_AValidAgentTurn_When_CompleteAsync_Then_RecordsConsumptionForTheAssistantMessage(
         StartedMessageProcessing processing,
-        MessageOrchestrationResult orchestrationResult,
         DateTimeOffset completedAt)
     {
         // Given
-        processing.SelectedModel = new SelectedAiModel("OpenAI", "gpt-5-mini");
+        var agentTurnResult = new AgentTurnResult(
+            "There are 248 units available.",
+            "gpt",
+            [],
+            [],
+            new AgentTurnUsage(
+                TimeSpan.FromSeconds(2),
+                InputTokens: 100,
+                OutputTokens: 20,
+                ModelCallCount: 2,
+                ToolCallCount: 1));
         var repository = new RecordingConversationRepository();
-        var summaryService = new StubConversationMemorySummaryService("Facts\n- The team selected blue.");
+        var usageTrackingService = new StubUsageTrackingService
+        {
+            Response = new MessageUsageResponse(120, 1_000_000, 120, 999_880, completedAt.AddDays(1), false)
+        };
         var service = new MessageProcessingLifecycleService(
             repository,
-            summaryService,
+            usageTrackingService,
             new StubTimeProvider(completedAt));
 
         // When
-        await service.CompleteAsync(processing, orchestrationResult, CancellationToken.None);
+        var result = await service.CompleteAsync(processing, agentTurnResult, CancellationToken.None);
 
         // Then
-        Assert.Equal("Facts\n- The team selected blue.", repository.ReceivedContextSummary);
-        Assert.Equal(processing.SelectedModel, summaryService.ReceivedModel);
-        Assert.Equal(processing.UserMessage, summaryService.ReceivedUserMessage);
-        Assert.Equal(orchestrationResult.Answer, summaryService.ReceivedAssistantMessage);
+        Assert.Equal(processing.OrganizationId, usageTrackingService.ReceivedOrganizationId);
+        Assert.Equal(repository.CompletedAssistantMessage!.Id, usageTrackingService.ReceivedAssistantMessageId);
+        Assert.Equal(100, usageTrackingService.ReceivedInputTokens);
+        Assert.Equal(20, usageTrackingService.ReceivedOutputTokens);
+        Assert.Equal(usageTrackingService.Response, result.Usage);
     }
 
     [Theory, AutoDomainData]
     public async Task Given_RepositoryRejectsCompletion_When_CompleteAsync_Then_ThrowsNotFound(
         StartedMessageProcessing processing,
-        MessageOrchestrationResult orchestrationResult,
+        AgentTurnResult agentTurnResult,
         DateTimeOffset completedAt)
     {
         // Given
@@ -380,13 +399,14 @@ public sealed class MessageProcessingLifecycleServiceTests
         };
         var service = new MessageProcessingLifecycleService(
             repository,
+            new StubUsageTrackingService(),
             new StubTimeProvider(completedAt));
 
         // When
         var exception = await Assert.ThrowsAsync<NotFoundException>(() =>
             service.CompleteAsync(
                 processing,
-                orchestrationResult,
+                agentTurnResult,
                 CancellationToken.None));
 
         // Then
@@ -406,6 +426,7 @@ public sealed class MessageProcessingLifecycleServiceTests
         var repository = new RecordingConversationRepository();
         var service = new MessageProcessingLifecycleService(
             repository,
+            new StubUsageTrackingService(),
             new StubTimeProvider(failedAt));
         using var cancellationTokenSource = new CancellationTokenSource();
 
@@ -434,6 +455,7 @@ public sealed class MessageProcessingLifecycleServiceTests
         };
         var service = new MessageProcessingLifecycleService(
             repository,
+            new StubUsageTrackingService(),
             new StubTimeProvider(DateTimeOffset.UtcNow));
 
         // When
@@ -455,6 +477,7 @@ public sealed class MessageProcessingLifecycleServiceTests
         var repository = new RecordingConversationRepository();
         var service = new MessageProcessingLifecycleService(
             repository,
+            new StubUsageTrackingService(),
             new StubTimeProvider(DateTimeOffset.UtcNow));
 
         // When
@@ -481,6 +504,7 @@ public sealed class MessageProcessingLifecycleServiceTests
         };
         var service = new MessageProcessingLifecycleService(
             repository,
+            new StubUsageTrackingService(),
             new StubTimeProvider(DateTimeOffset.UtcNow));
 
         // When
@@ -499,27 +523,38 @@ public sealed class MessageProcessingLifecycleServiceTests
         public override DateTimeOffset GetUtcNow() => utcNow;
     }
 
-    private sealed class StubConversationMemorySummaryService(string? summary)
-        : IConversationMemorySummaryService
+    private sealed class StubUsageTrackingService : IUsageTrackingService
     {
-        public SelectedAiModel? ReceivedModel { get; private set; }
+        public Guid? ReceivedOrganizationId { get; private set; }
 
-        public string? ReceivedUserMessage { get; private set; }
+        public Guid? ReceivedAssistantMessageId { get; private set; }
 
-        public string? ReceivedAssistantMessage { get; private set; }
+        public long? ReceivedInputTokens { get; private set; }
 
-        public Task<string?> CreateAsync(
-            SelectedAiModel model,
-            IReadOnlyCollection<AiConversationMessage> conversationHistory,
-            string currentUserMessage,
-            string currentAssistantMessage,
-            CancellationToken cancellationToken)
+        public long? ReceivedOutputTokens { get; private set; }
+
+        public MessageUsageResponse Response { get; init; } =
+            new(0, 0, 0, 0, DateTimeOffset.UtcNow, false);
+
+        public Task<MessageUsageResponse> RecordConsumptionAsync(
+            Guid organizationId,
+            Guid assistantMessageId,
+            long inputTokens,
+            long outputTokens,
+            DateTimeOffset occurredAt,
+            CancellationToken cancellationToken = default)
         {
-            ReceivedModel = model;
-            ReceivedUserMessage = currentUserMessage;
-            ReceivedAssistantMessage = currentAssistantMessage;
-            return Task.FromResult(summary);
+            ReceivedOrganizationId = organizationId;
+            ReceivedAssistantMessageId = assistantMessageId;
+            ReceivedInputTokens = inputTokens;
+            ReceivedOutputTokens = outputTokens;
+            return Task.FromResult(Response);
         }
+
+        public Task<TokenUsageResponse> GetCurrentUsageAsync(
+            Guid organizationId,
+            CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
     }
 
     [Theory, AutoDomainData]
@@ -537,6 +572,7 @@ public sealed class MessageProcessingLifecycleServiceTests
         var repository = new RecordingConversationRepository { FoundConversation = conversation };
         var service = new MessageProcessingLifecycleService(
             repository,
+            new StubUsageTrackingService(),
             new StubTimeProvider(now));
 
         // When
@@ -562,6 +598,7 @@ public sealed class MessageProcessingLifecycleServiceTests
             string? title,
             ConversationStatus? status,
             DateTimeOffset updatedAt,
+            string correlationId,
             CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();
 
@@ -571,6 +608,7 @@ public sealed class MessageProcessingLifecycleServiceTests
             Guid conversationId,
             DateTimeOffset deletedAt,
             DateTimeOffset purgeAfter,
+            string correlationId,
             CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();
 
@@ -605,8 +643,6 @@ public sealed class MessageProcessingLifecycleServiceTests
         public string? ReceivedErrorCode { get; private set; }
 
         public DateTimeOffset? ReceivedFailureDate { get; private set; }
-
-        public string? ReceivedContextSummary { get; private set; }
 
         public CancellationToken ReceivedCancellationToken { get; private set; }
 
@@ -656,16 +692,6 @@ public sealed class MessageProcessingLifecycleServiceTests
             Operations.Add("GetConversationHistory");
             ReceivedCancellationToken = cancellationToken;
             return Task.FromResult<IReadOnlyList<ConversationMessageItem>>([]);
-        }
-
-        public Task<bool> UpdateConversationContextSummaryAsync(
-            Guid organizationId, Guid ownerMemberId, Guid conversationId, string summary,
-            DateTimeOffset updatedAt, CancellationToken cancellationToken = default)
-        {
-            Operations.Add("UpdateContextSummary");
-            ReceivedContextSummary = summary;
-            ReceivedCancellationToken = cancellationToken;
-            return Task.FromResult(true);
         }
 
         public Task<ConversationListPage> ListConversationsAsync(

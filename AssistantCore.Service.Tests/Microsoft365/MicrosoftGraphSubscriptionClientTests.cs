@@ -134,9 +134,10 @@ public sealed class MicrosoftGraphSubscriptionClientTests
     }
 
     [Theory, AutoDomainData]
-    public async Task Given_AnExistingSubscription_When_RenewAsync_Then_SendsOnlyNewExpiration(
+    public async Task Given_AnExistingSubscription_When_RenewAsync_Then_SendsNotificationUrlAndNewExpiration(
         string subscriptionId,
         string accessToken,
+        string notificationUrl,
         DateTimeOffset expiresAt)
     {
         // Given
@@ -162,6 +163,7 @@ public sealed class MicrosoftGraphSubscriptionClientTests
             "https://graph.microsoft.com",
             accessToken,
             subscriptionId,
+            notificationUrl,
             expiresAt,
             CancellationToken.None);
 
@@ -169,7 +171,8 @@ public sealed class MicrosoftGraphSubscriptionClientTests
         Assert.Equal(HttpMethod.Patch, capturedRequest?.Method);
         Assert.EndsWith($"/subscriptions/{subscriptionId}", capturedRequest?.RequestUri?.AbsolutePath);
         using var json = JsonDocument.Parse(requestBody!);
-        Assert.Single(json.RootElement.EnumerateObject());
+        Assert.Equal(notificationUrl, json.RootElement.GetProperty("notificationUrl").GetString());
+        Assert.Equal(2, json.RootElement.EnumerateObject().Count());
         Assert.Equal(expiresAt, result.ExpiresAt);
     }
 
@@ -177,6 +180,7 @@ public sealed class MicrosoftGraphSubscriptionClientTests
     public async Task Given_AMissingSubscription_When_RenewAsync_Then_ReportsNotFound(
         string subscriptionId,
         string accessToken,
+        string notificationUrl,
         DateTimeOffset expiresAt)
     {
         // Given
@@ -189,6 +193,7 @@ public sealed class MicrosoftGraphSubscriptionClientTests
             "https://graph.microsoft.com",
             accessToken,
             subscriptionId,
+            notificationUrl,
             expiresAt,
             CancellationToken.None);
 

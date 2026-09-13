@@ -6,4 +6,5 @@ public sealed record Microsoft365SearchParameters(
     DateOnly? DateFrom,
     DateOnly? DateTo,
     Microsoft365SearchSecurityContext SecurityContext,
-    int MaximumResults);
+    int MaximumResults,
+    bool TextOnly = false);

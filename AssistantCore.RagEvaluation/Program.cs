@@ -25,17 +25,17 @@ internal static class Program
                 options.DatasetPath,
                 cancellationSource.Token);
             var selectedCases = dataset.Cases
+                .Where(evaluationCase => !evaluationCase.AdaptiveComparisonOnly)
                 .Where(evaluationCase => evaluationCase.Modes.Contains(
                     options.Mode,
                     StringComparer.OrdinalIgnoreCase))
                 .ToArray();
-            using var liveProvider = options.Mode == "model"
-                ? LiveAiModelProviderScope.Create(options.Model)
+            using var foundryScope = options.Mode == "model"
+                ? LiveFoundryAgentScope.Create()
                 : null;
-            var target = new OrchestrationEvaluationTarget(
-                (evaluationCase, evidence) => liveProvider?.Provider
-                    ?? new ScriptedAiModelProvider(evaluationCase, evidence),
-                TimeProvider.System);
+            IRagEvaluationTarget target = foundryScope is null
+                ? new OfflineEvaluationTarget()
+                : new FoundryEvaluationTarget(foundryScope.Client);
 
             var observations = new List<EvaluationObservation>();
             foreach (var evaluationCase in selectedCases)
@@ -43,7 +43,6 @@ internal static class Program
                 Console.WriteLine($"Running {evaluationCase.Id} ({options.Mode})...");
                 observations.Add(await target.RunAsync(
                     evaluationCase,
-                    options.Model,
                     cancellationSource.Token));
             }
 
@@ -52,7 +51,7 @@ internal static class Program
                 scopedDataset,
                 observations,
                 options.Mode,
-                options.Model);
+                foundryScope?.AgentIdentifier ?? "fixture");
             var paths = await new EvaluationReportWriter().WriteAsync(
                 report,
                 options.OutputDirectory,

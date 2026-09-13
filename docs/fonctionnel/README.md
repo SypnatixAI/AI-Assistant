@@ -12,7 +12,6 @@ Ce dossier contient la documentation fonctionnelle du projet.
 - [Envoyer un message](features/messages/send-message.md)
 - [Rechercher sur le web public](features/messages/public-web-search.md)
 - [Interface web du client](features/frontend/client-interface.md)
-- [Lister les modèles disponibles](features/models/list-models.md)
 - [Consulter le quota de jetons](features/usage/get-token-usage.md)
 - [Gerer la politique de quota](features/usage/manage-usage-policy.md)
 - [Administrer les membres dans Angular](features/frontend/member-administration.md)

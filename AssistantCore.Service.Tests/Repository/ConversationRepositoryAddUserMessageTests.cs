@@ -23,7 +23,7 @@ public sealed class ConversationRepositoryAddUserMessageTests
         dbContext.Conversations.Add(conversation);
         await dbContext.SaveChangesAsync();
         dbContext.ChangeTracker.Clear();
-        var repository = new ConversationRepository(dbContext);
+        var repository = new ConversationRepository(dbContext, new StubAdministrativeAuditRepository());
 
         // When
         var result = await repository.AddUserMessageAsync(
@@ -60,7 +60,7 @@ public sealed class ConversationRepositoryAddUserMessageTests
         dbContext.Conversations.Add(conversation);
         await dbContext.SaveChangesAsync();
         dbContext.ChangeTracker.Clear();
-        var repository = new ConversationRepository(dbContext);
+        var repository = new ConversationRepository(dbContext, new StubAdministrativeAuditRepository());
 
         // When
         await repository.AddUserMessageAsync(
@@ -94,7 +94,7 @@ public sealed class ConversationRepositoryAddUserMessageTests
         dbContext.Conversations.Add(conversation);
         await dbContext.SaveChangesAsync();
         dbContext.ChangeTracker.Clear();
-        var repository = new ConversationRepository(dbContext);
+        var repository = new ConversationRepository(dbContext, new StubAdministrativeAuditRepository());
         var requestedOrganizationId = mismatchedContext == "organization"
             ? Guid.NewGuid()
             : organizationId;
@@ -130,7 +130,7 @@ public sealed class ConversationRepositoryAddUserMessageTests
         dbContext.Conversations.Add(conversation);
         await dbContext.SaveChangesAsync();
         dbContext.ChangeTracker.Clear();
-        var repository = new ConversationRepository(dbContext);
+        var repository = new ConversationRepository(dbContext, new StubAdministrativeAuditRepository());
 
         // When
         var exception = await Assert.ThrowsAsync<ArgumentException>(() =>

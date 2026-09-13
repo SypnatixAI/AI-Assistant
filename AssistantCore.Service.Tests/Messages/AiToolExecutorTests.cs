@@ -17,7 +17,7 @@ public sealed class ToolExecutionRouterTests
     {
         // Given
         var expectedResult = ToolExecutionResult.Succeeded(callId.ToString(), [evidence]);
-        var handler = new RecordingInternalDataHandler(expectedResult);
+        var handler = new RecordingMicrosoft365Handler(expectedResult);
         var router = new ToolExecutionRouter([handler]);
         var validatedToolCall = CreateValidatedToolCall(callId, query);
         var executionContext = new ConnectorExecutionContext(Guid.NewGuid(), Guid.NewGuid());
@@ -67,8 +67,8 @@ public sealed class ToolExecutionRouterTests
         var handlerResult = ToolExecutionResult.Succeeded(callId.ToString(), [evidence]);
         var router = new ToolExecutionRouter(
             [
-                new RecordingInternalDataHandler(handlerResult),
-                new RecordingInternalDataHandler(handlerResult)
+                new RecordingMicrosoft365Handler(handlerResult),
+                new RecordingMicrosoft365Handler(handlerResult)
             ]);
         var validatedToolCall = CreateValidatedToolCall(callId, query);
         var executionContext = new ConnectorExecutionContext(Guid.NewGuid(), Guid.NewGuid());
@@ -91,11 +91,11 @@ public sealed class ToolExecutionRouterTests
     {
         // Given
         var handlerResult = ToolExecutionResult.Succeeded(callId.ToString(), [evidence]);
-        var handler = new RecordingInternalDataHandler(handlerResult);
+        var handler = new RecordingMicrosoft365Handler(handlerResult);
         var router = new ToolExecutionRouter([handler]);
         var validatedToolCall = new ValidatedToolCall(
             callId.ToString(),
-            AiToolNames.SearchInternalData,
+            AiToolNames.SearchMicrosoft365,
             JsonSerializer.SerializeToElement(new { query = 123 }));
         var executionContext = new ConnectorExecutionContext(Guid.NewGuid(), Guid.NewGuid());
 
@@ -136,22 +136,22 @@ public sealed class ToolExecutionRouterTests
 
     private static ValidatedToolCall CreateValidatedToolCall(Guid callId, string query) => new(
         callId.ToString(),
-        AiToolNames.SearchInternalData,
+        AiToolNames.SearchMicrosoft365,
         JsonSerializer.SerializeToElement(new { query }));
 
-    private sealed class RecordingInternalDataHandler(ToolExecutionResult result)
-        : AiToolExecutionHandler<SearchInternalDataToolArguments>(
-            AiToolNames.SearchInternalData)
+    private sealed class RecordingMicrosoft365Handler(ToolExecutionResult result)
+        : AiToolExecutionHandler<SearchMicrosoft365ToolArguments>(
+            AiToolNames.SearchMicrosoft365)
     {
         public string? ReceivedToolCallId { get; private set; }
 
-        public SearchInternalDataToolArguments? ReceivedArguments { get; private set; }
+        public SearchMicrosoft365ToolArguments? ReceivedArguments { get; private set; }
 
         public ConnectorExecutionContext? ReceivedExecutionContext { get; private set; }
 
         protected override Task<ToolExecutionResult> ExecuteAsync(
             string toolCallId,
-            SearchInternalDataToolArguments arguments,
+            SearchMicrosoft365ToolArguments arguments,
             ConnectorExecutionContext executionContext,
             CancellationToken cancellationToken)
         {

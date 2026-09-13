@@ -21,6 +21,8 @@ public sealed class AuthenticateUserService(
     ITenantAdmissionPolicy tenantAdmissionPolicy,
     TimeProvider timeProvider) : IAuthenticateUserService
 {
+    private const int InitialMemberVersion = 1;
+
     public async Task<(Organization Organization, OrganizationMember Member)> GetOrganizationAsync(CancellationToken cancellationToken)
     {
         var identity = currentIdentity.GetIdentity();
@@ -98,15 +100,9 @@ public sealed class AuthenticateUserService(
                     IdentityProvider = identity.Provider,
                     ExternalUserId = identity.ExternalUserId,
                     Role = resolvedRole,
-                    Status = RecordStatus.Active
+                    Status = RecordStatus.Active,
+                    Version = InitialMemberVersion
                 },
-                cancellationToken);
-        }
-        else if (member.Role != resolvedRole)
-        {
-            member = await organizationMemberQueries.UpdateRole(
-                member,
-                resolvedRole,
                 cancellationToken);
         }
 
@@ -114,6 +110,10 @@ public sealed class AuthenticateUserService(
         {
             throw new ForbiddenException("Organization member access denied.");
         }
+
+        // Le rôle persistant est informatif. Les autorisations de la session
+        // courante suivent toujours les app roles du JWT.
+        member.Role = resolvedRole;
 
         var isOnboardingComplete = await onboardingCompletionChecker.IsCompleteAsync(
             organizationId,

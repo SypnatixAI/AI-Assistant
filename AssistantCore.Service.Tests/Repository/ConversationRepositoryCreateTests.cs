@@ -20,7 +20,7 @@ public sealed class ConversationRepositoryCreateTests
         conversation.OwnerMemberId = ownerMemberId;
         userMessage.ConversationId = conversation.Id;
         await using var dbContext = CreateDbContext();
-        var repository = new ConversationRepository(dbContext);
+        var repository = new ConversationRepository(dbContext, new StubAdministrativeAuditRepository());
 
         // When
         var result = await repository.CreateConversationWithFirstMessageAsync(
@@ -55,7 +55,7 @@ public sealed class ConversationRepositoryCreateTests
         conversation.OwnerMemberId = Guid.Empty;
         userMessage.ConversationId = Guid.Empty;
         await using var dbContext = CreateDbContext();
-        var repository = new ConversationRepository(dbContext);
+        var repository = new ConversationRepository(dbContext, new StubAdministrativeAuditRepository());
 
         // When
         await repository.CreateConversationWithFirstMessageAsync(
@@ -93,7 +93,7 @@ public sealed class ConversationRepositoryCreateTests
             ? Guid.NewGuid()
             : conversation.Id;
         await using var dbContext = CreateDbContext();
-        var repository = new ConversationRepository(dbContext);
+        var repository = new ConversationRepository(dbContext, new StubAdministrativeAuditRepository());
 
         // When
         var exception = await Assert.ThrowsAsync<ArgumentException>(() =>

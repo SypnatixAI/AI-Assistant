@@ -2,15 +2,10 @@ name: RAG evaluation certification
 
 on:
   workflow_dispatch:
-    inputs:
-      model:
-        description: OpenAI model configured for certification
-        required: true
-        default: gpt-5.6-luna
-        type: string
 
 permissions:
   contents: read
+  id-token: write
 
 concurrency:
   group: rag-evaluation-certification-${{ github.ref }}
@@ -22,7 +17,7 @@ env:
 
 jobs:
   evaluate:
-    name: Evaluate production orchestration with OpenAI
+    name: Evaluate the Foundry agent
     runs-on: ubuntu-latest
     timeout-minutes: 20
     environment: rag-evaluation-certification
@@ -36,6 +31,13 @@ jobs:
         with:
           dotnet-version: "10.0.x"
 
+      - name: Sign in to Azure with OIDC
+        uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
       - name: Restore dependencies
         run: dotnet restore AssistantCore.RagEvaluation/AssistantCore.RagEvaluation.csproj
 
@@ -44,14 +46,11 @@ jobs:
           dotnet build AssistantCore.RagEvaluation/AssistantCore.RagEvaluation.csproj
           --configuration Release --no-restore
 
-      - name: Run model RAG evaluation
-        env:
-          RAG_EVAL_OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      - name: Run Foundry RAG evaluation
         run: >-
           dotnet run --project AssistantCore.RagEvaluation/AssistantCore.RagEvaluation.csproj
           --configuration Release --no-build --
           --mode model
-          --model "${{ inputs.model }}"
           --dataset docs/recherche/rag-agentique/evaluation-cases.json
           --output artifacts/rag-evaluation
 
@@ -59,6 +58,6 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: rag-evaluation-model-${{ inputs.model }}
+          name: rag-evaluation-foundry-agent
           path: artifacts/rag-evaluation
           if-no-files-found: warn

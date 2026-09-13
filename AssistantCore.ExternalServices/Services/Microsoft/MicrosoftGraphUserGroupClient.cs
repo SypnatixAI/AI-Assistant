@@ -18,7 +18,22 @@ public sealed class MicrosoftGraphUserGroupClient(HttpClient httpClient)
             "user transitive group memberships",
             cancellationToken);
 
-    private static Uri CreateGroupsUri(string graphBaseUrl, string userId)
+    public Task<IReadOnlyCollection<string>> GetOwnedGroupIdsAsync(
+        string graphBaseUrl,
+        string accessToken,
+        string userId,
+        CancellationToken cancellationToken = default) =>
+        collectionReader.ReadAsync<Group, string>(
+            CreateGroupsUri(graphBaseUrl, userId, "ownedObjects"),
+            accessToken,
+            MapGroupId,
+            "user-owned Microsoft 365 groups",
+            cancellationToken);
+
+    private static Uri CreateGroupsUri(
+        string graphBaseUrl,
+        string userId,
+        string relationship = "transitiveMemberOf")
     {
         if (!Guid.TryParse(userId, out var parsedUserId) || parsedUserId == Guid.Empty)
         {
@@ -34,7 +49,7 @@ public sealed class MicrosoftGraphUserGroupClient(HttpClient httpClient)
         var normalizedBaseUri = new Uri($"{graphBaseUri.GetLeftPart(UriPartial.Authority)}/");
         return new Uri(
             normalizedBaseUri,
-            $"v1.0/users/{parsedUserId:D}/transitiveMemberOf/microsoft.graph.group?$select=id");
+            $"v1.0/users/{parsedUserId:D}/{relationship}/microsoft.graph.group?$select=id");
     }
 
     private static string MapGroupId(Group group)

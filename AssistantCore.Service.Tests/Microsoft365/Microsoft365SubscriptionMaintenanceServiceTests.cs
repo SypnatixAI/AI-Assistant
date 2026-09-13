@@ -136,6 +136,90 @@ public sealed class Microsoft365SubscriptionMaintenanceServiceTests
     }
 
     [Theory, AutoDomainData]
+    public async Task Given_AClientStateMigrationIsRequired_When_RunMaintenanceAsync_Then_OldSubscriptionIsDeletedAndRecreatedWithReconciliation(
+        Guid organizationId,
+        string oldSubscriptionId,
+        string newSubscriptionId,
+        string tenantId,
+        string siteId,
+        string listId)
+    {
+        // Given
+        var subscription = CreateSubscription(
+            organizationId,
+            oldSubscriptionId,
+            tenantId,
+            siteId,
+            listId);
+        subscription.Status = Microsoft365SubscriptionStatus.RenewalRequired;
+        subscription.LastErrorCode = "ClientStateMigrationRequired";
+        subscription.ProtectedClientState = "legacy-sha256-hash";
+        var client = new SubscriptionClientFake
+        {
+            CreationResult = new Microsoft365SubscriptionResult(
+                newSubscriptionId,
+                subscription.Resource,
+                Now.AddHours(48))
+        };
+        var repository = new SubscriptionRepositoryFake(subscription);
+        var publisher = new SynchronizationPublisherFake();
+        var service = CreateService(repository, client, publisher);
+
+        // When
+        await service.RunMaintenanceAsync(CancellationToken.None);
+
+        // Then
+        Assert.Equal(1, client.DeleteCount);
+        Assert.Equal(1, client.CreateCount);
+        Assert.Equal(newSubscriptionId, subscription.MicrosoftSubscriptionId);
+        Assert.Equal("protected-client-state", subscription.ProtectedClientState);
+        Assert.NotEqual("legacy-sha256-hash", subscription.ProtectedClientState);
+        Assert.Equal(Microsoft365SubscriptionStatus.Active, subscription.Status);
+        Assert.Null(subscription.LastErrorCode);
+        var work = Assert.Single(publisher.Published);
+        Assert.Equal(newSubscriptionId, work.SubscriptionId);
+    }
+
+    [Theory, AutoDomainData]
+    public async Task Given_AClientStateMigrationOnASubscriptionWithoutAGraphId_When_RunMaintenanceAsync_Then_NothingIsDeletedButANewOneIsCreated(
+        Guid organizationId,
+        string newSubscriptionId,
+        string tenantId,
+        string siteId,
+        string listId)
+    {
+        // Given
+        var subscription = CreateSubscription(
+            organizationId,
+            "unused-subscription-id",
+            tenantId,
+            siteId,
+            listId);
+        subscription.Status = Microsoft365SubscriptionStatus.RenewalRequired;
+        subscription.LastErrorCode = "ClientStateMigrationRequired";
+        subscription.MicrosoftSubscriptionId = null;
+        var client = new SubscriptionClientFake
+        {
+            CreationResult = new Microsoft365SubscriptionResult(
+                newSubscriptionId,
+                subscription.Resource,
+                Now.AddHours(48))
+        };
+        var service = CreateService(
+            new SubscriptionRepositoryFake(subscription),
+            client,
+            new SynchronizationPublisherFake());
+
+        // When
+        await service.RunMaintenanceAsync(CancellationToken.None);
+
+        // Then
+        Assert.Equal(0, client.DeleteCount);
+        Assert.Equal(1, client.CreateCount);
+        Assert.Equal(newSubscriptionId, subscription.MicrosoftSubscriptionId);
+    }
+
+    [Theory, AutoDomainData]
     public async Task Given_ARevocationRequest_When_RunMaintenanceAsync_Then_SubscriptionIsDeletedAndMarkedRevoked(
         Guid organizationId,
         string subscriptionId,
@@ -311,6 +395,7 @@ public sealed class Microsoft365SubscriptionMaintenanceServiceTests
         public Task<Microsoft365SubscriptionRenewalResult> RenewAsync(
             string tenantId,
             string subscriptionId,
+            string notificationUrl,
             DateTimeOffset expiresAt,
             CancellationToken cancellationToken = default)
         {

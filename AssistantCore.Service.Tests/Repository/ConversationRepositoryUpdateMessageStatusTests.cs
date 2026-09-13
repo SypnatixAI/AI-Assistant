@@ -27,7 +27,7 @@ public sealed class ConversationRepositoryUpdateMessageStatusTests
         dbContext.Messages.Add(message);
         await dbContext.SaveChangesAsync();
         dbContext.ChangeTracker.Clear();
-        var repository = new ConversationRepository(dbContext);
+        var repository = new ConversationRepository(dbContext, new StubAdministrativeAuditRepository());
 
         // When
         var updated = await repository.UpdateMessageProcessingStatusAsync(
@@ -68,7 +68,7 @@ public sealed class ConversationRepositoryUpdateMessageStatusTests
         dbContext.Messages.Add(message);
         await dbContext.SaveChangesAsync();
         dbContext.ChangeTracker.Clear();
-        var repository = new ConversationRepository(dbContext);
+        var repository = new ConversationRepository(dbContext, new StubAdministrativeAuditRepository());
 
         // When
         var updated = await repository.UpdateMessageProcessingStatusAsync(

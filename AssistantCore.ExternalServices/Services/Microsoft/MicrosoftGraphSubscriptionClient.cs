@@ -40,14 +40,18 @@ public sealed class MicrosoftGraphSubscriptionClient(HttpClient httpClient)
         string graphBaseUrl,
         string accessToken,
         string subscriptionId,
+        string notificationUrl,
         DateTimeOffset expiresAt,
         CancellationToken cancellationToken = default)
     {
+        ArgumentException.ThrowIfNullOrWhiteSpace(notificationUrl);
         using var request = CreateAuthorizedRequest(
             HttpMethod.Patch,
             $"{graphBaseUrl.TrimEnd('/')}/v1.0/subscriptions/{Uri.EscapeDataString(subscriptionId)}",
             accessToken);
-        request.Content = JsonContent.Create(new RenewSubscriptionRequest(expiresAt));
+        request.Content = JsonContent.Create(new RenewSubscriptionRequest(
+            notificationUrl,
+            expiresAt));
 
         using var response = await httpClient.SendAsync(request, cancellationToken);
         return await ReadSubscriptionAsync(response, "renewal", cancellationToken);
@@ -132,6 +136,7 @@ public sealed class MicrosoftGraphSubscriptionClient(HttpClient httpClient)
         [property: JsonPropertyName("clientState")] string ClientState);
 
     private sealed record RenewSubscriptionRequest(
+        [property: JsonPropertyName("notificationUrl")] string NotificationUrl,
         [property: JsonPropertyName("expirationDateTime")] DateTimeOffset ExpirationDateTime);
 
     private sealed record SubscriptionResponse(

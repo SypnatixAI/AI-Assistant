@@ -12,20 +12,30 @@ public sealed class OpenAiEmbeddingsClient(HttpClient httpClient)
         string model,
         int dimensions,
         IReadOnlyCollection<string> inputs,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        string? deploymentName = null,
+        string apiVersion = "2024-06-01")
     {
+        var usesAzureOpenAi = !string.IsNullOrWhiteSpace(deploymentName);
+        var requestUri = usesAzureOpenAi
+            ? $"{endpoint.TrimEnd('/')}/openai/deployments/{Uri.EscapeDataString(deploymentName)}/embeddings?api-version={Uri.EscapeDataString(apiVersion)}"
+            : $"{endpoint.TrimEnd('/')}/embeddings";
         using var request = new HttpRequestMessage(
             HttpMethod.Post,
-            $"{endpoint.TrimEnd('/')}/embeddings")
+            requestUri)
         {
-            Content = JsonContent.Create(new
-            {
-                model,
-                input = inputs,
-                dimensions
-            })
+            Content = usesAzureOpenAi
+                ? JsonContent.Create(new { input = inputs, dimensions })
+                : JsonContent.Create(new { model, input = inputs, dimensions })
         };
-        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
+        if (usesAzureOpenAi)
+        {
+            request.Headers.TryAddWithoutValidation("api-key", apiKey);
+        }
+        else
+        {
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
+        }
         using var response = await httpClient.SendAsync(request, cancellationToken);
         if (!response.IsSuccessStatusCode)
         {

@@ -13,6 +13,10 @@ internal sealed class StubMemberManagementService : IMemberManagementService
 
     public string? ReceivedRole { get; private set; }
 
+    public string? ReceivedStatus { get; private set; }
+
+    public int? ReceivedExpectedVersion { get; private set; }
+
     public CancellationToken ReceivedCancellationToken { get; private set; }
 
     public Task<IReadOnlyCollection<OrganizationMember>> GetMembersAsync(
@@ -29,6 +33,20 @@ internal sealed class StubMemberManagementService : IMemberManagementService
     {
         ReceivedMemberId = memberId;
         ReceivedRole = role;
+        ReceivedCancellationToken = cancellationToken;
+        return Task.FromResult(
+            UpdatedMember ?? throw new InvalidOperationException("Updated member is not configured."));
+    }
+
+    public Task<OrganizationMember> UpdateMemberStatusAsync(
+        Guid memberId,
+        string status,
+        int? expectedVersion,
+        CancellationToken cancellationToken = default)
+    {
+        ReceivedMemberId = memberId;
+        ReceivedStatus = status;
+        ReceivedExpectedVersion = expectedVersion;
         ReceivedCancellationToken = cancellationToken;
         return Task.FromResult(
             UpdatedMember ?? throw new InvalidOperationException("Updated member is not configured."));

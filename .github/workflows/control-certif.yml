@@ -21,7 +21,7 @@ permissions:
 
 concurrency:
   group: control-certif
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 env:
   AZURE_CORE_OUTPUT: none
@@ -46,25 +46,33 @@ jobs:
         run: |
           if [ "${{ inputs.action }}" = "start" ]; then
             MIN_REPLICAS=1
+            EXTRA_ARGUMENTS=(--set-env-vars "WorkerAutoStopToken=control-${{ github.run_id }}-${{ github.run_attempt }}")
           else
             MIN_REPLICAS=0
+            EXTRA_ARGUMENTS=()
           fi
 
           az containerapp update \
             --name ca-assistant-worker-certif \
             --resource-group "$RESOURCE_GROUP" \
+            "${EXTRA_ARGUMENTS[@]}" \
             --min-replicas "$MIN_REPLICAS"
 
       - name: Control public applications
         if: ${{ inputs.scope == 'all' }}
         run: |
-          for app in ca-assistant-api-certif ca-assistant-spa-certif; do
+          for app in ca-assistant-api-certif ca-assistant-spa-certif ca-assistant-sqlpad-certif; do
             if [ "${{ inputs.action }}" = "start" ]; then
+              if [ "$app" = "ca-assistant-sqlpad-certif" ]; then
+                TARGET_PORT=3000
+              else
+                TARGET_PORT=8080
+              fi
               az containerapp ingress enable \
                 --name "$app" \
                 --resource-group "$RESOURCE_GROUP" \
                 --type external \
-                --target-port 8080 \
+                --target-port "$TARGET_PORT" \
                 --transport auto
             else
               az containerapp ingress disable \
@@ -77,3 +85,40 @@ jobs:
             fi
           done
 
+  auto-stop-worker:
+    name: Stop CERTIF worker after 30 minutes
+    needs: control
+    if: ${{ inputs.action == 'start' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    environment: certif
+
+    steps:
+      - name: Wait before stopping worker
+        run: sleep 1800
+
+      - name: Sign in to Azure with OIDC
+        uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Stop CERTIF worker
+        run: |
+          EXPECTED_TOKEN="control-${{ github.run_id }}-${{ github.run_attempt }}"
+          CURRENT_TOKEN="$(az containerapp show \
+            --name ca-assistant-worker-certif \
+            --resource-group "$RESOURCE_GROUP" \
+            --query "properties.template.containers[?name == 'worker'] | [0].env[?name == 'WorkerAutoStopToken'].value | [0]" \
+            --output tsv)"
+
+          if [ "$CURRENT_TOKEN" != "$EXPECTED_TOKEN" ]; then
+            echo "The CERTIF worker was restarted more recently; skipping this stale stop."
+            exit 0
+          fi
+
+          az containerapp update \
+            --name ca-assistant-worker-certif \
+            --resource-group "$RESOURCE_GROUP" \
+            --min-replicas 0

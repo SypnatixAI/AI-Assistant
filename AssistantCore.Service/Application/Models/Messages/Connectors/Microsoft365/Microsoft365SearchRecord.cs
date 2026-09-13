@@ -5,6 +5,10 @@ public sealed record Microsoft365SearchRecord(
     string Title,
     string Content,
     string Reference,
+    string? SiteId,
+    string? DriveId,
+    string? DriveItemId,
     string? Url,
     DateTimeOffset? ModifiedAt,
-    double? RelevanceScore);
+    double? RelevanceScore,
+    double? SemanticScore = null);

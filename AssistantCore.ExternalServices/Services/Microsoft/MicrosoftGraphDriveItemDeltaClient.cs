@@ -7,6 +7,13 @@ namespace AssistantCore.ExternalServices.Services.Microsoft;
 
 public sealed class MicrosoftGraphDriveItemDeltaClient(HttpClient httpClient)
 {
+    private static readonly string[] PermissionTrackingPreferences =
+    [
+        "hierarchicalsharing",
+        "deltashowremovedasdeleted",
+        "deltatraversepermissiongaps",
+        "deltashowsharingchanges"
+    ];
     private readonly MicrosoftGraphCollectionReader collectionReader = new(httpClient);
 
     public async IAsyncEnumerable<MicrosoftDriveItemDeltaPage> GetInitialPagesAsync(
@@ -50,7 +57,8 @@ public sealed class MicrosoftGraphDriveItemDeltaClient(HttpClient httpClient)
                            accessToken,
                            MapItem,
                            "drive item delta",
-                           cancellationToken))
+                           cancellationToken,
+                           PermissionTrackingPreferences))
         {
             foundFinalDeltaLink |= page.DeltaLink is not null;
             yield return new MicrosoftDriveItemDeltaPage(page.Items, page.DeltaLink);

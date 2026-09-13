@@ -1,6 +1,6 @@
 using AssistantCore.Repository.Domain.Entities;
+using AssistantCore.Service.Application.Models.Messages.AgentRuntime;
 using AssistantCore.Service.Application.Models.Messages.Lifecycle;
-using AssistantCore.Service.Application.Models.Messages.Orchestration;
 using AssistantCore.Service.Application.Services.Messages.Lifecycle;
 
 namespace AssistantCore.Service.Tests;
@@ -28,7 +28,7 @@ internal sealed class RecordingMessageProcessingLifecycleService
 
     public Task<CompletedMessageProcessing> CompleteAsync(
         StartedMessageProcessing processing,
-        MessageOrchestrationResult result,
+        AgentTurnResult result,
         CancellationToken cancellationToken) =>
         throw new NotSupportedException();
 

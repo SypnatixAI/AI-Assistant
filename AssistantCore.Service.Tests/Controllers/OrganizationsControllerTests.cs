@@ -41,7 +41,7 @@ public sealed class OrganizationsControllerTests
     }
 
     [Theory, AutoDomainData]
-    public void Given_TheCreateOrganizationAction_When_CreateOrganization_Then_RequiresAuthorizationAndUsesExpectedRoute(
+    public void Given_TheCreateOrganizationAction_When_CreateOrganization_Then_DoesNotRequireAuthorizationAndUsesExpectedRoute(
         int _)
     {
         // Given
@@ -51,11 +51,13 @@ public sealed class OrganizationsControllerTests
         var controllerRoute = controllerType.GetCustomAttribute<RouteAttribute>();
         var authorizeAttribute = controllerType.GetCustomAttribute<AuthorizeAttribute>();
         var method = controllerType.GetMethod(nameof(OrganizationsController.CreateOrganization));
+        var actionAuthorizeAttribute = method?.GetCustomAttribute<AuthorizeAttribute>();
 
         // Then
         Assert.NotNull(method);
         Assert.Equal("api/organizations", controllerRoute?.Template);
-        Assert.NotNull(authorizeAttribute);
+        Assert.Null(authorizeAttribute);
+        Assert.Null(actionAuthorizeAttribute);
         Assert.NotNull(method.GetCustomAttribute<HttpPostAttribute>());
     }
 }

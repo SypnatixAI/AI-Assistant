@@ -16,6 +16,8 @@ public sealed class Organization
 
     public RecordStatus Status { get; set; }
 
+    public DateTimeOffset CreatedAt { get; set; }
+
     public ICollection<OrganizationMember> Members { get; set; } = [];
 
     public ICollection<OrganizationConnector> Connectors { get; set; } = [];

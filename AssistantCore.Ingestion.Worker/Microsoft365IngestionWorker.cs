@@ -113,17 +113,25 @@ public sealed class Microsoft365IngestionWorker(
                     break;
                 }
             }
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception exception)
+        {
+            logger.LogError(exception, "Microsoft 365 pending ingestion cycle failed.");
+        }
 
+        try
+        {
             for (var index = 0; index < options.Value.MaximumDocumentsPerCycle; index++)
             {
                 await using var scope = scopeFactory.CreateAsyncScope();
                 var service = scope.ServiceProvider
                     .GetService<IMicrosoft365DocumentProcessingService>();
-                if (service is null)
-                {
-                    break;
-                }
-                if (!await service.ProcessNextAsync(cancellationToken))
+                if (service is null
+                    || !await service.ProcessNextAsync(cancellationToken))
                 {
                     break;
                 }
@@ -135,7 +143,7 @@ public sealed class Microsoft365IngestionWorker(
         }
         catch (Exception exception)
         {
-            logger.LogError(exception, "Microsoft 365 pending ingestion cycle failed.");
+            logger.LogError(exception, "Microsoft 365 document ingestion cycle failed.");
         }
     }
 }

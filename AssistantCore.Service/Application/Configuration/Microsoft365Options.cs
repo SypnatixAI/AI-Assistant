@@ -12,6 +12,16 @@ public sealed class Microsoft365Options
 
     public string ClientSecret { get; init; } = string.Empty;
 
+    public string ClientStateHmacKey { get; init; } = string.Empty;
+
+    public string SharePointCertificatePath { get; init; } = string.Empty;
+
+    public string SharePointCertificateBase64 { get; init; } = string.Empty;
+
+    public string SharePointCertificatePassword { get; init; } = string.Empty;
+
+    public int SharePointGroupCacheMinutes { get; init; } = 5;
+
     public string ConsentCallbackUrl { get; init; } = string.Empty;
 
     public string ConsentSuccessRedirectUrl { get; init; } = string.Empty;
@@ -42,6 +52,22 @@ public sealed class Microsoft365Options
 
     public int MaximumExtractedCharacters { get; init; } = 2_000_000;
 
+    public string OcrEndpoint { get; init; } = string.Empty;
+
+    public string OcrApiKey { get; init; } = string.Empty;
+
+    public int OcrTimeoutSeconds { get; init; } = 60;
+
+    public int OcrPollIntervalMilliseconds { get; init; } = 500;
+
+    public int OcrMinimumNativeCharactersPerPage { get; init; } = 20;
+
+    public int MaximumPdfPages { get; init; } = 500;
+
+    public int MaximumExcelSheets { get; init; } = 100;
+
+    public int MaximumExcelCells { get; init; } = 100_000;
+
     public int ChunkMaximumTokens { get; init; } = 800;
 
     public int ChunkOverlapTokens { get; init; } = 100;
@@ -53,6 +79,10 @@ public sealed class Microsoft365Options
     public string EmbeddingApiKey { get; init; } = string.Empty;
 
     public string EmbeddingModel { get; init; } = "text-embedding-3-small";
+
+    public string EmbeddingDeploymentName { get; init; } = string.Empty;
+
+    public string EmbeddingApiVersion { get; init; } = "2024-06-01";
 
     public int EmbeddingDimensions { get; init; } = 1536;
 

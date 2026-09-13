@@ -1,14 +1,18 @@
 using AssistantCore.Repository.Domain.Entities;
 using AssistantCore.Repository.Domain.Enums;
 using AssistantCore.Repository.Persistence;
+using AssistantCore.Repository.Repositories.Audit;
 using Microsoft.EntityFrameworkCore;
 
 namespace AssistantCore.Repository.Repositories;
 
-public sealed class ConversationRepository(AssistantCoreDbContext dbContext)
+public sealed class ConversationRepository(
+    AssistantCoreDbContext dbContext,
+    IAdministrativeAuditRepository administrativeAuditRepository)
     : IConversationRepository
 {
     private const int InitialConversationVersion = 1;
+    private const int MaximumAgentHistoryMessages = 20;
 
     public async Task<(Conversation Conversation, Message UserMessage)> CreateConversationWithFirstMessageAsync(
         Guid organizationId,
@@ -121,16 +125,6 @@ public sealed class ConversationRepository(AssistantCoreDbContext dbContext)
         Guid conversationId,
         CancellationToken cancellationToken = default)
     {
-        var summary = await dbContext.Conversations
-            .AsNoTracking()
-            .Where(conversation =>
-                conversation.Id == conversationId
-                && conversation.OrganizationId == organizationId
-                && conversation.OwnerMemberId == ownerMemberId
-                && conversation.DeletedAt == null)
-            .Select(conversation => conversation.ContextSummary)
-            .SingleOrDefaultAsync(cancellationToken);
-
         var messages = await dbContext.Messages
             .AsNoTracking()
             .Where(message =>
@@ -138,9 +132,11 @@ public sealed class ConversationRepository(AssistantCoreDbContext dbContext)
                 && message.Conversation.OrganizationId == organizationId
                 && message.Conversation.OwnerMemberId == ownerMemberId
                 && message.Conversation.DeletedAt == null
-                && message.ProcessingStatus == MessageProcessingStatus.Completed)
-            .OrderBy(message => message.CreatedAt)
-            .ThenBy(message => message.Id)
+                && message.ProcessingStatus == MessageProcessingStatus.Completed
+                && !message.Sources.Any(source => source.SourceType == "Microsoft365"))
+            .OrderByDescending(message => message.CreatedAt)
+            .ThenByDescending(message => message.Id)
+            .Take(MaximumAgentHistoryMessages)
             .Select(message => new ConversationMessageItem(
                 message.Id,
                 message.Role,
@@ -152,52 +148,71 @@ public sealed class ConversationRepository(AssistantCoreDbContext dbContext)
                 Array.Empty<ConversationMessageSourceItem>()))
             .ToListAsync(cancellationToken);
 
-        if (string.IsNullOrWhiteSpace(summary))
-        {
-            return messages;
-        }
-
-        return
-        [
-            new ConversationMessageItem(
-                Guid.Empty,
-                MessageRole.Assistant,
-                $"[Conversation summary]\n{summary}",
-                MessageProcessingStatus.Completed,
-                null,
-                DateTimeOffset.MinValue,
-                DateTimeOffset.MinValue,
-                Array.Empty<ConversationMessageSourceItem>()),
-            .. messages.TakeLast(20)
-        ];
+        messages.Reverse();
+        return messages;
     }
 
-    public async Task<bool> UpdateConversationContextSummaryAsync(
-        Guid organizationId,
-        Guid ownerMemberId,
-        Guid conversationId,
-        string summary,
-        DateTimeOffset updatedAt,
-        CancellationToken cancellationToken = default)
+    public async Task<(Conversation Conversation, IReadOnlyList<ConversationMessageItem> History)?>
+        StartExistingConversationMessageAsync(
+            Guid organizationId,
+            Guid ownerMemberId,
+            Guid conversationId,
+            Message userMessage,
+            CancellationToken cancellationToken = default)
     {
-        var conversation = await dbContext.Conversations.SingleOrDefaultAsync(
-            candidate => candidate.Id == conversationId
-                && candidate.OrganizationId == organizationId
-                && candidate.OwnerMemberId == ownerMemberId
-                && candidate.DeletedAt == null,
-            cancellationToken);
+        ValidateIdentifier(
+            userMessage.ConversationId,
+            conversationId,
+            nameof(userMessage.ConversationId));
+
+        var conversation = await dbContext.Conversations
+            .Include(candidate => candidate.Messages
+                .Where(message =>
+                    message.ProcessingStatus == MessageProcessingStatus.Completed
+                    && !message.Sources.Any(source => source.SourceType == "Microsoft365"))
+                .OrderByDescending(message => message.CreatedAt)
+                .ThenByDescending(message => message.Id)
+                .Take(MaximumAgentHistoryMessages))
+            .SingleOrDefaultAsync(
+                candidate =>
+                    candidate.Id == conversationId
+                    && candidate.OrganizationId == organizationId
+                    && candidate.OwnerMemberId == ownerMemberId
+                    && candidate.DeletedAt == null,
+                cancellationToken);
 
         if (conversation is null)
         {
-            return false;
+            return null;
         }
 
-        conversation.ContextSummary = summary.Length <= 12000
-            ? summary
-            : summary[..12000];
-        conversation.ContextSummaryUpdatedAt = updatedAt;
+        if (conversation.Status == ConversationStatus.Archived)
+        {
+            return (conversation, Array.Empty<ConversationMessageItem>());
+        }
+
+        var history = conversation.Messages
+            .OrderBy(message => message.CreatedAt)
+            .ThenBy(message => message.Id)
+            .Select(message => new ConversationMessageItem(
+                message.Id,
+                message.Role,
+                message.Content,
+                message.ProcessingStatus,
+                message.Model,
+                message.CreatedAt,
+                message.UpdatedAt,
+                Array.Empty<ConversationMessageSourceItem>()))
+            .ToArray();
+
+        userMessage.ConversationId = conversationId;
+        userMessage.Role = MessageRole.User;
+        userMessage.ProcessingStatus = MessageProcessingStatus.InProgress;
+        conversation.UpdatedAt = userMessage.CreatedAt;
+        dbContext.Messages.Add(userMessage);
         await dbContext.SaveChangesAsync(cancellationToken);
-        return true;
+
+        return (conversation, history);
     }
 
     public async Task<ConversationListPage> ListConversationsAsync(
@@ -426,6 +441,7 @@ public sealed class ConversationRepository(AssistantCoreDbContext dbContext)
         string? title,
         ConversationStatus? status,
         DateTimeOffset updatedAt,
+        string correlationId,
         CancellationToken cancellationToken = default)
     {
         var conversation = await dbContext.Conversations
@@ -454,7 +470,23 @@ public sealed class ConversationRepository(AssistantCoreDbContext dbContext)
 
         if (status is not null)
         {
+            var previousStatus = conversation.Status;
             conversation.Status = status.Value;
+
+            if (status.Value == ConversationStatus.Archived)
+            {
+                administrativeAuditRepository.Stage(AdministrativeAuditEntryFactory.Create(
+                    organizationId,
+                    AdministrativeAuditSubjectTypes.Member,
+                    ownerMemberId,
+                    AdministrativeAuditAction.ConversationArchived,
+                    AdministrativeAuditSubjectTypes.Conversation,
+                    conversationId,
+                    updatedAt,
+                    new Dictionary<string, object?> { ["status"] = previousStatus.ToString() },
+                    new Dictionary<string, object?> { ["status"] = status.Value.ToString() },
+                    correlationId));
+            }
         }
 
         conversation.Version += 1;
@@ -478,6 +510,7 @@ public sealed class ConversationRepository(AssistantCoreDbContext dbContext)
         Guid conversationId,
         DateTimeOffset deletedAt,
         DateTimeOffset purgeAfter,
+        string correlationId,
         CancellationToken cancellationToken = default)
     {
         var conversation = await dbContext.Conversations
@@ -508,6 +541,18 @@ public sealed class ConversationRepository(AssistantCoreDbContext dbContext)
             conversation.DeletedAt = deletedAt;
             conversation.Version += 1;
             conversation.UpdatedAt = deletedAt;
+
+            administrativeAuditRepository.Stage(AdministrativeAuditEntryFactory.Create(
+                organizationId,
+                AdministrativeAuditSubjectTypes.Member,
+                ownerMemberId,
+                AdministrativeAuditAction.ConversationDeleted,
+                AdministrativeAuditSubjectTypes.Conversation,
+                conversationId,
+                deletedAt,
+                new Dictionary<string, object?> { ["deletedAt"] = null },
+                new Dictionary<string, object?> { ["deletedAt"] = deletedAt.ToString("O") },
+                correlationId));
         }
 
         if (!alreadyRequested)

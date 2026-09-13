@@ -17,6 +17,30 @@ public sealed class Microsoft365SourceDiscoveryRepository(AssistantCoreDbContext
             .Select(site => site.SiteId)
             .ToArrayAsync(cancellationToken);
 
+    public async Task<IReadOnlyCollection<Microsoft365SharePointSiteData>> GetIndexedSitesAsync(
+        Guid organizationId,
+        CancellationToken cancellationToken = default) =>
+        await dbContext.Microsoft365Sites
+            .AsNoTracking()
+            .Where(site =>
+                site.OrganizationId == organizationId
+                && site.WebUrl != null
+                && (dbContext.Microsoft365Drives.Any(drive =>
+                        drive.OrganizationId == organizationId
+                        && drive.SiteId == site.SiteId
+                        && drive.IsIndexed
+                        && (drive.Status == Microsoft365SourceStatus.Enabled
+                            || drive.Status == Microsoft365SourceStatus.FullResyncRequired))
+                    || dbContext.Microsoft365Lists.Any(list =>
+                        list.OrganizationId == organizationId
+                        && list.SiteId == site.SiteId
+                        && list.IsIndexed
+                        && (list.Status == Microsoft365SourceStatus.Enabled
+                            || list.Status == Microsoft365SourceStatus.FullResyncRequired))))
+            .OrderBy(site => site.SiteId)
+            .Select(site => new Microsoft365SharePointSiteData(site.SiteId, site.WebUrl!))
+            .ToArrayAsync(cancellationToken);
+
     public Task<bool> HasIndexedSourceAsync(
         Guid organizationId,
         CancellationToken cancellationToken = default) =>
@@ -25,8 +49,57 @@ public sealed class Microsoft365SourceDiscoveryRepository(AssistantCoreDbContext
             .AnyAsync(source =>
                 source.Microsoft365Connection.OrganizationId == organizationId
                 && source.IsIndexed
+                && (source.Status == Microsoft365SourceStatus.Enabled
+                    || source.Status == Microsoft365SourceStatus.FullResyncRequired)
                 && source.Kind != Microsoft365SourceKind.SharePointSite,
                 cancellationToken);
+
+    public async Task<bool> IsEnvironmentReadyAsync(
+        Guid organizationId,
+        CancellationToken cancellationToken = default)
+    {
+        var activeSources = dbContext.Microsoft365Sources
+            .AsNoTracking()
+            .Where(source =>
+                source.Microsoft365Connection.OrganizationId == organizationId
+                && source.IsIndexed
+                && source.Status == Microsoft365SourceStatus.Enabled
+                && source.Kind != Microsoft365SourceKind.SharePointSite);
+
+        if (!await activeSources.AnyAsync(cancellationToken))
+        {
+            return false;
+        }
+
+        var activeSourceIds = await activeSources
+            .Select(source => source.Id)
+            .ToArrayAsync(cancellationToken);
+
+        var hasPendingDocumentWork = await dbContext.Microsoft365DocumentWorks
+            .AsNoTracking()
+            .AnyAsync(work =>
+                activeSourceIds.Contains(work.Microsoft365SourceId)
+                && work.Microsoft365Synchronization.Type == Microsoft365SynchronizationType.Initial
+                && (work.Status == Microsoft365DocumentWorkStatus.Pending
+                    || work.Status == Microsoft365DocumentWorkStatus.Processing
+                    || work.Status == Microsoft365DocumentWorkStatus.TemporaryFailure),
+                cancellationToken);
+        if (hasPendingDocumentWork)
+        {
+            return false;
+        }
+
+        return !await activeSources.AnyAsync(
+            source => source.LastSuccessfulSynchronizationAt == null
+                || source.Synchronizations.Any(synchronization =>
+                    synchronization.Type == Microsoft365SynchronizationType.Initial
+                    && (synchronization.Status == Microsoft365SynchronizationStatus.Pending
+                        || synchronization.Status == Microsoft365SynchronizationStatus.Running
+                        || synchronization.Status == Microsoft365SynchronizationStatus.TemporaryFailure))
+                || !source.Subscriptions.Any(subscription =>
+                    subscription.Status == Microsoft365SubscriptionStatus.Active),
+            cancellationToken);
+    }
 
     public async Task<Microsoft365Site> SaveSiteAsync(
         Microsoft365Connection connection,
@@ -77,7 +150,10 @@ public sealed class Microsoft365SourceDiscoveryRepository(AssistantCoreDbContext
         CancellationToken cancellationToken = default) =>
         await dbContext.Microsoft365Drives
             .AsNoTracking()
-            .Where(drive => drive.OrganizationId == organizationId && drive.SiteId == siteId)
+            .Where(drive =>
+                drive.OrganizationId == organizationId
+                && drive.SiteId == siteId
+                && drive.Kind == Microsoft365SourceKind.SharePointDrive)
             .OrderBy(drive => drive.DisplayName)
             .ToArrayAsync(cancellationToken);
 
@@ -93,7 +169,8 @@ public sealed class Microsoft365SourceDiscoveryRepository(AssistantCoreDbContext
             .SingleOrDefaultAsync(drive =>
                 drive.OrganizationId == organizationId
                 && drive.SiteId == siteId
-                && drive.DriveId == driveId,
+                && drive.DriveId == driveId
+                && drive.Kind == Microsoft365SourceKind.SharePointDrive,
                 cancellationToken);
 
     public async Task SaveDriveActivationAsync(
@@ -101,11 +178,19 @@ public sealed class Microsoft365SourceDiscoveryRepository(AssistantCoreDbContext
         DateTimeOffset requestedAt,
         CancellationToken cancellationToken = default)
     {
-        if (drive.EnableIndexing(requestedAt)
-            && !drive.Synchronizations.Any(synchronization =>
+        drive.EnableIndexing(requestedAt);
+        await EnsureConnectorSourceAsync(drive, cancellationToken);
+
+        var hasSuccessfulInitialSynchronization = drive.Synchronizations.Any(synchronization =>
+            synchronization.Type == Microsoft365SynchronizationType.Initial
+            && synchronization.Status == Microsoft365SynchronizationStatus.Succeeded);
+        var hasRetryableInitialSynchronization = drive.Synchronizations.Any(synchronization =>
                 synchronization.Type == Microsoft365SynchronizationType.Initial
                 && synchronization.Status is Microsoft365SynchronizationStatus.Pending
-                    or Microsoft365SynchronizationStatus.Running))
+                    or Microsoft365SynchronizationStatus.Running
+                    or Microsoft365SynchronizationStatus.TemporaryFailure);
+        if (!hasSuccessfulInitialSynchronization
+            && !hasRetryableInitialSynchronization)
         {
             drive.Synchronizations.Add(new Microsoft365Synchronization
             {
@@ -135,6 +220,36 @@ public sealed class Microsoft365SourceDiscoveryRepository(AssistantCoreDbContext
         }
 
         await dbContext.SaveChangesAsync(cancellationToken);
+    }
+
+    private async Task EnsureConnectorSourceAsync(
+        Microsoft365Drive drive,
+        CancellationToken cancellationToken)
+    {
+        var sourceType = drive.Kind switch
+        {
+            Microsoft365SourceKind.SharePointDrive => Microsoft365SourceType.SharePoint,
+            Microsoft365SourceKind.OneDrive => Microsoft365SourceType.OneDrive,
+            _ => throw new InvalidOperationException("Unsupported Microsoft 365 drive source type.")
+        };
+        var source = await dbContext.OrganizationConnectorSources.SingleOrDefaultAsync(candidate =>
+            candidate.OrganizationConnectorId == drive.OrganizationConnectorId
+            && candidate.SourceType == sourceType,
+            cancellationToken);
+        if (source is null)
+        {
+            dbContext.OrganizationConnectorSources.Add(new OrganizationConnectorSource
+            {
+                OrganizationConnectorId = drive.OrganizationConnectorId,
+                SourceType = sourceType,
+                Status = RecordStatus.Active,
+                IsIndexed = true
+            });
+            return;
+        }
+
+        source.Status = RecordStatus.Active;
+        source.IsIndexed = true;
     }
 
     public async Task SaveDriveDeactivationAsync(
@@ -224,10 +339,18 @@ public sealed class Microsoft365SourceDiscoveryRepository(AssistantCoreDbContext
         var initialSynchronizationRequests = 0;
         var subscriptionCreationRequests = 0;
 
-        if (!list.Synchronizations.Any(synchronization =>
+        list.EnableIndexing(requestedAt);
+
+        var hasSuccessfulInitialSynchronization = list.Synchronizations.Any(synchronization =>
+            synchronization.Type == Microsoft365SynchronizationType.Initial
+            && synchronization.Status == Microsoft365SynchronizationStatus.Succeeded);
+        var hasRetryableInitialSynchronization = list.Synchronizations.Any(synchronization =>
                 synchronization.Type == Microsoft365SynchronizationType.Initial
                 && synchronization.Status is Microsoft365SynchronizationStatus.Pending
-                    or Microsoft365SynchronizationStatus.Running))
+                    or Microsoft365SynchronizationStatus.Running
+                    or Microsoft365SynchronizationStatus.TemporaryFailure);
+        if (!hasSuccessfulInitialSynchronization
+            && !hasRetryableInitialSynchronization)
         {
             list.Synchronizations.Add(new Microsoft365Synchronization
             {
@@ -350,7 +473,7 @@ public sealed class Microsoft365SourceDiscoveryRepository(AssistantCoreDbContext
                 drive.OrganizationId == site.OrganizationId
                 && drive.OrganizationConnectorId == site.OrganizationConnectorId
                 && drive.Microsoft365ConnectionId == site.Microsoft365ConnectionId
-                && drive.SiteId == site.SiteId)
+                && drive.Kind == Microsoft365SourceKind.SharePointDrive)
             .ToListAsync(cancellationToken);
         var existingLists = await dbContext.Microsoft365Lists
             .Where(list =>
@@ -382,6 +505,8 @@ public sealed class Microsoft365SourceDiscoveryRepository(AssistantCoreDbContext
             discoveredIds.Add(discoveredDrive.MicrosoftResourceId);
             if (existingById.TryGetValue(discoveredDrive.MicrosoftResourceId, out var existingDrive))
             {
+                existingDrive.SiteId = site.SiteId;
+                existingDrive.ParentExternalResourceId = site.SiteId;
                 existingDrive.RefreshDiscovery(discoveredDrive.DisplayName, discoveredDrive.WebUrl);
                 continue;
             }
@@ -405,7 +530,9 @@ public sealed class Microsoft365SourceDiscoveryRepository(AssistantCoreDbContext
             });
         }
 
-        foreach (var missingDrive in existingDrives.Where(drive => !discoveredIds.Contains(drive.DriveId)))
+        foreach (var missingDrive in existingDrives.Where(drive =>
+                     drive.SiteId == site.SiteId
+                     && !discoveredIds.Contains(drive.DriveId)))
         {
             missingDrive.MarkUnavailable();
         }

@@ -1,9 +1,11 @@
 using AssistantCore.Repository.Abstractions;
+using AssistantCore.Repository.Domain.Entities;
 using AssistantCore.Repository.Domain.Enums;
 using AssistantCore.Repository.Queries;
 using AssistantCore.Service.Application.Abstractions;
 using AssistantCore.Service.Application.Exceptions;
 using AssistantCore.Service.Application.Models.Messages;
+using AssistantCore.Service.Application.Services.AuthenticateUser;
 using AssistantCore.Service.Application.Services.Microsoft365;
 using AssistantCore.Service.Application.Services.TenantAdmission;
 
@@ -13,6 +15,7 @@ public sealed class MessageUserContextService(
     ICurrentIdentity currentIdentity,
     IOrganizationQueries organizationQueries,
     IOrganizationMemberQueries memberQueries,
+    IOrganizationRoleResolver organizationRoleResolver,
     IMicrosoft365OnboardingCompletionChecker onboardingCompletionChecker,
     ITenantAdmissionPolicy tenantAdmissionPolicy) : IMessageUserContextService
 {
@@ -20,28 +23,52 @@ public sealed class MessageUserContextService(
         CancellationToken cancellationToken)
     {
         var identity = currentIdentity.GetIdentity();
-        var organization = await organizationQueries.FindOrganization(
+        var resolved = await memberQueries.FindMemberWithOrganization(
             identity.Provider,
             identity.ExternalOrganizationId,
+            identity.ExternalUserId,
             cancellationToken);
 
-        if (organization is null || organization.Status != RecordStatus.Active)
+        Organization? organization;
+        OrganizationMember? member;
+        if (resolved is not null)
+        {
+            organization = resolved.Organization;
+            member = resolved.Member;
+        }
+        else
+        {
+            // Compatibility fallback for alternate query implementations and tests.
+            // The production repository resolves both entities with one SQL query.
+            organization = await organizationQueries.FindOrganization(
+                identity.Provider,
+                identity.ExternalOrganizationId,
+                cancellationToken);
+
+            if (organization is null || organization.Status != RecordStatus.Active)
+            {
+                throw new ForbiddenException("Organization access denied.");
+            }
+
+            member = await memberQueries.FindMember(
+                organization.Id,
+                identity.Provider,
+                identity.ExternalUserId,
+                cancellationToken);
+        }
+
+        if (organization.Status != RecordStatus.Active)
         {
             throw new ForbiddenException("Organization access denied.");
         }
 
-        var member = await memberQueries.FindMember(
-            organization.Id,
-            identity.Provider,
-            identity.ExternalUserId,
-            cancellationToken);
-
-        if (member is null
-            || member.Status != RecordStatus.Active
-            || member.Role is not (OrganizationRole.Admin or OrganizationRole.User))
+        if (member is null || member.Status != RecordStatus.Active)
         {
             throw new ForbiddenException("Organization member access denied.");
         }
+
+        // Le rôle effectif vient du JWT; la valeur persistée reste informative.
+        member.Role = organizationRoleResolver.Resolve(identity.AppRoles);
 
         var isOnboardingComplete = await onboardingCompletionChecker.IsCompleteAsync(
             organization.Id,
@@ -55,6 +82,6 @@ public sealed class MessageUserContextService(
                 TenantAdmissionException.TenantAdminRequired);
         }
 
-        return new MessageUserContext(organization, member);
+        return new MessageUserContext(organization, member, identity);
     }
 }
