@@ -250,23 +250,23 @@ public sealed class MessageProcessingLifecycleService(
             Id = Guid.NewGuid(),
             Role = MessageRole.Assistant,
             Content = result.Content,
-            Model = result.ModelName,
             ProcessingStatus = MessageProcessingStatus.Completed,
+            Model = result.ModelName,
             CreatedAt = completedAt,
             UpdatedAt = completedAt
         };
 
     private static IReadOnlyCollection<MessageSource> CreateSources(
-        IReadOnlyCollection<RetrievedEvidence> citations) =>
-        citations
-            .Select(evidence => new MessageSource
+        IReadOnlyCollection<RetrievedEvidence> evidence) =>
+        evidence
+            .Select(item => new MessageSource
             {
                 Id = Guid.NewGuid(),
-                SourceType = evidence.SourceType,
-                Title = evidence.Title,
-                Url = evidence.Url,
-                Reference = evidence.Reference,
-                SourceDate = evidence.SourceDate
+                SourceType = item.SourceType,
+                Title = item.Title,
+                Reference = item.Reference,
+                Url = item.Url,
+                SourceDate = item.OccurredAt
             })
             .ToArray();
 
@@ -277,10 +277,23 @@ public sealed class MessageProcessingLifecycleService(
             .Select(warning => new MessageWarning
             {
                 Id = Guid.NewGuid(),
-                Code = warning,
-                CreatedAt = DateTimeOffset.UtcNow
+                Content = warning.Trim()
             })
             .ToArray();
+
+    private static string ValidateErrorCode(string errorCode)
+    {
+        var normalizedErrorCode = errorCode.Trim();
+
+        if (normalizedErrorCode.Length is 0 or > MaximumProcessingErrorCodeLength)
+        {
+            throw new ArgumentException(
+                $"The error code must contain between 1 and {MaximumProcessingErrorCodeLength} characters.",
+                nameof(errorCode));
+        }
+
+        return normalizedErrorCode;
+    }
 
     private static void EnsureMemberBelongsToOrganization(
         Organization organization,
@@ -288,20 +301,12 @@ public sealed class MessageProcessingLifecycleService(
     {
         if (member.OrganizationId != organization.Id)
         {
-            throw new InvalidOperationException(
-                "The authenticated member does not belong to the current organization.");
+            throw new ArgumentException(
+                "The organization member does not belong to the provided organization.",
+                nameof(member));
         }
     }
 
-    private static string ValidateErrorCode(string errorCode)
-    {
-        ArgumentException.ThrowIfNullOrWhiteSpace(errorCode);
-
-        return errorCode.Length <= MaximumProcessingErrorCodeLength
-            ? errorCode
-            : errorCode[..MaximumProcessingErrorCodeLength];
-    }
-
     private static NotFoundException CreateConversationNotFoundException() =>
-        new("Conversation not found.", NotFoundException.ConversationNotFound);
+        new("Conversation not found.");
 }
