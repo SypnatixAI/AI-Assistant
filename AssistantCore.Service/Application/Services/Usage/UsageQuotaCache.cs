@@ -27,6 +27,39 @@ public sealed class UsageQuotaCache(IOptions<UsageOptions> options) : IUsageQuot
         }
     }
 
+    public void Merge(
+        DateTimeOffset periodStartsAt,
+        DateTimeOffset periodEndsAt,
+        IReadOnlyDictionary<Guid, long> tokensUsedByOrganization)
+    {
+        foreach (var (organizationId, tokensUsed) in tokensUsedByOrganization)
+        {
+            while (true)
+            {
+                var entry = entries.GetOrAdd(
+                    organizationId,
+                    _ => new UsageQuotaEntry(periodStartsAt, periodEndsAt, tokensUsed));
+                var snapshot = entry.Read();
+
+                if (snapshot.PeriodStartsAt == periodStartsAt
+                    && snapshot.PeriodEndsAt == periodEndsAt)
+                {
+                    entry.EnsureAtLeast(tokensUsed);
+                    break;
+                }
+
+                var replacement = new UsageQuotaEntry(
+                    periodStartsAt,
+                    periodEndsAt,
+                    tokensUsed);
+                if (entries.TryUpdate(organizationId, replacement, entry))
+                {
+                    break;
+                }
+            }
+        }
+    }
+
     public void EnsureQuotaAvailable(Guid organizationId, DateTimeOffset now)
     {
         var entry = GetCurrentEntry(organizationId, now);
@@ -112,6 +145,14 @@ public sealed class UsageQuotaCache(IOptions<UsageOptions> options) : IUsageQuot
                 }
 
                 return CreateSnapshot();
+            }
+        }
+
+        public void EnsureAtLeast(long tokensUsed)
+        {
+            lock (gate)
+            {
+                currentTokensUsed = Math.Max(currentTokensUsed, tokensUsed);
             }
         }
 
