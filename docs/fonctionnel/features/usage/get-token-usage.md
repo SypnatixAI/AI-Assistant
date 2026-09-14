@@ -143,18 +143,35 @@ Après une réponse réussie, `POST /api/messages` retourne également :
 ```
 
 - `requestTokens` est le total facturé pour cette demande.
-- `tokensUsed` est le total actualisé de la période.
-- `tokensRemaining` vient du backend après enregistrement.
+- `tokensUsed` est le total actualisé connu par l'instance API.
+- `tokensRemaining` est calculé par le backend et ne devient jamais négatif.
+
+La consommation est persistée avec le message Assistant dans le même
+`SaveChanges` EF. Il n'y a donc pas d'écriture SQL supplémentaire dédiée au
+quota sur le chemin critique du message.
+
+Après cette écriture durable, le cache local de quota est incrémenté en mémoire
+et fournit immédiatement le solde retourné par `POST /api/messages`.
 
 Le frontend remplace son ancien compteur par ces valeurs. Il ne fait pas une
-soustraction locale, car un autre membre de l'organisation peut consommer des
-jetons en même temps.
+soustraction locale.
+
+`GET /api/usage` reste la lecture autoritative depuis les consommations
+persistées en base.
 
 <a id="usage-exhausted"></a>
 ## Quota épuisé
 
 Avant de démarrer une nouvelle orchestration, le backend vérifie que
 l'organisation possède encore des jetons.
+
+Cette vérification est effectuée uniquement dans le cache local en mémoire de
+l'instance API. `POST /api/messages` ne fait aucun appel SQL, Redis ou réseau
+supplémentaire pour vérifier le quota avant Foundry.
+
+Le cache est chargé depuis les consommations persistées au démarrage de
+l'application puis resynchronisé périodiquement en arrière-plan. La
+resynchronisation n'est pas effectuée dans la requête `/api/messages`.
 
 Lorsque le quota est déjà épuisé, `POST /api/messages` retourne :
 
@@ -182,7 +199,8 @@ légèrement le quota. Dans ce cas :
 
 - la consommation réelle est enregistrée
 - `tokensRemaining` reste à zéro et ne devient jamais négatif dans le contrat
-- les demandes suivantes sont refusées
+- les demandes suivantes de la même instance sont refusées immédiatement
+- les autres instances convergent lors de leur prochaine resynchronisation
 - la réponse déjà produite n'est pas supprimée
 
 <a id="usage-concurrency"></a>
@@ -191,14 +209,19 @@ légèrement le quota. Dans ce cas :
 Plusieurs membres peuvent envoyer une question simultanément.
 
 - Chaque consommation possède un identifiant unique lié au message Assistant.
-- Le même message ne peut pas être facturé deux fois après une reprise.
-- L'écriture utilise une transaction ou un mécanisme atomique adapté à SQL Server.
-- Le total lu ne doit pas dépendre d'une valeur conservée uniquement en mémoire.
+- Le même message ne peut pas être facturé deux fois dans le journal persistant.
+- La consommation et le message Assistant sont écrits dans le même `SaveChanges`.
+- Le cache local est thread-safe et ne recompte pas deux fois le même message pendant la vie de l'instance.
+- Le cache est initialisé depuis le journal durable avant de servir les demandes.
+- Les instances API se resynchronisent périodiquement depuis la base en dehors du chemin `/messages`.
+- Une resynchronisation ne remplace jamais un compteur local plus récent par une valeur durable plus faible.
+- `GET /api/usage` calcule son total depuis la persistance et ne dépend pas uniquement du cache local.
 - La période utilisée pour l'écriture est la même que celle retournée au frontend.
 
-Une légère surconsommation due à deux demandes simultanées est acceptée pour le
-MVP. Une réservation préalable stricte est hors périmètre tant que le besoin
-commercial n'est pas confirmé.
+Une légère surconsommation due à des demandes simultanées ou à la courte fenêtre
+de convergence entre plusieurs instances est acceptée pour le MVP. Une
+réservation préalable stricte est hors périmètre tant que le besoin commercial
+n'est pas confirmé.
 
 <a id="usage-architecture"></a>
 ## Architecture et persistance
@@ -213,18 +236,30 @@ UsageController
   -> repository de consommation
 ```
 
-L'enregistrement après un message suit le flow existant du message :
+Le chemin critique d'un message respecte :
 
 ```text
-SendMessageCommandHandler
-  -> service applicatif d'orchestration
-  -> service applicatif de quota
-  -> repository de consommation
+POST /api/messages
+  -> lecture du quota en mémoire
+  -> orchestration / Foundry
+  -> persistance du message Assistant + TokenConsumption dans le même SaveChanges
+  -> mise à jour du cache local en mémoire
+  -> réponse
 ```
 
-Le handler orchestre les services et ne calcule pas le quota.
+La synchronisation durable du cache est séparée :
 
-La persistance doit permettre de retrouver au minimum :
+```text
+Démarrage / worker périodique
+  -> repository de consommation
+  -> agrégation SQL de la période
+  -> fusion dans le cache local
+```
+
+Le handler orchestre les services et ne calcule pas le quota. Aucun appel
+externe supplémentaire de quota n'est ajouté avant l'appel Foundry.
+
+La persistance permet de retrouver au minimum :
 
 - l'organisation
 - le message Assistant à l'origine de la consommation
@@ -234,8 +269,9 @@ La persistance doit permettre de retrouver au minimum :
 - le total
 - la date d'enregistrement
 
-Le choix entre un journal de consommation et un compteur agrégé est laissé au
-développeur. Le résultat doit rester auditable et empêcher un double comptage.
+Le journal de consommation reste la source durable et auditable. Le cache local
+sert uniquement à appliquer rapidement le quota sur le chemin de
+`POST /api/messages`.
 
 <a id="usage-errors"></a>
 ## Erreurs
@@ -259,9 +295,13 @@ développeur. Le résultat doit rester auditable et empêcher un double comptage
 - limite de jetons invalide
 - impossibilité de lire ou d'enregistrer la consommation
 
-Une erreur de persistance de la consommation ne doit pas être ignorée. La
-réponse ne doit pas prétendre que le compteur est actualisé si l'écriture a
-échoué.
+Une erreur de persistance de la consommation ne doit pas être ignorée. Comme la
+consommation est écrite avec la réponse Assistant, le cache n'est actualisé
+qu'après une persistance réussie.
+
+Une erreur de resynchronisation en arrière-plan conserve le dernier snapshot
+local valide et est journalisée. Elle n'ajoute pas de dépendance réseau à la
+requête `/api/messages`.
 
 <a id="usage-security"></a>
 ## Sécurité
@@ -282,6 +322,8 @@ réponse ne doit pas prétendre que le compteur est actualisé si l'écriture a
 - La réponse de message contient le total de la demande et le solde actualisé.
 - Un quota épuisé retourne le code stable `organization_token_quota_exhausted`.
 - Le contrat ne retourne jamais un nombre négatif de jetons restants.
+- `POST /api/messages` n'effectue aucune lecture SQL ou Redis dédiée au quota.
+- La consommation est persistée avec le message Assistant sans round-trip SQL supplémentaire.
 - Les appels externes autres que les modèles IA ne sont pas comptés comme jetons.
 - Les tests couvrent le renouvellement de période, la concurrence et l'isolation.
 - Les tests respectent les conventions du projet et `dotnet test Solution.sln` réussit.
