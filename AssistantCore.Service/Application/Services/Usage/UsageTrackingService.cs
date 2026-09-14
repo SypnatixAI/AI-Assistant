@@ -47,6 +47,7 @@ public sealed class UsageTrackingService(
         consumptionQueue.Enqueue(consumption);
         var usage = quotaCache.RecordConsumption(
             organizationId,
+            assistantMessageId,
             requestTokens,
             occurredAt);
 
