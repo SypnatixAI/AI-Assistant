@@ -10,14 +10,14 @@ namespace AssistantCore.Service.Tests.Usage;
 public sealed class UsageTrackingServiceTests
 {
     [Theory, AutoDomainData]
-    public async Task Given_AMessageProcessedMidMonth_When_RecordConsumptionAsync_Then_UpdatesCacheAndQueuesPersistence(
+    public async Task Given_AMessageProcessedMidMonth_When_RecordConsumptionAsync_Then_UpdatesTheInMemoryBalanceWithoutRepositoryIo(
         Guid organizationId,
         Guid assistantMessageId)
     {
         // Given
         var occurredAt = DateTimeOffset.Parse("2026-08-18T15:42:00Z");
         var repository = new StubTokenConsumptionRepository();
-        var (service, queue) = CreateService(
+        var service = CreateService(
             repository,
             defaultMonthlyTokenLimit: 1_000_000,
             now: occurredAt);
@@ -37,17 +37,7 @@ public sealed class UsageTrackingServiceTests
         Assert.Equal(999_880, response.TokensRemaining);
         Assert.Equal(DateTimeOffset.Parse("2026-09-01T00:00:00Z"), response.PeriodEndsAt);
         Assert.Equal(0, repository.TryRecordCallCount);
-
-        await using var enumerator = queue.ReadAllAsync(CancellationToken.None).GetAsyncEnumerator();
-        Assert.True(await enumerator.MoveNextAsync());
-        var queued = enumerator.Current;
-        Assert.Equal(organizationId, queued.OrganizationId);
-        Assert.Equal(assistantMessageId, queued.AssistantMessageId);
-        Assert.Equal(100, queued.InputTokens);
-        Assert.Equal(20, queued.OutputTokens);
-        Assert.Equal(120, queued.TotalTokens);
-        Assert.Equal(DateTimeOffset.Parse("2026-08-01T00:00:00Z"), queued.PeriodStartsAt);
-        Assert.Equal(DateTimeOffset.Parse("2026-09-01T00:00:00Z"), queued.PeriodEndsAt);
+        Assert.Equal(0, repository.SumCallCount);
     }
 
     [Theory, AutoDomainData]
@@ -58,7 +48,7 @@ public sealed class UsageTrackingServiceTests
         // Given
         var occurredAt = DateTimeOffset.Parse("2026-08-18T15:42:00Z");
         var repository = new StubTokenConsumptionRepository();
-        var (service, _) = CreateService(
+        var service = CreateService(
             repository,
             defaultMonthlyTokenLimit: 1_000_000,
             now: occurredAt);
@@ -91,7 +81,7 @@ public sealed class UsageTrackingServiceTests
         // Given
         var now = DateTimeOffset.Parse("2026-08-18T15:42:00Z");
         var repository = new StubTokenConsumptionRepository { SumToReturn = 428_000 };
-        var (service, _) = CreateService(repository, defaultMonthlyTokenLimit: 1_000_000, now: now);
+        var service = CreateService(repository, defaultMonthlyTokenLimit: 1_000_000, now: now);
 
         // When
         var response = await service.GetCurrentUsageAsync(organizationId, CancellationToken.None);
@@ -119,7 +109,6 @@ public sealed class UsageTrackingServiceTests
         var service = new UsageTrackingService(
             repository,
             cache,
-            new UsageConsumptionQueue(),
             options,
             new FixedTimeProvider(now));
 
@@ -130,6 +119,7 @@ public sealed class UsageTrackingServiceTests
         // Then
         Assert.Equal(DateTimeOffset.Parse("2026-09-01T00:00:00Z"), exception.PeriodEndsAt);
         Assert.Equal(0, repository.SumCallCount);
+        Assert.Equal(0, repository.TryRecordCallCount);
     }
 
     [Theory, AutoDomainData]
@@ -139,7 +129,7 @@ public sealed class UsageTrackingServiceTests
         // Given
         var now = DateTimeOffset.Parse("2026-08-18T15:42:00Z");
         var repository = new StubTokenConsumptionRepository();
-        var (service, _) = CreateService(repository, defaultMonthlyTokenLimit: 1_000_000, now: now);
+        var service = CreateService(repository, defaultMonthlyTokenLimit: 1_000_000, now: now);
 
         // When
         await service.GetCurrentUsageAsync(organizationId, CancellationToken.None);
@@ -150,7 +140,7 @@ public sealed class UsageTrackingServiceTests
         Assert.Equal(DateTimeOffset.Parse("2026-09-01T00:00:00Z"), repository.ReceivedPeriodEndsAt);
     }
 
-    private static (UsageTrackingService Service, UsageConsumptionQueue Queue) CreateService(
+    private static UsageTrackingService CreateService(
         ITokenConsumptionRepository repository,
         long defaultMonthlyTokenLimit,
         DateTimeOffset now)
@@ -159,15 +149,12 @@ public sealed class UsageTrackingServiceTests
         {
             DefaultMonthlyTokenLimit = defaultMonthlyTokenLimit
         });
-        var queue = new UsageConsumptionQueue();
-        return (
-            new UsageTrackingService(
-                repository,
-                new UsageQuotaCache(options),
-                queue,
-                options,
-                new FixedTimeProvider(now)),
-            queue);
+
+        return new UsageTrackingService(
+            repository,
+            new UsageQuotaCache(options),
+            options,
+            new FixedTimeProvider(now));
     }
 
     private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider
