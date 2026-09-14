@@ -80,9 +80,13 @@ public static class ServiceCollectionExtensions
             .Validate(
                 options => options.DefaultMonthlyTokenLimit > 0,
                 $"{UsageOptions.SectionName}:{nameof(UsageOptions.DefaultMonthlyTokenLimit)} must be greater than zero.")
+            .Validate(
+                options => options.CacheRefreshIntervalSeconds > 0,
+                $"{UsageOptions.SectionName}:{nameof(UsageOptions.CacheRefreshIntervalSeconds)} must be greater than zero.")
             .ValidateOnStart();
         services.AddSingleton<IUsageQuotaCache, UsageQuotaCache>();
         services.AddHostedService<UsageQuotaCacheInitializer>();
+        services.AddHostedService<UsageQuotaCacheRefreshWorker>();
         services.AddScoped<IUsageTrackingService, UsageTrackingService>();
         services.AddScoped<ISendMessageCommandValidator, SendMessageCommandValidator>();
         services.AddSingleton<IConversationCursorCodec, ConversationCursorCodec>();
