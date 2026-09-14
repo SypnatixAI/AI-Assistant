@@ -1,4 +1,3 @@
-using AssistantCore.Repository.Domain.Entities;
 using AssistantCore.Repository.Repositories;
 using AssistantCore.Service.Application.Configuration;
 using AssistantCore.Service.Application.Models.Usage;
@@ -9,7 +8,6 @@ namespace AssistantCore.Service.Application.Services.Usage;
 public sealed class UsageTrackingService(
     ITokenConsumptionRepository consumptionRepository,
     IUsageQuotaCache quotaCache,
-    UsageConsumptionQueue consumptionQueue,
     IOptions<UsageOptions> options,
     TimeProvider timeProvider) : IUsageTrackingService
 {
@@ -29,22 +27,7 @@ public sealed class UsageTrackingService(
         DateTimeOffset occurredAt,
         CancellationToken cancellationToken = default)
     {
-        var (periodStartsAt, periodEndsAt) = UsagePeriodCalculator.ComputeMonthlyPeriod(occurredAt);
         var requestTokens = checked(inputTokens + outputTokens);
-        var consumption = new TokenConsumption
-        {
-            Id = Guid.NewGuid(),
-            OrganizationId = organizationId,
-            AssistantMessageId = assistantMessageId,
-            PeriodStartsAt = periodStartsAt,
-            PeriodEndsAt = periodEndsAt,
-            InputTokens = inputTokens,
-            OutputTokens = outputTokens,
-            TotalTokens = requestTokens,
-            CreatedAt = occurredAt
-        };
-
-        consumptionQueue.Enqueue(consumption);
         var usage = quotaCache.RecordConsumption(
             organizationId,
             assistantMessageId,
