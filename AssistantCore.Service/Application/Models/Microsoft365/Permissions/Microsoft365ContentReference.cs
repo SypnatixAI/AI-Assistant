@@ -6,8 +6,7 @@ public sealed record Microsoft365ContentReference(
     string? DriveId,
     string? ListId,
     string ItemId,
-    string? SiteUrl = null,
-    string? MailboxUserId = null)
+    string? SiteUrl = null)
 {
     public string? SiteId { get; } = NormalizeSiteId(Kind, SiteId);
 
@@ -21,8 +20,6 @@ public sealed record Microsoft365ContentReference(
 
     public string? SiteUrl { get; } = NormalizeOptionalId(SiteUrl);
 
-    public string? MailboxUserId { get; } = NormalizeMailboxUserId(Kind, MailboxUserId);
-
     private static string? NormalizeSiteId(
         Microsoft365ContentReferenceKind kind,
         string? siteId)
@@ -31,21 +28,6 @@ public sealed record Microsoft365ContentReference(
         if (kind == Microsoft365ContentReferenceKind.ListItem && normalized is null)
         {
             throw new ArgumentException("The site id is required for list items.", nameof(siteId));
-        }
-
-        return normalized;
-    }
-
-    private static string? NormalizeMailboxUserId(
-        Microsoft365ContentReferenceKind kind,
-        string? mailboxUserId)
-    {
-        var normalized = NormalizeOptionalId(mailboxUserId);
-        if (kind == Microsoft365ContentReferenceKind.OutlookMessage && normalized is null)
-        {
-            throw new ArgumentException(
-                "The mailbox user id is required for Outlook messages.",
-                nameof(mailboxUserId));
         }
 
         return normalized;
