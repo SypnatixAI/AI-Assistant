@@ -14,6 +14,7 @@ namespace AssistantCore.Service.Application.Services.Messages.Lifecycle;
 
 public sealed class MessageProcessingLifecycleService(
     IConversationRepository conversationRepository,
+    IMessageCompletionRepository messageCompletionRepository,
     IUsageTrackingService usageTrackingService,
     TimeProvider timeProvider) : IMessageProcessingLifecycleService
 {
@@ -170,9 +171,15 @@ public sealed class MessageProcessingLifecycleService(
         var assistantMessage = CreateAssistantMessage(result, completedAt);
         var sources = CreateSources(result.Citations);
         var warnings = CreateWarnings(result.Warnings);
+        var consumption = UsageConsumptionFactory.Create(
+            processing.OrganizationId,
+            assistantMessage.Id,
+            result.Usage.InputTokens,
+            result.Usage.OutputTokens,
+            completedAt);
 
-        var completedMessage = await conversationRepository
-            .CompleteMessageWithAssistantResponseAsync(
+        var completedMessage = await messageCompletionRepository
+            .CompleteWithUsageAsync(
                 processing.OrganizationId,
                 processing.OwnerMemberId,
                 processing.ConversationId,
@@ -180,6 +187,7 @@ public sealed class MessageProcessingLifecycleService(
                 assistantMessage,
                 sources,
                 warnings,
+                consumption,
                 completedAt,
                 cancellationToken)
             ?? throw CreateConversationNotFoundException();
