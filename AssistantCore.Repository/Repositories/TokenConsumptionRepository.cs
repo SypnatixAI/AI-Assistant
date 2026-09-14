@@ -41,6 +41,21 @@ public sealed class TokenConsumptionRepository(AssistantCoreDbContext dbContext)
             .SumAsync(consumption => (long?)consumption.TotalTokens, cancellationToken)
             ?? 0L;
 
+    public async Task<IReadOnlyDictionary<Guid, long>> SumTokensByOrganizationForPeriodAsync(
+        DateTimeOffset periodStartsAt,
+        DateTimeOffset periodEndsAt,
+        CancellationToken cancellationToken = default) =>
+        await dbContext.TokenConsumptions
+            .AsNoTracking()
+            .Where(consumption =>
+                consumption.PeriodStartsAt == periodStartsAt
+                && consumption.PeriodEndsAt == periodEndsAt)
+            .GroupBy(consumption => consumption.OrganizationId)
+            .ToDictionaryAsync(
+                group => group.Key,
+                group => group.Sum(consumption => consumption.TotalTokens),
+                cancellationToken);
+
     private static bool IsUniqueConstraintViolation(DbUpdateException exception) =>
         exception.InnerException is SqlException
         {
