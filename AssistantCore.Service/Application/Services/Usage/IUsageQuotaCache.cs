@@ -9,6 +9,11 @@ public interface IUsageQuotaCache
         DateTimeOffset periodEndsAt,
         IReadOnlyDictionary<Guid, long> tokensUsedByOrganization);
 
+    void Merge(
+        DateTimeOffset periodStartsAt,
+        DateTimeOffset periodEndsAt,
+        IReadOnlyDictionary<Guid, long> tokensUsedByOrganization);
+
     void EnsureQuotaAvailable(Guid organizationId, DateTimeOffset now);
 
     MessageUsageResponse RecordConsumption(
