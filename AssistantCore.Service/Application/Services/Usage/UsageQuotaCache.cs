@@ -40,11 +40,12 @@ public sealed class UsageQuotaCache(IOptions<UsageOptions> options) : IUsageQuot
 
     public MessageUsageResponse RecordConsumption(
         Guid organizationId,
+        Guid assistantMessageId,
         long requestTokens,
         DateTimeOffset occurredAt)
     {
         var entry = GetCurrentEntry(organizationId, occurredAt);
-        var snapshot = entry.Add(requestTokens);
+        var snapshot = entry.AddOnce(assistantMessageId, requestTokens);
         var tokensRemaining = Math.Max(0, tokenLimit - snapshot.TokensUsed);
 
         return new MessageUsageResponse(
@@ -90,30 +91,32 @@ public sealed class UsageQuotaCache(IOptions<UsageOptions> options) : IUsageQuot
         long tokensUsed)
     {
         private readonly object gate = new();
+        private readonly HashSet<Guid> countedMessages = [];
         private long currentTokensUsed = tokensUsed;
 
         public UsageQuotaSnapshot Read()
         {
             lock (gate)
             {
-                return new UsageQuotaSnapshot(
-                    periodStartsAt,
-                    periodEndsAt,
-                    currentTokensUsed);
+                return CreateSnapshot();
             }
         }
 
-        public UsageQuotaSnapshot Add(long requestTokens)
+        public UsageQuotaSnapshot AddOnce(Guid assistantMessageId, long requestTokens)
         {
             lock (gate)
             {
-                currentTokensUsed = checked(currentTokensUsed + requestTokens);
-                return new UsageQuotaSnapshot(
-                    periodStartsAt,
-                    periodEndsAt,
-                    currentTokensUsed);
+                if (countedMessages.Add(assistantMessageId))
+                {
+                    currentTokensUsed = checked(currentTokensUsed + requestTokens);
+                }
+
+                return CreateSnapshot();
             }
         }
+
+        private UsageQuotaSnapshot CreateSnapshot() =>
+            new(periodStartsAt, periodEndsAt, currentTokensUsed);
     }
 
     private sealed record UsageQuotaSnapshot(
