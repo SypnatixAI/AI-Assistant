@@ -25,10 +25,6 @@ namespace AssistantCore.Service.Application;
 
 public static class ServiceCollectionExtensions
 {
-    /// <summary>
-    /// Longueur de la colonne Conversation.Title en base : la configuration ne peut pas
-    /// autoriser un titre que la persistence refuserait.
-    /// </summary>
     private const int MaximumPersistedTitleLength = 200;
 
     public static IServiceCollection AddApplication(
@@ -134,6 +130,8 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IMicrosoft365IngestionOrchestrator, Microsoft365IngestionOrchestrator>();
         services.AddScoped<IMicrosoft365ListSynchronizationService, Microsoft365ListSynchronizationService>();
         services.AddScoped<IMicrosoft365DriveSynchronizationService, Microsoft365DriveSynchronizationService>();
+        services.AddScoped<IMicrosoft365OutlookSynchronizationService, Microsoft365OutlookSynchronizationService>();
+        services.AddScoped<IMicrosoft365OutlookMessageIndexingService, Microsoft365OutlookMessageIndexingService>();
         services.AddScoped<IMicrosoft365SubscriptionMaintenanceService, Microsoft365SubscriptionMaintenanceService>();
         services.AddScoped<IMicrosoft365ReconciliationService, Microsoft365ReconciliationService>();
         services.AddScoped<
