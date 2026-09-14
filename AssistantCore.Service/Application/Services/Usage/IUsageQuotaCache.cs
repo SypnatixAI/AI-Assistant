@@ -13,6 +13,7 @@ public interface IUsageQuotaCache
 
     MessageUsageResponse RecordConsumption(
         Guid organizationId,
+        Guid assistantMessageId,
         long requestTokens,
         DateTimeOffset occurredAt);
 }
