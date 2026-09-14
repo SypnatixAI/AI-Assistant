@@ -10,14 +10,17 @@ namespace AssistantCore.Service.Tests.Usage;
 public sealed class UsageTrackingServiceTests
 {
     [Theory, AutoDomainData]
-    public async Task Given_AMessageProcessedMidMonth_When_RecordConsumptionAsync_Then_PersistsTheMonthlyPeriodBoundaries(
+    public async Task Given_AMessageProcessedMidMonth_When_RecordConsumptionAsync_Then_UpdatesCacheAndQueuesPersistence(
         Guid organizationId,
         Guid assistantMessageId)
     {
         // Given
         var occurredAt = DateTimeOffset.Parse("2026-08-18T15:42:00Z");
-        var repository = new StubTokenConsumptionRepository { SumToReturn = 120 };
-        var service = CreateService(repository, defaultMonthlyTokenLimit: 1_000_000, now: occurredAt);
+        var repository = new StubTokenConsumptionRepository();
+        var (service, queue) = CreateService(
+            repository,
+            defaultMonthlyTokenLimit: 1_000_000,
+            now: occurredAt);
 
         // When
         var response = await service.RecordConsumptionAsync(
@@ -29,38 +32,46 @@ public sealed class UsageTrackingServiceTests
             CancellationToken.None);
 
         // Then
-        Assert.NotNull(repository.ReceivedConsumption);
-        Assert.Equal(organizationId, repository.ReceivedConsumption.OrganizationId);
-        Assert.Equal(assistantMessageId, repository.ReceivedConsumption.AssistantMessageId);
-        Assert.Equal(100, repository.ReceivedConsumption.InputTokens);
-        Assert.Equal(20, repository.ReceivedConsumption.OutputTokens);
-        Assert.Equal(120, repository.ReceivedConsumption.TotalTokens);
-        Assert.Equal(
-            DateTimeOffset.Parse("2026-08-01T00:00:00Z"),
-            repository.ReceivedConsumption.PeriodStartsAt);
-        Assert.Equal(
-            DateTimeOffset.Parse("2026-09-01T00:00:00Z"),
-            repository.ReceivedConsumption.PeriodEndsAt);
         Assert.Equal(120, response.RequestTokens);
+        Assert.Equal(120, response.TokensUsed);
+        Assert.Equal(999_880, response.TokensRemaining);
         Assert.Equal(DateTimeOffset.Parse("2026-09-01T00:00:00Z"), response.PeriodEndsAt);
+        Assert.Equal(0, repository.TryRecordCallCount);
+
+        await using var enumerator = queue.ReadAllAsync(CancellationToken.None).GetAsyncEnumerator();
+        Assert.True(await enumerator.MoveNextAsync());
+        var queued = enumerator.Current;
+        Assert.Equal(organizationId, queued.OrganizationId);
+        Assert.Equal(assistantMessageId, queued.AssistantMessageId);
+        Assert.Equal(100, queued.InputTokens);
+        Assert.Equal(20, queued.OutputTokens);
+        Assert.Equal(120, queued.TotalTokens);
+        Assert.Equal(DateTimeOffset.Parse("2026-08-01T00:00:00Z"), queued.PeriodStartsAt);
+        Assert.Equal(DateTimeOffset.Parse("2026-09-01T00:00:00Z"), queued.PeriodEndsAt);
     }
 
     [Theory, AutoDomainData]
-    public async Task Given_AMessageReplayedAfterAlreadyBeingRecorded_When_RecordConsumptionAsync_Then_StillReturnsTheCurrentTotalsWithoutDoubleCounting(
+    public async Task Given_TheSameAssistantMessage_When_RecordConsumptionAsync_Then_DoesNotDoubleCountInMemory(
         Guid organizationId,
-        Guid assistantMessageId,
-        DateTimeOffset occurredAt)
+        Guid assistantMessageId)
     {
         // Given
-        var repository = new StubTokenConsumptionRepository
-        {
-            TryRecordResult = false,
-            SumToReturn = 300
-        };
-        var service = CreateService(repository, defaultMonthlyTokenLimit: 1_000_000, now: occurredAt);
+        var occurredAt = DateTimeOffset.Parse("2026-08-18T15:42:00Z");
+        var repository = new StubTokenConsumptionRepository();
+        var (service, _) = CreateService(
+            repository,
+            defaultMonthlyTokenLimit: 1_000_000,
+            now: occurredAt);
 
         // When
-        var response = await service.RecordConsumptionAsync(
+        await service.RecordConsumptionAsync(
+            organizationId,
+            assistantMessageId,
+            100,
+            20,
+            occurredAt,
+            CancellationToken.None);
+        var replayResponse = await service.RecordConsumptionAsync(
             organizationId,
             assistantMessageId,
             100,
@@ -69,8 +80,8 @@ public sealed class UsageTrackingServiceTests
             CancellationToken.None);
 
         // Then
-        Assert.Equal(300, response.TokensUsed);
-        Assert.Equal(999_700, response.TokensRemaining);
+        Assert.Equal(120, replayResponse.TokensUsed);
+        Assert.Equal(999_880, replayResponse.TokensRemaining);
     }
 
     [Theory, AutoDomainData]
@@ -80,7 +91,7 @@ public sealed class UsageTrackingServiceTests
         // Given
         var now = DateTimeOffset.Parse("2026-08-18T15:42:00Z");
         var repository = new StubTokenConsumptionRepository { SumToReturn = 428_000 };
-        var service = CreateService(repository, defaultMonthlyTokenLimit: 1_000_000, now: now);
+        var (service, _) = CreateService(repository, defaultMonthlyTokenLimit: 1_000_000, now: now);
 
         // When
         var response = await service.GetCurrentUsageAsync(organizationId, CancellationToken.None);
@@ -93,52 +104,42 @@ public sealed class UsageTrackingServiceTests
     }
 
     [Theory, AutoDomainData]
-    public async Task Given_UsageExceedsTheLimit_When_GetCurrentUsageAsync_Then_ClampsRemainingToZeroAndMarksExhausted(
+    public async Task Given_AnExhaustedCachedQuota_When_EnsureQuotaAvailableAsync_Then_ThrowsWithoutQueryingTheDatabase(
         Guid organizationId)
     {
         // Given
         var now = DateTimeOffset.Parse("2026-08-18T15:42:00Z");
-        var repository = new StubTokenConsumptionRepository { SumToReturn = 1_200_000 };
-        var service = CreateService(repository, defaultMonthlyTokenLimit: 1_000_000, now: now);
-
-        // When
-        var response = await service.GetCurrentUsageAsync(organizationId, CancellationToken.None);
-
-        // Then
-        Assert.Equal(0, response.TokensRemaining);
-        Assert.True(response.IsExhausted);
-    }
-
-    [Theory, AutoDomainData]
-    public async Task Given_UsageExceedsTheLimit_When_EnsureQuotaAvailableAsync_Then_ThrowsWithThePeriodEnd(
-        Guid organizationId)
-    {
-        // Given
-        var now = DateTimeOffset.Parse("2026-08-18T15:42:00Z");
-        var repository = new StubTokenConsumptionRepository { SumToReturn = 1_000_000 };
-        var service = CreateService(repository, defaultMonthlyTokenLimit: 1_000_000, now: now);
+        var repository = new StubTokenConsumptionRepository();
+        var options = Options.Create(new UsageOptions { DefaultMonthlyTokenLimit = 1_000_000 });
+        var cache = new UsageQuotaCache(options);
+        cache.Initialize(
+            DateTimeOffset.Parse("2026-08-01T00:00:00Z"),
+            DateTimeOffset.Parse("2026-09-01T00:00:00Z"),
+            new Dictionary<Guid, long> { [organizationId] = 1_000_000 });
+        var service = new UsageTrackingService(
+            repository,
+            cache,
+            new UsageConsumptionQueue(),
+            options,
+            new FixedTimeProvider(now));
 
         // When
         var exception = await Assert.ThrowsAsync<OrganizationTokenQuotaExceededException>(() =>
             service.EnsureQuotaAvailableAsync(organizationId, CancellationToken.None));
 
         // Then
-        Assert.Equal(
-            DateTimeOffset.Parse("2026-09-01T00:00:00Z"),
-            exception.PeriodEndsAt);
-        Assert.Equal(
-            OrganizationTokenQuotaExceededException.Code,
-            exception.ErrorCode);
+        Assert.Equal(DateTimeOffset.Parse("2026-09-01T00:00:00Z"), exception.PeriodEndsAt);
+        Assert.Equal(0, repository.SumCallCount);
     }
 
     [Theory, AutoDomainData]
-    public async Task Given_TwoOrganizations_When_GetCurrentUsageAsync_Then_QueriesTheRequestedOrganizationOnly(
+    public async Task Given_ARequestedOrganization_When_GetCurrentUsageAsync_Then_QueriesOnlyItsCurrentPeriod(
         Guid organizationId)
     {
         // Given
         var now = DateTimeOffset.Parse("2026-08-18T15:42:00Z");
-        var repository = new StubTokenConsumptionRepository { SumToReturn = 0 };
-        var service = CreateService(repository, defaultMonthlyTokenLimit: 1_000_000, now: now);
+        var repository = new StubTokenConsumptionRepository();
+        var (service, _) = CreateService(repository, defaultMonthlyTokenLimit: 1_000_000, now: now);
 
         // When
         await service.GetCurrentUsageAsync(organizationId, CancellationToken.None);
@@ -149,14 +150,25 @@ public sealed class UsageTrackingServiceTests
         Assert.Equal(DateTimeOffset.Parse("2026-09-01T00:00:00Z"), repository.ReceivedPeriodEndsAt);
     }
 
-    private static UsageTrackingService CreateService(
+    private static (UsageTrackingService Service, UsageConsumptionQueue Queue) CreateService(
         ITokenConsumptionRepository repository,
         long defaultMonthlyTokenLimit,
-        DateTimeOffset now) =>
-        new(
-            repository,
-            Options.Create(new UsageOptions { DefaultMonthlyTokenLimit = defaultMonthlyTokenLimit }),
-            new FixedTimeProvider(now));
+        DateTimeOffset now)
+    {
+        var options = Options.Create(new UsageOptions
+        {
+            DefaultMonthlyTokenLimit = defaultMonthlyTokenLimit
+        });
+        var queue = new UsageConsumptionQueue();
+        return (
+            new UsageTrackingService(
+                repository,
+                new UsageQuotaCache(options),
+                queue,
+                options,
+                new FixedTimeProvider(now)),
+            queue);
+    }
 
     private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider
     {
@@ -165,11 +177,11 @@ public sealed class UsageTrackingServiceTests
 
     private sealed class StubTokenConsumptionRepository : ITokenConsumptionRepository
     {
-        public bool TryRecordResult { get; init; } = true;
-
         public long SumToReturn { get; init; }
 
-        public TokenConsumption? ReceivedConsumption { get; private set; }
+        public int TryRecordCallCount { get; private set; }
+
+        public int SumCallCount { get; private set; }
 
         public Guid? ReceivedOrganizationId { get; private set; }
 
@@ -181,8 +193,8 @@ public sealed class UsageTrackingServiceTests
             TokenConsumption consumption,
             CancellationToken cancellationToken = default)
         {
-            ReceivedConsumption = consumption;
-            return Task.FromResult(TryRecordResult);
+            TryRecordCallCount++;
+            return Task.FromResult(true);
         }
 
         public Task<long> SumTokensForPeriodAsync(
@@ -191,10 +203,17 @@ public sealed class UsageTrackingServiceTests
             DateTimeOffset periodEndsAt,
             CancellationToken cancellationToken = default)
         {
+            SumCallCount++;
             ReceivedOrganizationId = organizationId;
             ReceivedPeriodStartsAt = periodStartsAt;
             ReceivedPeriodEndsAt = periodEndsAt;
             return Task.FromResult(SumToReturn);
         }
+
+        public Task<IReadOnlyDictionary<Guid, long>> SumTokensByOrganizationForPeriodAsync(
+            DateTimeOffset periodStartsAt,
+            DateTimeOffset periodEndsAt,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult<IReadOnlyDictionary<Guid, long>>(new Dictionary<Guid, long>());
     }
 }
