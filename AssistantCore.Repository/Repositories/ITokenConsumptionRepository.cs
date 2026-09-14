@@ -18,4 +18,9 @@ public interface ITokenConsumptionRepository
         DateTimeOffset periodStartsAt,
         DateTimeOffset periodEndsAt,
         CancellationToken cancellationToken = default);
+
+    Task<IReadOnlyDictionary<Guid, long>> SumTokensByOrganizationForPeriodAsync(
+        DateTimeOffset periodStartsAt,
+        DateTimeOffset periodEndsAt,
+        CancellationToken cancellationToken = default);
 }
