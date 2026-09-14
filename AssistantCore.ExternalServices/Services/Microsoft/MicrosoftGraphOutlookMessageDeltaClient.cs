@@ -7,6 +7,8 @@ namespace AssistantCore.ExternalServices.Services.Microsoft;
 
 public sealed class MicrosoftGraphOutlookMessageDeltaClient(HttpClient httpClient)
 {
+    private static readonly string[] MessagePreferences =
+        ["outlook.body-content-type=\"text\""];
     private readonly MicrosoftGraphCollectionReader collectionReader = new(httpClient);
 
     public async IAsyncEnumerable<MicrosoftOutlookMessageDeltaPage> GetInitialPagesAsync(
@@ -51,7 +53,8 @@ public sealed class MicrosoftGraphOutlookMessageDeltaClient(HttpClient httpClien
                            accessToken,
                            MapMessage,
                            "Outlook message delta",
-                           cancellationToken))
+                           cancellationToken,
+                           MessagePreferences))
         {
             foundFinalDeltaLink |= page.DeltaLink is not null;
             yield return new MicrosoftOutlookMessageDeltaPage(page.Items, page.DeltaLink);
