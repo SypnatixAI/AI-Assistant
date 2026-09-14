@@ -5,7 +5,6 @@ using AssistantCore.Service.Application.Commands.GetBackofficeOrganizationUserDe
 using AssistantCore.Service.Application.Commands.GetBackofficeOrganizationUsers;
 using AssistantCore.Service.Application.Commands.ReevaluateBackofficeUserAccess;
 using AssistantCore.Service.Application.Models.Backoffice;
-using AssistantCore.Service.Infrastructure.Authentication.Authorization;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Swashbuckle.AspNetCore.Annotations;
@@ -13,7 +12,7 @@ using Swashbuckle.AspNetCore.Annotations;
 namespace AssistantCore.Service.Controllers;
 
 [ApiController]
-[Authorize(Policy = ApiAuthorizationPolicies.ManagementAdmin)]
+[AllowAnonymous]
 [Route("api/backoffice/organizations")]
 public sealed class BackofficeOrganizationsController(IDispatcher dispatcher) : ControllerBase
 {

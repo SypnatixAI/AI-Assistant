@@ -175,6 +175,44 @@ public sealed class BackofficeOrganizationQueriesTests
     }
 
     [Theory, AutoDomainData]
+    public async Task Given_IndexedSharePointDriveOnDiscoveredSite_When_GetOrganizationDetailsAsync_Then_CountsTheSite(
+        Guid databaseId)
+    {
+        // Given
+        var organization = CreateOrganization("MetalPro");
+        var connectorId = Guid.NewGuid();
+        var connection = new Microsoft365Connection
+        {
+            Id = Guid.NewGuid(),
+            OrganizationId = organization.Id,
+            OrganizationConnectorId = connectorId,
+            TenantId = "tenant-metal",
+            Status = Microsoft365ConnectionStatus.Active,
+            ConsentValidatedAt = DateTimeOffset.Parse("2026-09-10T20:00:00Z"),
+            CreatedAt = DateTimeOffset.Parse("2026-09-10T19:00:00Z"),
+            UpdatedAt = DateTimeOffset.Parse("2026-09-10T20:00:00Z")
+        };
+        var site = CreateSite(organization.Id, connectorId, connection.Id);
+        site.IsIndexed = false;
+        var drive = CreateSharePointDrive(organization.Id, connectorId, connection.Id);
+        await using var dbContext = CreateDbContext(databaseId);
+        dbContext.Organizations.Add(organization);
+        dbContext.Microsoft365Connections.Add(connection);
+        dbContext.Microsoft365Sources.AddRange(site, drive);
+        await dbContext.SaveChangesAsync();
+        var queries = new BackofficeOrganizationQueries(dbContext);
+
+        // When
+        var result = await queries.GetOrganizationDetailsAsync(
+            organization.Id,
+            CancellationToken.None);
+
+        // Then
+        Assert.NotNull(result);
+        Assert.Equal(1, result.Sources.SharePointSiteCount);
+    }
+
+    [Theory, AutoDomainData]
     public async Task Given_SourceInError_When_GetOrganizationDetailsAsync_Then_ReturnsErrorIndexingStatus(
         Guid databaseId)
     {
@@ -283,6 +321,26 @@ public sealed class BackofficeOrganizationQueriesTests
             IsIndexed = true,
             SiteId = "site-1",
             DriveId = "drive-1",
+            DiscoveredAt = DateTimeOffset.Parse("2026-09-10T20:00:00Z"),
+            LastSuccessfulSynchronizationAt = DateTimeOffset.Parse("2026-09-10T20:12:00Z")
+        };
+
+    private static Microsoft365Drive CreateSharePointDrive(
+        Guid organizationId,
+        Guid connectorId,
+        Guid connectionId) => new()
+        {
+            Id = Guid.NewGuid(),
+            OrganizationId = organizationId,
+            OrganizationConnectorId = connectorId,
+            Microsoft365ConnectionId = connectionId,
+            Kind = Microsoft365SourceKind.SharePointDrive,
+            ExternalResourceId = "sharepoint-drive-1",
+            DisplayName = "Documents",
+            Status = Microsoft365SourceStatus.Enabled,
+            IsIndexed = true,
+            SiteId = "site-1",
+            DriveId = "sharepoint-drive-1",
             DiscoveredAt = DateTimeOffset.Parse("2026-09-10T20:00:00Z"),
             LastSuccessfulSynchronizationAt = DateTimeOffset.Parse("2026-09-10T20:12:00Z")
         };

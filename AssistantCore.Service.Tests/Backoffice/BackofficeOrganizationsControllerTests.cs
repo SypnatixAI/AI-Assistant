@@ -6,7 +6,6 @@ using AssistantCore.Service.Application.Commands.GetBackofficeOrganizationUsers;
 using AssistantCore.Service.Application.Commands.ReevaluateBackofficeUserAccess;
 using AssistantCore.Service.Application.Models.Backoffice;
 using AssistantCore.Service.Controllers;
-using AssistantCore.Service.Infrastructure.Authentication.Authorization;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -102,7 +101,7 @@ public sealed class BackofficeOrganizationsControllerTests
     }
 
     [Theory, AutoDomainData]
-    public void Given_Controller_When_InspectingAuthorization_Then_RequiresManagementAdminAndDisallowsAnonymousAccess(int _)
+    public void Given_Controller_When_InspectingAuthorization_Then_AllowsAnonymousAccess(int _)
     {
         // Given
         var controllerType = typeof(BackofficeOrganizationsController);
@@ -117,8 +116,8 @@ public sealed class BackofficeOrganizationsControllerTests
 
         // Then
         Assert.Equal("api/backoffice/organizations", route?.Template);
-        Assert.Equal(ApiAuthorizationPolicies.ManagementAdmin, authorize?.Policy);
-        Assert.Null(allowAnonymous);
+        Assert.Null(authorize);
+        Assert.NotNull(allowAnonymous);
         Assert.Equal("{organizationId:guid}/users", usersMethod?.GetCustomAttribute<HttpGetAttribute>()?.Template);
         Assert.Equal(
             "{organizationId:guid}/users/{userId:guid}",
