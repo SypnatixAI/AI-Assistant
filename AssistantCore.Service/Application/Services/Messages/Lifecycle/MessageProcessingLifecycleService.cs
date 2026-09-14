@@ -14,9 +14,9 @@ namespace AssistantCore.Service.Application.Services.Messages.Lifecycle;
 
 public sealed class MessageProcessingLifecycleService(
     IConversationRepository conversationRepository,
-    IMessageCompletionRepository messageCompletionRepository,
     IUsageTrackingService usageTrackingService,
-    TimeProvider timeProvider) : IMessageProcessingLifecycleService
+    TimeProvider timeProvider,
+    IMessageCompletionRepository? messageCompletionRepository = null) : IMessageProcessingLifecycleService
 {
     private const int MaximumProcessingErrorCodeLength = 100;
 
@@ -171,15 +171,32 @@ public sealed class MessageProcessingLifecycleService(
         var assistantMessage = CreateAssistantMessage(result, completedAt);
         var sources = CreateSources(result.Citations);
         var warnings = CreateWarnings(result.Warnings);
-        var consumption = UsageConsumptionFactory.Create(
-            processing.OrganizationId,
-            assistantMessage.Id,
-            result.Usage.InputTokens,
-            result.Usage.OutputTokens,
-            completedAt);
 
-        var completedMessage = await messageCompletionRepository
-            .CompleteWithUsageAsync(
+        Message? completedMessage;
+        if (messageCompletionRepository is null)
+        {
+            completedMessage = await conversationRepository
+                .CompleteMessageWithAssistantResponseAsync(
+                    processing.OrganizationId,
+                    processing.OwnerMemberId,
+                    processing.ConversationId,
+                    processing.UserMessageId,
+                    assistantMessage,
+                    sources,
+                    warnings,
+                    completedAt,
+                    cancellationToken);
+        }
+        else
+        {
+            var consumption = UsageConsumptionFactory.Create(
+                processing.OrganizationId,
+                assistantMessage.Id,
+                result.Usage.InputTokens,
+                result.Usage.OutputTokens,
+                completedAt);
+
+            completedMessage = await messageCompletionRepository.CompleteWithUsageAsync(
                 processing.OrganizationId,
                 processing.OwnerMemberId,
                 processing.ConversationId,
@@ -189,8 +206,10 @@ public sealed class MessageProcessingLifecycleService(
                 warnings,
                 consumption,
                 completedAt,
-                cancellationToken)
-            ?? throw CreateConversationNotFoundException();
+                cancellationToken);
+        }
+
+        completedMessage ??= throw CreateConversationNotFoundException();
 
         var usage = await usageTrackingService.RecordConsumptionAsync(
             processing.OrganizationId,
@@ -242,7 +261,7 @@ public sealed class MessageProcessingLifecycleService(
             Id = Guid.NewGuid(),
             OrganizationId = organizationId,
             OwnerMemberId = ownerMemberId,
-            Title = ConversationTitleFactory.CreateFromFirstMessage(firstMessage),
+            Title = ConversationTitleFactory.CreateFromFirstMessage(firstMessage, now),
             Status = ConversationStatus.Active,
             CreatedAt = now,
             UpdatedAt = now
