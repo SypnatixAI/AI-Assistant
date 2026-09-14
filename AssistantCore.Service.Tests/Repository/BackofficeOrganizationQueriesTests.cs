@@ -132,6 +132,10 @@ public sealed class BackofficeOrganizationQueriesTests
             UpdatedAt = DateTimeOffset.Parse("2026-09-10T20:00:00Z")
         };
         var site = CreateSite(organization.Id, connector.Id, connection.Id);
+        var sharePointDrive = CreateSharePointDrive(
+            organization.Id,
+            connector.Id,
+            connection.Id);
         var drive = CreateOneDrive(organization.Id, connector.Id, connection.Id);
         var content = new Microsoft365IndexedContent
         {
@@ -150,7 +154,7 @@ public sealed class BackofficeOrganizationQueriesTests
             CreateMember(organization.Id, "disabled@metalpro.test", OrganizationRole.User, RecordStatus.Inactive));
         dbContext.OrganizationConnectors.Add(connector);
         dbContext.Microsoft365Connections.Add(connection);
-        dbContext.Microsoft365Sources.AddRange(site, drive);
+        dbContext.Microsoft365Sources.AddRange(site, sharePointDrive, drive);
         dbContext.Microsoft365IndexedContents.Add(content);
         await dbContext.SaveChangesAsync();
         var queries = new BackofficeOrganizationQueries(dbContext);
