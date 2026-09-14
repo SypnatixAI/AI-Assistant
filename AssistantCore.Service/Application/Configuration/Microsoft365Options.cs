@@ -68,6 +68,8 @@ public sealed class Microsoft365Options
 
     public int MaximumExcelCells { get; init; } = 100_000;
 
+    public int MaximumPowerPointSlides { get; init; } = 1_000;
+
     public int ChunkMaximumTokens { get; init; } = 800;
 
     public int ChunkOverlapTokens { get; init; } = 100;

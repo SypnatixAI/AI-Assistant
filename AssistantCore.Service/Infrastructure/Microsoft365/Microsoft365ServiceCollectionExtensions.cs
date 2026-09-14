@@ -47,6 +47,7 @@ public static class Microsoft365ServiceCollectionExtensions
                     && options.MaximumExtractedCharacters > 0
                     && options.MaximumExcelSheets > 0
                     && options.MaximumExcelCells > 0
+                    && options.MaximumPowerPointSlides > 0
                     && options.SharePointGroupCacheMinutes > 0
                     && options.ChunkMaximumTokens > 0
                     && options.ChunkOverlapTokens >= 0
@@ -108,6 +109,7 @@ public static class Microsoft365ServiceCollectionExtensions
         services.AddSingleton<MicrosoftExcelContentExtractorClient>();
         services.AddSingleton<MicrosoftExcelTableReaderClient>();
         services.AddSingleton<MicrosoftPdfContentExtractorClient>();
+        services.AddSingleton<MicrosoftPowerPointContentExtractorClient>();
         services.AddSingleton<MicrosoftCertificateIdentityClient>();
         AddProtectedHttpClient<MicrosoftSharePointUserGroupClient>(services);
         services.AddHttpClient<AzureAiSearchPassageAclClient>()
@@ -138,6 +140,7 @@ public static class Microsoft365ServiceCollectionExtensions
         services.AddScoped<IMicrosoft365ContentExtractor, Microsoft365WordContentExtractorAdapter>();
         services.AddScoped<IMicrosoft365ContentExtractor, Microsoft365ExcelContentExtractorAdapter>();
         services.AddScoped<IMicrosoft365ContentExtractor, Microsoft365PdfImageContentExtractorAdapter>();
+        services.AddScoped<IMicrosoft365ContentExtractor, Microsoft365PowerPointContentExtractorAdapter>();
         services.AddScoped<IMicrosoft365EmbeddingGenerator, Microsoft365EmbeddingGeneratorAdapter>();
         services.AddScoped<IMicrosoft365SearchIndexInitializer, Microsoft365SearchIndexInitializerAdapter>();
         services.AddSingleton<IMicrosoft365ClientStateProtector, Microsoft365ClientStateProtectorAdapter>();

@@ -816,6 +816,10 @@
                   "if (pm.response.code === 200) {",
                   "    const response = pm.response.json();",
                   "    pm.expect(response.answer).to.be.a('string').and.not.empty;",
+                  "    pm.expect(response.usage).to.be.an('object');",
+                  "    pm.expect(response.usage.requestTokens).to.be.a('number');",
+                  "    pm.expect(response.usage.tokensRemaining).to.be.at.least(0);",
+                  "    pm.expect(response.usage.isExhausted).to.be.a('boolean');",
                   "    pm.environment.set('conversation_id', response.conversationId);",
                   "}"
                 ]

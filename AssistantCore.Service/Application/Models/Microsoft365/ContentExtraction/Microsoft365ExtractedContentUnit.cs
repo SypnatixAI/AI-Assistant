@@ -14,5 +14,6 @@ public enum Microsoft365ExtractedContentUnitKind
     Paragraph,
     ListItem,
     Table,
-    Footer
+    Footer,
+    Note
 }
