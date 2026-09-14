@@ -8,13 +8,11 @@ using AssistantCore.Service.Application.Models.Messages.AgentRuntime;
 using AssistantCore.Service.Application.Models.Messages.AiModels;
 using AssistantCore.Service.Application.Models.Messages.Lifecycle;
 using AssistantCore.Service.Application.Services.Conversations;
-using AssistantCore.Service.Application.Services.Usage;
 
 namespace AssistantCore.Service.Application.Services.Messages.Lifecycle;
 
 public sealed class MessageProcessingLifecycleService(
     IConversationRepository conversationRepository,
-    IUsageTrackingService usageTrackingService,
     TimeProvider timeProvider) : IMessageProcessingLifecycleService
 {
     private const int MaximumProcessingErrorCodeLength = 100;
@@ -184,18 +182,9 @@ public sealed class MessageProcessingLifecycleService(
                 cancellationToken)
             ?? throw CreateConversationNotFoundException();
 
-        var usage = await usageTrackingService.RecordConsumptionAsync(
-            processing.OrganizationId,
-            completedMessage.Id,
-            result.Usage.InputTokens,
-            result.Usage.OutputTokens,
-            completedAt,
-            cancellationToken);
-
         return new CompletedMessageProcessing(
             completedMessage.Id,
-            completedMessage.CreatedAt,
-            usage);
+            completedMessage.CreatedAt);
     }
 
     public async Task FailAsync(
@@ -261,23 +250,23 @@ public sealed class MessageProcessingLifecycleService(
             Id = Guid.NewGuid(),
             Role = MessageRole.Assistant,
             Content = result.Content,
-            ProcessingStatus = MessageProcessingStatus.Completed,
             Model = result.ModelName,
+            ProcessingStatus = MessageProcessingStatus.Completed,
             CreatedAt = completedAt,
             UpdatedAt = completedAt
         };
 
     private static IReadOnlyCollection<MessageSource> CreateSources(
-        IReadOnlyCollection<RetrievedEvidence> evidence) =>
-        evidence
-            .Select(item => new MessageSource
+        IReadOnlyCollection<RetrievedEvidence> citations) =>
+        citations
+            .Select(evidence => new MessageSource
             {
                 Id = Guid.NewGuid(),
-                SourceType = item.SourceType,
-                Title = item.Title,
-                Reference = item.Reference,
-                Url = item.Url,
-                SourceDate = item.OccurredAt
+                SourceType = evidence.SourceType,
+                Title = evidence.Title,
+                Url = evidence.Url,
+                Reference = evidence.Reference,
+                SourceDate = evidence.SourceDate
             })
             .ToArray();
 
@@ -288,23 +277,10 @@ public sealed class MessageProcessingLifecycleService(
             .Select(warning => new MessageWarning
             {
                 Id = Guid.NewGuid(),
-                Content = warning.Trim()
+                Code = warning,
+                CreatedAt = DateTimeOffset.UtcNow
             })
             .ToArray();
-
-    private static string ValidateErrorCode(string errorCode)
-    {
-        var normalizedErrorCode = errorCode.Trim();
-
-        if (normalizedErrorCode.Length is 0 or > MaximumProcessingErrorCodeLength)
-        {
-            throw new ArgumentException(
-                $"The error code must contain between 1 and {MaximumProcessingErrorCodeLength} characters.",
-                nameof(errorCode));
-        }
-
-        return normalizedErrorCode;
-    }
 
     private static void EnsureMemberBelongsToOrganization(
         Organization organization,
@@ -312,12 +288,20 @@ public sealed class MessageProcessingLifecycleService(
     {
         if (member.OrganizationId != organization.Id)
         {
-            throw new ArgumentException(
-                "The organization member does not belong to the provided organization.",
-                nameof(member));
+            throw new InvalidOperationException(
+                "The authenticated member does not belong to the current organization.");
         }
     }
 
+    private static string ValidateErrorCode(string errorCode)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(errorCode);
+
+        return errorCode.Length <= MaximumProcessingErrorCodeLength
+            ? errorCode
+            : errorCode[..MaximumProcessingErrorCodeLength];
+    }
+
     private static NotFoundException CreateConversationNotFoundException() =>
-        new("Conversation not found.");
+        new("Conversation not found.", NotFoundException.ConversationNotFound);
 }
