@@ -261,7 +261,7 @@ public sealed class MessageProcessingLifecycleService(
             Id = Guid.NewGuid(),
             OrganizationId = organizationId,
             OwnerMemberId = ownerMemberId,
-            Title = ConversationTitleFactory.CreateFromFirstMessage(firstMessage, now),
+            Title = ConversationTitleFactory.CreateFromFirstMessage(firstMessage),
             Status = ConversationStatus.Active,
             CreatedAt = now,
             UpdatedAt = now
