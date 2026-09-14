@@ -7,5 +7,6 @@ public enum AdministrativeAuditAction
     UsagePolicyChanged,
     ConversationArchived,
     ConversationDeleted,
-    ConnectorStatusChanged
+    ConnectorStatusChanged,
+    UserAccessReevaluated
 }
