@@ -37,7 +37,8 @@ public static class FoundryAgentServiceCollectionExtensions
                 serviceProvider.GetRequiredService<ILogger<FoundryAgentExternalClient>>());
         });
 
-        services.AddSingleton<IFoundryAgentClient, FoundryAgentClientAdapter>();
+        services.AddScoped<IFoundryDelegatedAccessTokenProvider, FoundryDelegatedAccessTokenProvider>();
+        services.AddScoped<IFoundryAgentClient, FoundryAgentClientAdapter>();
 
         return services;
     }
