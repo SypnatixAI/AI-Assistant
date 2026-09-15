@@ -18,11 +18,11 @@ on:
         type: choice
         options: [certif]
       backend_image_tag:
-        description: Required for deploy-environment; immutable backend SHA tag in ACR
+        description: Optional backend SHA tag; defaults to the latest complete tag published in ACR
         required: false
         type: string
       spa_image_tag:
-        description: Required for deploy-environment; immutable SPA SHA tag in ACR
+        description: Optional SPA SHA tag; defaults to the latest published tag in ACR
         required: false
         type: string
 permissions:
@@ -108,17 +108,54 @@ jobs:
           REQUESTED_BACKEND_TAG: ${{ inputs.backend_image_tag }}
           REQUESTED_SPA_TAG: ${{ inputs.spa_image_tag }}
         run: |
-          for tag in "$REQUESTED_BACKEND_TAG" "$REQUESTED_SPA_TAG"; do
+          ACR_NAME="${{ vars.AZURE_ACR_NAME }}"
+          BACKEND_TAG="$REQUESTED_BACKEND_TAG"
+          SPA_TAG="$REQUESTED_SPA_TAG"
+
+          if [ -z "$BACKEND_TAG" ]; then
+            while IFS= read -r candidate; do
+              if ! printf '%s' "$candidate" | grep -Eq '^sha-[0-9a-f]{40}$'; then
+                continue
+              fi
+              if az acr repository show --name "$ACR_NAME" --image "assistant-worker:${candidate}" --only-show-errors >/dev/null \
+                && az acr repository show --name "$ACR_NAME" --image "assistant-migrations:${candidate}" --only-show-errors >/dev/null; then
+                BACKEND_TAG="$candidate"
+                break
+              fi
+            done < <(az acr repository show-tags \
+              --name "$ACR_NAME" \
+              --repository assistant-api \
+              --orderby time_desc \
+              --output tsv)
+          fi
+
+          if [ -z "$SPA_TAG" ]; then
+            SPA_TAG="$(az acr repository show-tags \
+              --name "$ACR_NAME" \
+              --repository assistant-spa \
+              --orderby time_desc \
+              --output tsv \
+              | grep -m 1 -E '^sha-[0-9a-f]{40}$' || true)"
+          fi
+
+          if [ -z "$BACKEND_TAG" ] || [ -z "$SPA_TAG" ]; then
+            echo "No complete published backend or SPA SHA tag was found in ACR." >&2
+            exit 1
+          fi
+
+          for tag in "$BACKEND_TAG" "$SPA_TAG"; do
             if ! printf '%s' "$tag" | grep -Eq '^sha-[0-9a-f]{40}$'; then
               echo "Both image tags must be sha- followed by a complete 40-character Git SHA." >&2
               exit 1
             fi
           done
 
-          az acr repository show --name "${{ vars.AZURE_ACR_NAME }}" --image "assistant-api:${REQUESTED_BACKEND_TAG}" --only-show-errors >/dev/null
-          az acr repository show --name "${{ vars.AZURE_ACR_NAME }}" --image "assistant-spa:${REQUESTED_SPA_TAG}" --only-show-errors >/dev/null
-          echo "BACKEND_TAG=${REQUESTED_BACKEND_TAG}" >> "$GITHUB_ENV"
-          echo "SPA_TAG=${REQUESTED_SPA_TAG}" >> "$GITHUB_ENV"
+          az acr repository show --name "$ACR_NAME" --image "assistant-api:${BACKEND_TAG}" --only-show-errors >/dev/null
+          az acr repository show --name "$ACR_NAME" --image "assistant-worker:${BACKEND_TAG}" --only-show-errors >/dev/null
+          az acr repository show --name "$ACR_NAME" --image "assistant-migrations:${BACKEND_TAG}" --only-show-errors >/dev/null
+          az acr repository show --name "$ACR_NAME" --image "assistant-spa:${SPA_TAG}" --only-show-errors >/dev/null
+          echo "BACKEND_TAG=${BACKEND_TAG}" >> "$GITHUB_ENV"
+          echo "SPA_TAG=${SPA_TAG}" >> "$GITHUB_ENV"
 
       - name: Preview and deploy environment
         if: ${{ inputs.operation == 'deploy-environment' }}
