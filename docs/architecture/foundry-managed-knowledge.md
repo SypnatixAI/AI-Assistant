@@ -2,66 +2,88 @@
 
 ## Objectif
 
-Cette branche fait évoluer le Foundry Agent pour utiliser des sources de connaissance managées sans supprimer encore le pipeline Microsoft 365 existant.
+Cette branche fait évoluer le runtime pour que les connaissances générales ne passent plus par le moteur `EnterpriseSearch` local. Le Foundry Agent doit utiliser :
 
-Le runtime attend désormais trois capacités sur l'agent publié :
-
-- `EnterpriseSearch`, conservé temporairement pendant la migration ;
-- Work IQ, pour les données Microsoft 365 de l'utilisateur ;
-- Foundry IQ, exposé comme serveur MCP de Knowledge Base.
+- Work IQ pour les données Microsoft 365 de l'utilisateur ;
+- Foundry IQ pour les Knowledge Bases et les futures sources non-Microsoft 365 ;
+- les tools locaux uniquement lorsqu'une capacité déterministe ou métier reste nécessaire, comme `AnalyzeSpreadsheet`.
 
 Les labels MCP attendus par défaut sont `work-iq` et `foundry-iq`. Ils sont configurables dans `FoundryAgent`.
 
-## Work IQ
+## Flow runtime
 
-Work IQ doit être configuré avec une identité utilisateur déléguée. Le flow cible est :
+Le flow d'un message devient :
 
 ```text
 Utilisateur Entra
   -> API SynaptixAI
-  -> OBO dans le tenant d'origine de l'utilisateur
-  -> Foundry Agent
-  -> Work IQ
-  -> Microsoft 365
+  -> OBO vers https://ai.azure.com/.default dans le tenant d'origine
+  -> Foundry Agent exécuté avec l'identité déléguée
+      -> Work IQ pour Microsoft 365
+      -> Foundry IQ pour les Knowledge Bases
+      -> AnalyzeSpreadsheet pour les calculs Excel déterministes
 ```
 
-### Configuration Entra
+Le bearer token reçu par l'API n'est jamais envoyé directement à Work IQ. L'API l'utilise comme assertion OAuth OBO pour obtenir un jeton Foundry délégué. Le `AIProjectClient` utilisé pour exécuter l'agent est ensuite créé avec ce jeton utilisateur afin que Foundry conserve le contexte délégué requis par la connexion Work IQ.
+
+La lecture administrative de la définition publiée de l'agent continue d'utiliser l'identité technique Azure (`DefaultAzureCredential`). Cette identité sert uniquement à vérifier la configuration de l'agent ; elle ne sert pas à exécuter une requête utilisateur Work IQ.
+
+## Work IQ
+
+Work IQ utilise une identité utilisateur déléguée. L'authentification app-only n'est pas utilisée pour les recherches Microsoft 365.
+
+### Configuration Entra à réaliser dans l'environnement
 
 1. L'application SynaptixAI reste multi-tenant (`organizations` / `AzureADMultipleOrgs`).
 2. Ajouter la permission déléguée Work IQ `WorkIQAgent.Ask`.
-3. Accorder le consentement administrateur lorsque requis.
-4. L'échange OBO doit être fait contre le tenant d'origine de l'utilisateur, pas contre un tenant SynaptixAI fixe.
-5. Ne pas utiliser un jeton app-only pour Work IQ.
+3. Accorder le consentement administrateur dans chaque organisation cliente qui active Work IQ.
+4. L'utilisateur doit se connecter via l'autorité de son tenant d'origine.
+5. Configurer les droits Foundry requis pour les identités impliquées dans le flow OAuth.
 
-Le client Microsoft expose maintenant `AcquireOnBehalfOfTokenAsync` pour ce flow. Le passage du jeton utilisateur jusqu'au runtime sera raccordé dans l'étape suivante de la migration, lorsque Work IQ remplacera effectivement le chemin `EnterpriseSearch`.
+Le backend utilise `AcquireOnBehalfOfTokenAsync` pour échanger le token API utilisateur contre un token délégué destiné à `https://ai.azure.com/.default`.
 
-### Configuration Foundry
-
-Dans le projet Foundry utilisé par l'environnement :
+### Configuration Foundry à réaliser dans l'environnement
 
 1. Créer la connexion Work IQ conformément à la documentation Microsoft.
-2. Ajouter Work IQ au toolbox de l'agent, ou l'ajouter directement comme `work_iq_preview`.
-3. Si Work IQ est exposé comme MCP, utiliser le label `work-iq` ou aligner `FoundryAgent:WorkIqServerLabel` sur le label réellement publié.
-4. Autoriser les capacités Microsoft 365 nécessaires : SharePoint, OneDrive, Outlook Mail, Outlook Calendar et Teams.
+2. Ajouter Work IQ au toolbox de l'agent ou l'ajouter comme `work_iq_preview`.
+3. Pour un toolbox MCP, utiliser une connexion de type `user-entra-token` afin de préserver l'identité de l'appelant.
+4. Aligner `FoundryAgent:WorkIqServerLabel` sur le `server_label` réellement publié.
+5. Autoriser les capacités Microsoft 365 voulues : SharePoint, OneDrive, Outlook Mail, Outlook Calendar et Teams.
+6. Publier une nouvelle version de l'agent.
 
 ## Foundry IQ
 
-La Knowledge Base Foundry IQ est ajoutée à l'agent via son endpoint MCP.
+La Knowledge Base Foundry IQ est attachée à l'agent via MCP.
 
 1. Créer ou réutiliser la Knowledge Base de l'environnement.
 2. Exposer son endpoint MCP `knowledge_base_retrieve` au Foundry Agent.
-3. Utiliser le label MCP `foundry-iq` ou aligner `FoundryAgent:FoundryIqServerLabel` sur le label réellement publié.
-4. Conserver les futures sources non-Microsoft 365 dans cette Knowledge Base : Azure SQL, Blob, index Azure AI Search spécifiques et serveurs MCP métier.
+3. Utiliser l'identité managée de l'agent pour l'accès à la Knowledge Base lorsque cette configuration est disponible.
+4. Aligner `FoundryAgent:FoundryIqServerLabel` sur le label réellement publié.
+5. Conserver les futures sources non-Microsoft 365 dans cette Knowledge Base : Azure SQL, Blob, index Azure AI Search spécifiques et serveurs MCP métier.
 
-## Publication de l'agent
+## EnterpriseSearch legacy
 
-Après configuration des deux outils :
+`EnterpriseSearch` existe encore physiquement dans le code à cette étape afin que sa suppression complète puisse être faite séparément et proprement.
 
-1. Publier une nouvelle version de l'agent Foundry.
-2. Mettre `FoundryAgent:AgentVersion` à jour avec cette version.
-3. Au premier appel, `FoundryAgentExternalClient` lit la définition publiée et refuse de démarrer si un outil requis manque ou si `web_search` est activé.
+Il n'est cependant plus exposé au Foundry Agent dans le runtime `/messages` et `FoundryAgent:RequireEnterpriseSearch` vaut désormais `false`.
 
-Pendant cette première étape de migration, `RequireEnterpriseSearch` reste à `true`. Il passera à `false` lorsque le runtime aura été basculé sur Work IQ / Foundry IQ et que l'ancien retrieval pourra être supprimé.
+Le retrieval Microsoft 365 général doit donc venir de Work IQ une fois les ressources Foundry configurées.
+
+## AnalyzeSpreadsheet
+
+`AnalyzeSpreadsheet` reste un tool local. Il sert uniquement aux opérations qui exigent un calcul déterministe et exhaustif sur un classeur XLSX/XLSM : sommes, moyennes, comptages, filtres de lignes et autres calculs tabulaires.
+
+Si l'utilisateur ne connaît pas le nom exact du fichier, l'agent doit utiliser Work IQ pour identifier le classeur puis appeler `AnalyzeSpreadsheet`.
+
+## Validation au démarrage du runtime
+
+Au premier appel, `FoundryAgentExternalClient` lit la définition publiée de l'agent et refuse l'exécution si :
+
+- Work IQ est requis mais absent ;
+- Foundry IQ est requis mais absent ;
+- `web_search` est activé alors qu'il n'est pas autorisé par l'architecture.
+
+La version `AgentVersion` doit être mise à jour après la publication de l'agent configuré dans Foundry.
 
 ## Références Microsoft
 
