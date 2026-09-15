@@ -87,6 +87,7 @@ public sealed class AiToolRegistry(
             {
                 Microsoft365SourceType.SharePoint => "sharepoint",
                 Microsoft365SourceType.OneDrive => "onedrive",
+                Microsoft365SourceType.Outlook => "outlook",
                 _ => null
             })
             .OfType<string>()
@@ -114,9 +115,9 @@ public sealed class AiToolRegistry(
                         description = "Sources a limiter, ou null pour toutes les sources autorisees."
                     }),
                     ["dateFrom"] = NullableDateProperty(
-                        "Date minimale de modification des fichiers. Ne filtre pas les dates mentionnees dans leur contenu."),
+                        "Date minimale de modification des contenus. Ne filtre pas les dates mentionnees dans leur contenu."),
                     ["dateTo"] = NullableDateProperty(
-                        "Date maximale de modification des fichiers. Ne filtre pas les dates mentionnees dans leur contenu.")
+                        "Date maximale de modification des contenus. Ne filtre pas les dates mentionnees dans leur contenu.")
                 }));
     }
 

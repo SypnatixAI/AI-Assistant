@@ -39,6 +39,7 @@ public static class Microsoft365ServiceCollectionExtensions
                     && options.SubscriptionRenewalLeadTimeHours < options.SubscriptionLifetimeHours
                     && options.SynchronizationLeaseMinutes is > 0 and <= 60
                     && options.SynchronizationIntervalMinutes > 0
+                    && options.OutlookRetentionDays > 0
                     && options.AclReconciliationIntervalMinutes > 0
                     && options.AclReconciliationRetryMinutes > 0
                     && options.AclReconciliationBatchSize is > 0 and <= 1000
@@ -97,6 +98,8 @@ public static class Microsoft365ServiceCollectionExtensions
         services.AddHttpClient<MicrosoftGraphListSchemaClient>();
         services.AddHttpClient<MicrosoftGraphListItemDeltaClient>();
         services.AddHttpClient<MicrosoftGraphDriveItemDeltaClient>();
+        services.AddHttpClient<MicrosoftGraphOutlookMessageDeltaClient>();
+        services.AddHttpClient<MicrosoftGraphMailFolderClient>();
         services.AddHttpClient<MicrosoftGraphSharedDriveItemSearchClient>();
         AddProtectedHttpClient<MicrosoftGraphDriveContentClient>(services);
         services.AddHttpClient<MicrosoftGraphSiteSourcesClient>();
@@ -125,6 +128,8 @@ public static class Microsoft365ServiceCollectionExtensions
         services.AddScoped<IMicrosoft365ConsentClient, Microsoft365ConsentClientAdapter>();
         services.AddScoped<IMicrosoft365ListItemDeltaClient, Microsoft365ListItemDeltaClientAdapter>();
         services.AddScoped<IMicrosoft365DriveItemDeltaClient, Microsoft365DriveItemDeltaClientAdapter>();
+        services.AddScoped<IMicrosoft365OutlookMessageDeltaClient, Microsoft365OutlookMessageDeltaClientAdapter>();
+        services.AddScoped<IMicrosoft365CurrentUserOutlookFoldersClient, Microsoft365CurrentUserOutlookFoldersClientAdapter>();
         services.AddScoped<IMicrosoft365DriveContentClient, Microsoft365DriveContentClientAdapter>();
         services.AddScoped<ISpreadsheetWorkbookReader, SpreadsheetWorkbookReaderAdapter>();
         services.AddScoped<IMicrosoft365ListSchemaClient, Microsoft365ListSchemaClientAdapter>();
