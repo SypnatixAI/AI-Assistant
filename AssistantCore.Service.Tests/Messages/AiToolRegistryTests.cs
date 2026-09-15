@@ -10,59 +10,16 @@ namespace AssistantCore.Service.Tests.Messages;
 public sealed class AiToolRegistryTests
 {
     [Theory, AutoDomainData]
-    public async Task Given_Microsoft365IsConfigured_When_GetAvailableToolsAsync_Then_ReturnsItsStrictDefinition(
+    public async Task Given_NoExecutionHandler_When_GetAvailableToolsAsync_Then_ReturnsNoTool(
         Organization organization)
     {
         // Given
         var connectorQueries = new StubOrganizationConnectorQueries
         {
             Connectors =
-            [
-                CreateConnector(
-                    ConnectorType.Microsoft365,
-                    Microsoft365SourceType.SharePoint,
-                    Microsoft365SourceType.OneDrive)
-            ]
+            [CreateConnector(ConnectorType.Microsoft365, Microsoft365SourceType.SharePoint)]
         };
-        var registry = new AiToolRegistry(
-            connectorQueries,
-            [new FakeToolExecutionHandler(AiToolNames.SearchMicrosoft365)]);
-
-        // When
-        var tools = await registry.GetAvailableToolsAsync(
-            organization.Id,
-            CancellationToken.None);
-
-        // Then
-        var tool = Assert.Single(tools);
-        Assert.Equal(AiToolNames.SearchMicrosoft365, tool.Name);
-        Assert.Equal("object", tool.InputSchema.GetProperty("type").GetString());
-        Assert.False(tool.InputSchema.GetProperty("additionalProperties").GetBoolean());
-        Assert.Equal(organization.Id, connectorQueries.ReceivedOrganizationId);
-        var sourceTypes = tool.InputSchema
-            .GetProperty("properties")
-            .GetProperty("sourceTypes")
-            .GetProperty("anyOf")[0]
-            .GetProperty("items")
-            .GetProperty("enum")
-            .EnumerateArray()
-            .Select(item => item.GetString())
-            .ToArray();
-        Assert.Equal(["onedrive", "sharepoint"], sourceTypes);
-    }
-
-    [Theory, AutoDomainData]
-    public async Task Given_Microsoft365HasNoSource_When_GetAvailableToolsAsync_Then_ReturnsNoTool(
-        Organization organization)
-    {
-        // Given
-        var connectorQueries = new StubOrganizationConnectorQueries
-        {
-            Connectors = [CreateConnector(ConnectorType.Microsoft365)]
-        };
-        var registry = new AiToolRegistry(
-            connectorQueries,
-            [new FakeToolExecutionHandler(AiToolNames.SearchMicrosoft365)]);
+        var registry = new AiToolRegistry(connectorQueries, []);
 
         // When
         var tools = await registry.GetAvailableToolsAsync(
@@ -74,16 +31,17 @@ public sealed class AiToolRegistryTests
     }
 
     [Theory, AutoDomainData]
-    public async Task Given_NoExecutionHandler_When_GetAvailableToolsAsync_Then_ReturnsNoTool(
+    public async Task Given_Microsoft365HasNoDocumentSource_When_GetAvailableToolsAsync_Then_ReturnsNoTool(
         Organization organization)
     {
         // Given
         var connectorQueries = new StubOrganizationConnectorQueries
         {
-            Connectors =
-            [CreateConnector(ConnectorType.Microsoft365, Microsoft365SourceType.SharePoint)]
+            Connectors = [CreateConnector(ConnectorType.Microsoft365)]
         };
-        var registry = new AiToolRegistry(connectorQueries, []);
+        var registry = new AiToolRegistry(
+            connectorQueries,
+            [new FakeToolExecutionHandler(AiToolNames.AnalyzeMicrosoft365Spreadsheet)]);
 
         // When
         var tools = await registry.GetAvailableToolsAsync(
@@ -116,6 +74,7 @@ public sealed class AiToolRegistryTests
         var properties = tool.InputSchema.GetProperty("properties");
         Assert.True(properties.TryGetProperty("aggregations", out _));
         Assert.True(properties.TryGetProperty("filters", out _));
+        Assert.Equal(organization.Id, connectorQueries.ReceivedOrganizationId);
     }
 
     private static OrganizationConnector CreateConnector(
@@ -139,7 +98,6 @@ public sealed class AiToolRegistryTests
     private sealed class StubOrganizationConnectorQueries : IOrganizationConnectorQueries
     {
         public IReadOnlyCollection<OrganizationConnector> Connectors { get; init; } = [];
-
         public Guid? ReceivedOrganizationId { get; private set; }
 
         public Task<IReadOnlyCollection<OrganizationConnector>> GetActiveConfiguredConnectors(
