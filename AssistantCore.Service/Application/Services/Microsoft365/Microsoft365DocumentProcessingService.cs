@@ -6,6 +6,7 @@ using AssistantCore.Service.Application.Exceptions;
 using AssistantCore.Service.Application.Models.Microsoft365;
 using AssistantCore.Service.Application.Models.Microsoft365.ContentExtraction;
 using AssistantCore.Service.Application.Models.Microsoft365.Permissions;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
 namespace AssistantCore.Service.Application.Services.Microsoft365;
@@ -21,7 +22,8 @@ public sealed class Microsoft365DocumentProcessingService(
     IMicrosoft365PassageIndexWriter indexWriter,
     IMicrosoft365ContentAclSynchronizationService aclSynchronizationService,
     IOptions<Microsoft365Options> options,
-    TimeProvider timeProvider) : IMicrosoft365DocumentProcessingService
+    TimeProvider timeProvider,
+    ILogger<Microsoft365DocumentProcessingService> logger) : IMicrosoft365DocumentProcessingService
 {
     public async Task<bool> ProcessNextAsync(CancellationToken cancellationToken = default)
     {
@@ -56,6 +58,11 @@ public sealed class Microsoft365DocumentProcessingService(
         }
         catch (Exception exception)
         {
+            logger.LogError(
+                exception,
+                "Microsoft 365 document work {WorkId} failed for drive item {DriveItemId}.",
+                work.Id,
+                work.DriveItemId);
             var failure = Microsoft365DocumentFailurePolicy.Evaluate(
                 exception,
                 work.AttemptCount,
