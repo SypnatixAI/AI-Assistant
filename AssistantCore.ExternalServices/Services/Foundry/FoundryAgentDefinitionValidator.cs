@@ -8,6 +8,21 @@ public static class FoundryAgentDefinitionValidator
     private const string EnterpriseSearchToolName = "EnterpriseSearch";
     private const string WorkIqToolType = "work_iq_preview";
     private const string McpToolType = "mcp";
+    private const string DefaultWorkIqServerLabel = "work-iq";
+    private const string DefaultFoundryIqServerLabel = "foundry-iq";
+
+    public static void Validate(JsonElement definition) =>
+        Validate(
+            definition,
+            new FoundryAgentClientSettings(
+                ProjectEndpoint: string.Empty,
+                AgentName: string.Empty,
+                AgentVersion: string.Empty,
+                RequireEnterpriseSearch: true,
+                RequireWorkIq: true,
+                WorkIqServerLabel: DefaultWorkIqServerLabel,
+                RequireFoundryIq: true,
+                FoundryIqServerLabel: DefaultFoundryIqServerLabel));
 
     public static void Validate(
         JsonElement definition,
