@@ -70,6 +70,10 @@ jobs:
                 --type external \
                 --target-port "$TARGET_PORT" \
                 --transport auto
+              az containerapp update \
+                --name "$app" \
+                --resource-group "$RESOURCE_GROUP" \
+                --min-replicas 1
             else
               az containerapp ingress disable \
                 --name "$app" \

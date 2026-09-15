@@ -192,9 +192,10 @@ Le déclenchement manuel constitue la décision de promotion. Une protection
 GitHub Environment peut exiger une approbation supplémentaire si l'équipe le
 souhaite.
 
-Le workflow `control-certif.yml` met le worker à une réplique seulement pendant
-une séance de certification et le remet à zéro après. Pour arrêter tout
-l'environnement, il désactive aussi les ingress publics de l'API et de la SPA.
+Le workflow `control-certif.yml` met l'API, la SPA et le worker à une réplique
+au démarrage d'une séance. Il arrête automatiquement le worker après
+30 minutes. L'action d'arrêt remet les répliques à zéro et désactive les ingress
+publics de l'API et de la SPA.
 
 Le workflow `release-candidate.yml` produit un manifeste YAML avec les digests
 ACR exacts des images les plus récemment publiées. Les champs de tag peuvent
