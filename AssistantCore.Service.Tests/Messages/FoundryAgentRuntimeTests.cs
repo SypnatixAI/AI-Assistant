@@ -81,56 +81,11 @@ public sealed class FoundryAgentRuntimeTests
         var request = Assert.Single(client.ReceivedRequests);
         var tool = Assert.Single(request.Tools);
         Assert.Equal("AnalyzeSpreadsheet", tool.Name);
+        Assert.Contains("Work IQ", tool.Description, StringComparison.OrdinalIgnoreCase);
         Assert.Single(validator.ReceivedCalls);
         Assert.Single(router.ReceivedCalls);
         Assert.Equal(evidence, Assert.Single(result.Citations));
         Assert.Equal(1, result.Usage.ToolCallCount);
-    }
-
-    [Theory, AutoDomainData]
-    public async Task Given_LegacyEnterpriseSearch_When_RunAsync_Then_DoesNotExposeItAsLocalTool(
-        StartedMessageProcessing processing)
-    {
-        // Given
-        var client = new RecordingFoundryAgentClient(
-            new FoundryAgentClientResult("Réponse.", "agent@1", 8, 2, 1));
-        var runtime = CreateRuntime(
-            client,
-            new StubToolRegistry([CreateAuthorizedEnterpriseSearchTool()]));
-
-        // When
-        await runtime.RunAsync(
-            new AgentTurnRequest(processing, CreateValidExecutionContext()),
-            CancellationToken.None);
-
-        // Then
-        Assert.Empty(Assert.Single(client.ReceivedRequests).Tools);
-    }
-
-    [Theory, AutoDomainData]
-    public async Task Given_SearchAndSpreadsheetTools_When_RunAsync_Then_ExposesOnlySpreadsheetAsLocalTool(
-        StartedMessageProcessing processing)
-    {
-        // Given
-        var client = new RecordingFoundryAgentClient(
-            new FoundryAgentClientResult("Réponse.", "agent@1", 8, 2, 1));
-        var runtime = CreateRuntime(
-            client,
-            new StubToolRegistry(
-            [
-                CreateAuthorizedEnterpriseSearchTool(),
-                CreateAuthorizedSpreadsheetAnalysisTool()
-            ]));
-
-        // When
-        await runtime.RunAsync(
-            new AgentTurnRequest(processing, CreateValidExecutionContext()),
-            CancellationToken.None);
-
-        // Then
-        var tool = Assert.Single(Assert.Single(client.ReceivedRequests).Tools);
-        Assert.Equal("AnalyzeSpreadsheet", tool.Name);
-        Assert.Contains("use Work IQ first", tool.Description, StringComparison.OrdinalIgnoreCase);
     }
 
     [Theory, AutoDomainData]
@@ -222,24 +177,6 @@ public sealed class FoundryAgentRuntimeTests
             Guid.NewGuid(),
             IdentityProvider.MicrosoftEntraId,
             UserEmail: "member@synaptix.local");
-
-    private static AiToolDefinition CreateAuthorizedEnterpriseSearchTool() =>
-        new(
-            AiToolNames.SearchMicrosoft365,
-            "Search authorized enterprise information.",
-            JsonSerializer.SerializeToElement(new
-            {
-                type = "object",
-                properties = new
-                {
-                    query = new { type = "string" },
-                    sourceTypes = new { type = new[] { "array", "null" } },
-                    dateFrom = new { type = new[] { "string", "null" } },
-                    dateTo = new { type = new[] { "string", "null" } }
-                },
-                required = new[] { "query", "sourceTypes", "dateFrom", "dateTo" },
-                additionalProperties = false
-            }));
 
     private static AiToolDefinition CreateAuthorizedSpreadsheetAnalysisTool() =>
         new(
