@@ -63,7 +63,7 @@ public sealed class Microsoft365DocumentProcessingService(
             await workRepository.FailAsync(
                 work,
                 failure.IsPermanent,
-                exception.GetType().Name,
+                GetErrorCode(exception),
                 timeProvider.GetUtcNow().Add(failure.RetryDelay),
                 cancellationToken);
         }
@@ -133,7 +133,7 @@ public sealed class Microsoft365DocumentProcessingService(
             cancellationToken);
         if (extraction.Status != Microsoft365ContentExtractionStatus.Success)
         {
-            throw new InvalidDataException($"Document extraction ended with {extraction.Status}.");
+            throw new Microsoft365ContentExtractionException(extraction.Status);
         }
 
         var sourceType = source.Kind == Microsoft365SourceKind.OneDrive
@@ -207,6 +207,11 @@ public sealed class Microsoft365DocumentProcessingService(
 
     private static string BuildEmbeddingContent(Microsoft365SearchPassage passage) =>
         $"Document: {passage.Title}\n\n{passage.Content}";
+
+    private static string GetErrorCode(Exception exception) =>
+        exception is Microsoft365ContentExtractionException extractionException
+            ? extractionException.ErrorCode
+            : exception.GetType().Name;
 
     private async Task DeleteAsync(
         Microsoft365DocumentWork work,
