@@ -36,6 +36,8 @@ param azureOpenAiEmbeddingModelName string = 'text-embedding-3-small'
 param azureOpenAiPlanningEndpoint string = 'https://josetchibozo7-5469-resource.openai.azure.com'
 param azureOpenAiPlanningDeploymentName string = 'gpt-5.5'
 param azureOpenAiPlanningModelName string = 'gpt-5.5'
+param foundryAccountName string = 'josetchibozo7-5469-resource'
+param foundryProjectName string = 'onpremia-openai-search'
 @allowed([
   'minimal'
   'low'
@@ -69,6 +71,15 @@ resource keyVault 'Microsoft.KeyVault/vaults@2023-07-01' existing = {
   name: keyVaultName
 }
 
+resource foundryAccount 'Microsoft.CognitiveServices/accounts@2025-06-01' existing = {
+  name: foundryAccountName
+}
+
+resource foundryProject 'Microsoft.CognitiveServices/accounts/projects@2025-06-01' existing = {
+  parent: foundryAccount
+  name: foundryProjectName
+}
+
 resource workloadIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-01-31' = {
   name: workloadIdentityName
   location: location
@@ -90,6 +101,19 @@ resource keyVaultSecretsUser 'Microsoft.Authorization/roleAssignments@2022-04-01
     roleDefinitionId: subscriptionResourceId(
       'Microsoft.Authorization/roleDefinitions',
       '4633458b-17de-408a-b874-0445c86b69e6'
+    )
+  }
+}
+
+resource foundryUser 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(foundryProject.id, workloadIdentity.id, 'FoundryUser')
+  scope: foundryProject
+  properties: {
+    principalId: workloadIdentity.properties.principalId
+    principalType: 'ServicePrincipal'
+    roleDefinitionId: subscriptionResourceId(
+      'Microsoft.Authorization/roleDefinitions'
+      '53ca6127-db72-4b80-b1b0-d745d6d5456d'
     )
   }
 }
@@ -209,6 +233,10 @@ var commonApiEnvironmentVariables = [
   {
     name: 'ASPNETCORE_ENVIRONMENT'
     value: 'Certif'
+  }
+  {
+    name: 'AZURE_CLIENT_ID'
+    value: workloadIdentity.properties.clientId
   }
   {
     name: 'ConnectionStrings__AssistantCoreDatabase'
@@ -456,6 +484,10 @@ var commonWorkerEnvironmentVariables = [
   {
     name: 'DOTNET_ENVIRONMENT'
     value: 'Certif'
+  }
+  {
+    name: 'AZURE_CLIENT_ID'
+    value: workloadIdentity.properties.clientId
   }
   {
     name: 'ConnectionStrings__AssistantCoreDatabase'
