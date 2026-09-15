@@ -112,7 +112,7 @@ resource foundryUser 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
     principalId: workloadIdentity.properties.principalId
     principalType: 'ServicePrincipal'
     roleDefinitionId: subscriptionResourceId(
-      'Microsoft.Authorization/roleDefinitions'
+      'Microsoft.Authorization/roleDefinitions',
       '53ca6127-db72-4b80-b1b0-d745d6d5456d'
     )
   }
@@ -433,7 +433,7 @@ resource api 'Microsoft.App/containerApps@2024-03-01' = {
       }
     }
   }
-  dependsOn: [acrPullRole, keyVaultSecretsUser]
+  dependsOn: [acrPullRole, keyVaultSecretsUser, foundryUser]
 }
 
 var workerSecrets = [
