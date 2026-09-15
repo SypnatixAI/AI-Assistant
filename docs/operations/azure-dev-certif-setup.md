@@ -109,14 +109,20 @@ Après un CI réussi sur la branche par défaut, les workflows **Publish backend
 images** et **Publish SPA image** construisent et publient les images avec un
 tag SHA complet. Ils ne déploient pas d’application Azure.
 
-Pour la première création des applications, lancer **Provision Azure
+Pour créer ou mettre à jour les applications, lancer **Provision Azure
 infrastructure** avec `deploy-environment` et `certif`. Les tags backend et SPA
 peuvent rester vides : le workflow choisit le dernier tag SHA disponible dans
 ACR (un tag backend seulement si l’API, le Worker et les migrations sont tous
 présents). Il est aussi possible de saisir des tags précis. Le workflow exécute
-un `what-if`, puis crée
-les ressources CERTIF. Le job Flyway est créé, mais les migrations sont
+un `what-if`, puis met à jour les ressources CERTIF. Le job Flyway est créé,
+mais les migrations sont
 exécutées lors de la promotion d’une version.
+
+L’API et le Worker CERTIF utilisent le modèle de planification RAG `gpt-5.5`
+avec l’effort de récupération `auto`. Dans Azure, le nom de déploiement de ce
+modèle est `gpt-5.5-1`. Les embeddings, le découpage des documents, le
+classement sémantique et les limites de contexte reprennent les mêmes réglages
+que la configuration locale.
 
 <a id="azure-setup-deployments"></a>
 ## Déployer une version CERTIF
