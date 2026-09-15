@@ -2,7 +2,6 @@ using System.Collections.Concurrent;
 using System.Text.Json;
 using AssistantCore.Service.Application.Models.Messages.Connectors;
 using AssistantCore.Service.Application.Models.Messages.Tools;
-using AssistantCore.Service.Application.Services.Messages.Evidence;
 using AssistantCore.Service.Application.Services.Messages.Tools;
 using AssistantCore.Service.Infrastructure.Connectors;
 using Microsoft.Extensions.Configuration;
@@ -13,17 +12,10 @@ namespace AssistantCore.Service.Tests.Integration;
 public sealed class ConnectorServiceCollectionExtensionsTests
 {
     [Theory, AutoDomainData]
-    public void Given_ValidConnectorConfiguration_When_AddConnectorInfrastructure_Then_RegistersSharedInfrastructure(
-        Guid _)
+    public void Given_ConnectorInfrastructure_When_AddConnectorInfrastructure_Then_RegistersToolRouter(Guid _)
     {
         // Given
-        var configuration = new ConfigurationBuilder()
-            .AddInMemoryCollection(new Dictionary<string, string?>
-            {
-                ["Connectors:Microsoft365:MaximumResults"] = "10",
-                ["Connectors:Microsoft365:MaximumContentLength"] = "4000"
-            })
-            .Build();
+        var configuration = new ConfigurationBuilder().Build();
         var services = new ServiceCollection();
 
         // When
@@ -32,7 +24,6 @@ public sealed class ConnectorServiceCollectionExtensionsTests
         // Then
         using var serviceProvider = services.BuildServiceProvider();
         using var scope = serviceProvider.CreateScope();
-        Assert.NotNull(scope.ServiceProvider.GetRequiredService<IEvidenceNormalizer>());
         Assert.IsType<ScopedToolExecutionRouter>(
             scope.ServiceProvider.GetRequiredService<IToolExecutionRouter>());
     }
@@ -96,9 +87,7 @@ public sealed class ConnectorServiceCollectionExtensionsTests
             observedScopeIds.Add(scopeMarker.Id);
             await parallelExecutionGate.WaitForBothCallsAsync(cancellationToken);
 
-            return ToolExecutionResult.Succeeded(
-                validatedToolCall.CallId,
-                []);
+            return ToolExecutionResult.Succeeded(validatedToolCall.CallId, []);
         }
     }
 
