@@ -196,9 +196,11 @@ Le workflow `control-certif.yml` met le worker à une réplique seulement pendan
 une séance de certification et le remet à zéro après. Pour arrêter tout
 l'environnement, il désactive aussi les ingress publics de l'API et de la SPA.
 
-Le workflow `release-candidate.yml` produit manuellement un manifeste YAML
-avec les digests ACR exacts des tags choisis. Le workflow CERTIF déploie ce
-manifeste sans reconstruire les images.
+Le workflow `release-candidate.yml` produit un manifeste YAML avec les digests
+ACR exacts des images les plus récemment publiées. Les champs de tag peuvent
+rester vides pour utiliser automatiquement les derniers tags SHA backend et SPA,
+ou être renseignés pour choisir une version précise. Le workflow CERTIF déploie
+ce manifeste sans reconstruire les images.
 
 <a id="production-deployment-secrets"></a>
 ### Secrets
