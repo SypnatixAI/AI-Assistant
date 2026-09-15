@@ -145,7 +145,6 @@ jobs:
           exit 1
 
       - name: Deploy CERTIF release candidate for readiness checks
-        id: deploy
         run: |
           az containerapp update \
             --name ca-assistant-api-certif \
@@ -182,15 +181,3 @@ jobs:
             "https://${SPA_FQDN}/"
           curl --fail --retry 12 --retry-delay 10 --retry-all-errors \
             "https://${SPA_FQDN}/assets/config/config.json"
-
-      - name: Stop CERTIF API and SPA after readiness checks
-        if: ${{ always() && steps.deploy.outcome != 'skipped' }}
-        run: |
-          az containerapp update \
-            --name ca-assistant-api-certif \
-            --resource-group "$CERTIF_RESOURCE_GROUP" \
-            --min-replicas 0
-          az containerapp update \
-            --name ca-assistant-spa-certif \
-            --resource-group "$CERTIF_RESOURCE_GROUP" \
-            --min-replicas 0
