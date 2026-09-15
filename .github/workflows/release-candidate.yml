@@ -4,12 +4,12 @@ on:
   workflow_dispatch:
     inputs:
       backend_image_tag:
-        description: Immutable backend SHA tag already published to ACR
-        required: true
+        description: Optional backend SHA tag; defaults to the latest published tag in ACR
+        required: false
         type: string
       spa_image_tag:
-        description: Immutable SPA SHA tag already published to ACR
-        required: true
+        description: Optional SPA SHA tag; defaults to the latest published tag in ACR
+        required: false
         type: string
       release_candidate:
         description: Optional candidate name; generated automatically when empty
@@ -48,7 +48,28 @@ jobs:
         run: |
           BACKEND_TAG="$REQUESTED_BACKEND_TAG"
           SPA_TAG="$REQUESTED_SPA_TAG"
+          if [ -z "$BACKEND_TAG" ]; then
+            BACKEND_TAG="$(az acr repository show-tags \
+              --name "$ACR_NAME" \
+              --repository assistant-api \
+              --orderby time_desc \
+              --output tsv \
+              | grep -m 1 -E '^sha-[0-9a-f]{40}$' || true)"
+          fi
+          if [ -z "$SPA_TAG" ]; then
+            SPA_TAG="$(az acr repository show-tags \
+              --name "$ACR_NAME" \
+              --repository assistant-spa \
+              --orderby time_desc \
+              --output tsv \
+              | grep -m 1 -E '^sha-[0-9a-f]{40}$' || true)"
+          fi
           RC_NAME="${REQUESTED_RC_NAME:-rc-$(date -u +%Y.%m.%d).${GITHUB_RUN_NUMBER}.${GITHUB_RUN_ATTEMPT}}"
+
+          if [ -z "$BACKEND_TAG" ] || [ -z "$SPA_TAG" ]; then
+            echo "No published SHA tag was found in ACR for the backend or SPA." >&2
+            exit 1
+          fi
 
           for tag in "$BACKEND_TAG" "$SPA_TAG"; do
             if ! printf '%s' "$tag" | grep -Eq '^sha-[0-9a-f]{40}$'; then
@@ -88,7 +109,7 @@ jobs:
             'schemaVersion: 1' \
             "releaseCandidate: ${RC_NAME}" \
             "createdAtUtc: $(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-            'sourceEnvironment: manually-selected-images' \
+            'sourceEnvironment: acr' \
             'images:' \
             "  api: ${ACR_NAME}.azurecr.io/assistant-api@${API_DIGEST}" \
             "  worker: ${ACR_NAME}.azurecr.io/assistant-worker@${WORKER_DIGEST}" \
