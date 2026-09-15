@@ -1,10 +1,28 @@
 using AssistantCore.Repository.Domain.Entities;
+using AssistantCore.Repository.Persistence.Configurations;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
 
 namespace AssistantCore.Repository.Persistence;
 
-public class AssistantCoreDbContext(DbContextOptions<AssistantCoreDbContext> options) : DbContext(options)
+public class AssistantCoreDbContext(
+    DbContextOptions<AssistantCoreDbContext> options,
+    IFieldEncryptorFactory? fieldEncryptorFactory = null) : DbContext(options)
 {
+    // EF Core caches the compiled model per DbContext type by default, ignoring constructor
+    // arguments. In production this is fine (IFieldEncryptorFactory is a singleton for the app's
+    // lifetime), but without this override, whichever encryptor is used by the first-constructed
+    // instance in a process would silently stick to every later instance too.
+    internal readonly IFieldEncryptorFactory EncryptorFactory =
+        fieldEncryptorFactory ?? PassthroughFieldEncryptorFactory.Instance;
+
+    private static readonly Type[] EncryptedConfigurationTypes =
+    [
+        typeof(MessageConfiguration),
+        typeof(ConversationConfiguration),
+        typeof(MessageWarningConfiguration)
+    ];
+
     public DbSet<Organization> Organizations => Set<Organization>();
 
     public DbSet<OrganizationMember> OrganizationMembers => Set<OrganizationMember>();
@@ -50,8 +68,22 @@ public class AssistantCoreDbContext(DbContextOptions<AssistantCoreDbContext> opt
 
     public DbSet<AdministrativeAuditEntry> AdministrativeAuditEntries => Set<AdministrativeAuditEntry>();
 
+    protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
+    {
+        optionsBuilder.ReplaceService<IModelCacheKeyFactory, EncryptionAwareModelCacheKeyFactory>();
+    }
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
-        modelBuilder.ApplyConfigurationsFromAssembly(typeof(AssistantCoreDbContext).Assembly);
+        modelBuilder.ApplyConfigurationsFromAssembly(
+            typeof(AssistantCoreDbContext).Assembly,
+            configurationType => !EncryptedConfigurationTypes.Contains(configurationType));
+
+        modelBuilder.ApplyConfiguration(new MessageConfiguration(
+            EncryptorFactory.CreateFor("AssistantCore.Conversations.MessageContent.v1")));
+        modelBuilder.ApplyConfiguration(new ConversationConfiguration(
+            EncryptorFactory.CreateFor("AssistantCore.Conversations.Title.v1")));
+        modelBuilder.ApplyConfiguration(new MessageWarningConfiguration(
+            EncryptorFactory.CreateFor("AssistantCore.Conversations.MessageWarningContent.v1")));
     }
 }

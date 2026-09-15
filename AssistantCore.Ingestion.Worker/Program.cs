@@ -1,6 +1,7 @@
 using AssistantCore.Repository.Persistence;
 using AssistantCore.Service.Application;
 using AssistantCore.Service.Infrastructure.Microsoft365;
+using AssistantCore.Service.Infrastructure.Persistence;
 using System.Reflection;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -42,6 +43,7 @@ public static class WorkerProgram
 
         builder.Services.AddMicrosoft365WorkerApplication();
         builder.Services.AddMicrosoft365Infrastructure(builder.Configuration);
+        builder.Services.AddPersistenceEncryption();
         builder.Services.AddPersistence(builder.Configuration);
         builder.Services.AddHostedService<Microsoft365IngestionWorker>();
 

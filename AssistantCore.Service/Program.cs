@@ -7,6 +7,7 @@ using AssistantCore.Service.Infrastructure.Cors;
 using AssistantCore.Service.Infrastructure.Microsoft365;
 using AssistantCore.Service.Infrastructure.Health;
 using AssistantCore.Service.Infrastructure.Foundry;
+using AssistantCore.Service.Infrastructure.Persistence;
 using AssistantCore.Service.Middleware;
 using AssistantCore.Repository.Persistence;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
@@ -56,6 +57,7 @@ builder.Services.AddConnectorInfrastructure(builder.Configuration);
 builder.Services.AddMicrosoft365Infrastructure(builder.Configuration);
 builder.Services.AddScoped<IMicrosoft365CurrentUserOneDriveClient, Microsoft365CurrentUserOneDriveClientAdapter>();
 builder.Services.AddDispatcher(Assembly.GetExecutingAssembly());
+builder.Services.AddPersistenceEncryption();
 builder.Services.AddPersistence(builder.Configuration);
 builder.Services.AddHealthChecks()
     .AddCheck<SqlDatabaseHealthCheck>(SqlDatabaseHealthCheck.Name, tags: ["ready"]);

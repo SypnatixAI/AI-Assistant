@@ -89,6 +89,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IConversationMessageListingService, ConversationMessageListingService>();
         services.AddScoped<IConversationAuditWriter, LoggingConversationAuditWriter>();
         services.AddScoped<IConversationLifecycleService, ConversationLifecycleService>();
+        services.AddScoped<IConversationEncryptionBackfillService, ConversationEncryptionBackfillService>();
         services.AddSingleton<ITenantAdmissionPolicy, TenantAdmissionPolicy>();
         services.AddScoped<IMicrosoft365OnboardingCompletionChecker, Microsoft365OnboardingCompletionChecker>();
         services.AddScoped<IMessageUserContextService, MessageUserContextService>();
