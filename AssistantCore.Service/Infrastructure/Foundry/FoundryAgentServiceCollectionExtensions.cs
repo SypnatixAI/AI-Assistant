@@ -28,7 +28,12 @@ public static class FoundryAgentServiceCollectionExtensions
                 new FoundryAgentClientSettings(
                     options.ProjectEndpoint,
                     options.AgentName,
-                    options.AgentVersion),
+                    options.AgentVersion,
+                    options.RequireEnterpriseSearch,
+                    options.RequireWorkIq,
+                    options.WorkIqServerLabel,
+                    options.RequireFoundryIq,
+                    options.FoundryIqServerLabel),
                 serviceProvider.GetRequiredService<ILogger<FoundryAgentExternalClient>>());
         });
 
