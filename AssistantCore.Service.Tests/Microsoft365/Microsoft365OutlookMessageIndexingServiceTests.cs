@@ -44,11 +44,12 @@ public sealed class Microsoft365OutlookMessageIndexingServiceTests
 
         Assert.Equal(mailboxUserId, normalizer.ReceivedUserId);
         Assert.Equal(organizationId, indexWriter.OrganizationId);
-        Assert.Equal([normalizedMailboxUserId], indexWriter.Acl?.UserIds);
-        Assert.Empty(indexWriter.Acl?.GroupIds ?? []);
-        Assert.Empty(indexWriter.Acl?.SharePointGroupIds ?? []);
-        Assert.False(indexWriter.Acl?.HasAnonymousLink);
-        Assert.False(indexWriter.Acl?.HasOrganizationLink);
+        var acl = Assert.IsType<Microsoft365Acl>(indexWriter.Acl);
+        Assert.Equal(new[] { normalizedMailboxUserId }, acl.AllowedEntraUserIds);
+        Assert.Empty(acl.AllowedEntraGroupIds);
+        Assert.Empty(acl.AllowedSharePointGroupIds);
+        Assert.False(acl.HasAnonymousLink);
+        Assert.False(acl.HasOrganizationLink);
         var passage = Assert.Single(indexWriter.Passages);
         Assert.Equal(messageId, passage.DriveItemId);
         Assert.Equal("outlook", passage.SourceType);
