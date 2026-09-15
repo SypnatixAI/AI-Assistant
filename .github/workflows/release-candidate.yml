@@ -4,12 +4,12 @@ on:
   workflow_dispatch:
     inputs:
       backend_image_tag:
-        description: Optional backend tag; defaults to the image deployed in DEV
-        required: false
+        description: Immutable backend SHA tag already published to ACR
+        required: true
         type: string
       spa_image_tag:
-        description: Optional SPA tag; defaults to the image deployed in DEV
-        required: false
+        description: Immutable SPA SHA tag already published to ACR
+        required: true
         type: string
       release_candidate:
         description: Optional candidate name; generated automatically when empty
@@ -22,7 +22,6 @@ permissions:
 
 env:
   AZURE_CORE_OUTPUT: none
-  DEV_RESOURCE_GROUP: ${{ vars.AZURE_DEV_RESOURCE_GROUP }}
   ACR_NAME: ${{ vars.AZURE_ACR_NAME }}
 
 jobs:
@@ -30,7 +29,7 @@ jobs:
     name: Create immutable manifest
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    environment: dev
+    environment: certif
 
     steps:
       - name: Sign in to Azure with OIDC
@@ -47,11 +46,8 @@ jobs:
           REQUESTED_SPA_TAG: ${{ inputs.spa_image_tag }}
           REQUESTED_RC_NAME: ${{ inputs.release_candidate }}
         run: |
-          CURRENT_API="$(az containerapp show --name ca-assistant-api-dev --resource-group "$DEV_RESOURCE_GROUP" --query properties.template.containers[0].image --output tsv)"
-          CURRENT_SPA="$(az containerapp show --name ca-assistant-spa-dev --resource-group "$DEV_RESOURCE_GROUP" --query properties.template.containers[0].image --output tsv)"
-
-          BACKEND_TAG="${REQUESTED_BACKEND_TAG:-${CURRENT_API##*:}}"
-          SPA_TAG="${REQUESTED_SPA_TAG:-${CURRENT_SPA##*:}}"
+          BACKEND_TAG="$REQUESTED_BACKEND_TAG"
+          SPA_TAG="$REQUESTED_SPA_TAG"
           RC_NAME="${REQUESTED_RC_NAME:-rc-$(date -u +%Y.%m.%d).${GITHUB_RUN_NUMBER}.${GITHUB_RUN_ATTEMPT}}"
 
           for tag in "$BACKEND_TAG" "$SPA_TAG"; do
@@ -65,8 +61,10 @@ jobs:
             exit 1
           fi
 
-          test "$CURRENT_API" = "${ACR_NAME}.azurecr.io/assistant-api:${BACKEND_TAG}"
-          test "$CURRENT_SPA" = "${ACR_NAME}.azurecr.io/assistant-spa:${SPA_TAG}"
+          az acr repository show --name "$ACR_NAME" --image "assistant-api:${BACKEND_TAG}" --only-show-errors >/dev/null
+          az acr repository show --name "$ACR_NAME" --image "assistant-worker:${BACKEND_TAG}" --only-show-errors >/dev/null
+          az acr repository show --name "$ACR_NAME" --image "assistant-migrations:${BACKEND_TAG}" --only-show-errors >/dev/null
+          az acr repository show --name "$ACR_NAME" --image "assistant-spa:${SPA_TAG}" --only-show-errors >/dev/null
 
           {
             echo "backend_tag=${BACKEND_TAG}"
@@ -90,7 +88,7 @@ jobs:
             'schemaVersion: 1' \
             "releaseCandidate: ${RC_NAME}" \
             "createdAtUtc: $(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-            'sourceEnvironment: dev' \
+            'sourceEnvironment: manually-selected-images' \
             'images:' \
             "  api: ${ACR_NAME}.azurecr.io/assistant-api@${API_DIGEST}" \
             "  worker: ${ACR_NAME}.azurecr.io/assistant-worker@${WORKER_DIGEST}" \

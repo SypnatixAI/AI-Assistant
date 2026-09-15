@@ -61,13 +61,9 @@ jobs:
       - name: Control public applications
         if: ${{ inputs.scope == 'all' }}
         run: |
-          for app in ca-assistant-api-certif ca-assistant-spa-certif ca-assistant-sqlpad-certif; do
+          for app in ca-assistant-api-certif ca-assistant-spa-certif; do
             if [ "${{ inputs.action }}" = "start" ]; then
-              if [ "$app" = "ca-assistant-sqlpad-certif" ]; then
-                TARGET_PORT=3000
-              else
-                TARGET_PORT=8080
-              fi
+              TARGET_PORT=8080
               az containerapp ingress enable \
                 --name "$app" \
                 --resource-group "$RESOURCE_GROUP" \
