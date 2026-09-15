@@ -65,6 +65,13 @@ Il peut exiger un approbateur. Ajouter ces variables dans cet environnement :
 | `AZURE_SHARED_RESOURCE_GROUP` | `rg-assistant-shared` |
 | `AZURE_CERTIF_RESOURCE_GROUP` | `rg-assistant-certif` |
 
+Dans le dépôt BFF, l’environnement GitHub `publish-images` est dédié à la
+publication automatique des images après un CI réussi sur `master`. Il n'exige
+pas d'approbation. Les variables `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`,
+`AZURE_SUBSCRIPTION_ID` et `AZURE_ACR_NAME` sont définies au niveau du dépôt et
+sont donc accessibles à cet environnement. L’environnement `certif` conserve
+son approbation pour les opérations de déploiement.
+
 <a id="azure-setup-shared"></a>
 ## Créer les ressources partagées
 
@@ -103,8 +110,11 @@ images** et **Publish SPA image** construisent et publient les images avec un
 tag SHA complet. Ils ne déploient pas d’application Azure.
 
 Pour la première création des applications, lancer **Provision Azure
-infrastructure** avec `deploy-environment`, `certif`, et fournir le tag backend
-ainsi que le tag SPA déjà publiés. Le workflow exécute un `what-if`, puis crée
+infrastructure** avec `deploy-environment` et `certif`. Les tags backend et SPA
+peuvent rester vides : le workflow choisit le dernier tag SHA disponible dans
+ACR (un tag backend seulement si l’API, le Worker et les migrations sont tous
+présents). Il est aussi possible de saisir des tags précis. Le workflow exécute
+un `what-if`, puis crée
 les ressources CERTIF. Le job Flyway est créé, mais les migrations sont
 exécutées lors de la promotion d’une version.
 
