@@ -34,7 +34,7 @@ param azureOpenAiEmbeddingEndpoint string = 'https://onpremia-openai-search.open
 param azureOpenAiEmbeddingDeploymentName string = 'm365-text-embedding-3-small'
 param azureOpenAiEmbeddingModelName string = 'text-embedding-3-small'
 param azureOpenAiPlanningEndpoint string = 'https://josetchibozo7-5469-resource.openai.azure.com'
-param azureOpenAiPlanningDeploymentName string = 'gpt-5.5-1'
+param azureOpenAiPlanningDeploymentName string = 'gpt-5.5'
 param azureOpenAiPlanningModelName string = 'gpt-5.5'
 @allowed([
   'minimal'
