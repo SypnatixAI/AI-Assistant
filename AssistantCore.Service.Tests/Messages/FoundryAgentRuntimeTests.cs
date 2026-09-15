@@ -48,27 +48,27 @@ public sealed class FoundryAgentRuntimeTests
     }
 
     [Theory, AutoDomainData]
-    public async Task Given_AuthorizedEnterpriseSearch_When_RunAsync_Then_DelegatesToolLoopToFoundry(
+    public async Task Given_AuthorizedSpreadsheetAnalysis_When_RunAsync_Then_DelegatesLocalToolLoopToFoundry(
         StartedMessageProcessing processing)
     {
         // Given
         var evidence = new RetrievedEvidence(
             "evidence-1",
             "Microsoft365",
-            "Politique interne",
-            "Contenu autorisé.",
-            "sharepoint://document",
-            "https://contoso.sharepoint.com/document",
+            "Classeur interne",
+            "Résultat calculé.",
+            "sharepoint://spreadsheet",
+            "https://contoso.sharepoint.com/spreadsheet",
             null);
         var router = new RecordingToolExecutionRouter(
             ToolExecutionResult.Succeeded("tool-result", [evidence]));
         var validator = new RecordingToolCallValidator();
         var client = new RecordingFoundryAgentClient(
-            new FoundryAgentClientResult("Réponse fondée.", "agent@1", 20, 7, 2),
+            new FoundryAgentClientResult("Réponse calculée.", "agent@1", 20, 7, 2),
             invokeFirstTool: true);
         var runtime = CreateRuntime(
             client,
-            new StubToolRegistry([CreateAuthorizedEnterpriseSearchTool()]),
+            new StubToolRegistry([CreateAuthorizedSpreadsheetAnalysisTool()]),
             validator,
             router);
 
@@ -80,7 +80,7 @@ public sealed class FoundryAgentRuntimeTests
         // Then
         var request = Assert.Single(client.ReceivedRequests);
         var tool = Assert.Single(request.Tools);
-        Assert.Equal("EnterpriseSearch", tool.Name);
+        Assert.Equal("AnalyzeSpreadsheet", tool.Name);
         Assert.Single(validator.ReceivedCalls);
         Assert.Single(router.ReceivedCalls);
         Assert.Equal(evidence, Assert.Single(result.Citations));
@@ -88,7 +88,7 @@ public sealed class FoundryAgentRuntimeTests
     }
 
     [Theory, AutoDomainData]
-    public async Task Given_UnauthorizedEnterpriseContext_When_RunAsync_Then_ExposesNoEnterpriseTool(
+    public async Task Given_LegacyEnterpriseSearch_When_RunAsync_Then_DoesNotExposeItAsLocalTool(
         StartedMessageProcessing processing)
     {
         // Given
@@ -97,13 +97,10 @@ public sealed class FoundryAgentRuntimeTests
         var runtime = CreateRuntime(
             client,
             new StubToolRegistry([CreateAuthorizedEnterpriseSearchTool()]));
-        var unauthorizedContext = new ConnectorExecutionContext(
-            Guid.NewGuid(),
-            Guid.NewGuid());
 
         // When
         await runtime.RunAsync(
-            new AgentTurnRequest(processing, unauthorizedContext),
+            new AgentTurnRequest(processing, CreateValidExecutionContext()),
             CancellationToken.None);
 
         // Then
@@ -111,7 +108,7 @@ public sealed class FoundryAgentRuntimeTests
     }
 
     [Theory, AutoDomainData]
-    public async Task Given_SearchAndSpreadsheetTools_When_RunAsync_Then_ExposesBothFoundryTools(
+    public async Task Given_SearchAndSpreadsheetTools_When_RunAsync_Then_ExposesOnlySpreadsheetAsLocalTool(
         StartedMessageProcessing processing)
     {
         // Given
@@ -131,14 +128,32 @@ public sealed class FoundryAgentRuntimeTests
             CancellationToken.None);
 
         // Then
-        var tools = Assert.Single(client.ReceivedRequests).Tools;
-        Assert.Equal(
-            ["AnalyzeSpreadsheet", "EnterpriseSearch"],
-            tools.Select(tool => tool.Name).OrderBy(name => name, StringComparer.Ordinal));
-        var enterpriseSearch = tools.Single(tool => tool.Name == "EnterpriseSearch");
-        var spreadsheetAnalysis = tools.Single(tool => tool.Name == "AnalyzeSpreadsheet");
-        Assert.Contains("then call AnalyzeSpreadsheet", enterpriseSearch.Description, StringComparison.Ordinal);
-        Assert.Contains("call EnterpriseSearch first", spreadsheetAnalysis.Description, StringComparison.Ordinal);
+        var tool = Assert.Single(Assert.Single(client.ReceivedRequests).Tools);
+        Assert.Equal("AnalyzeSpreadsheet", tool.Name);
+        Assert.Contains("use Work IQ first", tool.Description, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Theory, AutoDomainData]
+    public async Task Given_UnauthorizedEnterpriseContext_When_RunAsync_Then_ExposesNoLocalMicrosoft365Tool(
+        StartedMessageProcessing processing)
+    {
+        // Given
+        var client = new RecordingFoundryAgentClient(
+            new FoundryAgentClientResult("Réponse.", "agent@1", 8, 2, 1));
+        var runtime = CreateRuntime(
+            client,
+            new StubToolRegistry([CreateAuthorizedSpreadsheetAnalysisTool()]));
+        var unauthorizedContext = new ConnectorExecutionContext(
+            Guid.NewGuid(),
+            Guid.NewGuid());
+
+        // When
+        await runtime.RunAsync(
+            new AgentTurnRequest(processing, unauthorizedContext),
+            CancellationToken.None);
+
+        // Then
+        Assert.Empty(Assert.Single(client.ReceivedRequests).Tools);
     }
 
     [Theory, AutoDomainData]
@@ -261,10 +276,7 @@ public sealed class FoundryAgentRuntimeTests
                         request.Tools.First().Name,
                         JsonSerializer.SerializeToElement(new
                         {
-                            query = "politique interne",
-                            sourceTypes = (string[]?)null,
-                            dateFrom = (string?)null,
-                            dateTo = (string?)null
+                            fileName = "finance.xlsx"
                         })),
                     cancellationToken);
             }
