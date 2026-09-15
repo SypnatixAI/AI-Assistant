@@ -251,13 +251,16 @@ public sealed class FoundryAgentExternalClient
                 agentVersion.Definition,
                 new ModelReaderWriterOptions("W"));
             using var document = JsonDocument.Parse(serializedDefinition.ToStream());
-            FoundryAgentDefinitionValidator.Validate(document.RootElement);
+            FoundryAgentDefinitionValidator.Validate(document.RootElement, _settings);
 
             _configurationValidated = true;
             _logger.LogInformation(
-                "Validated Foundry agent {AgentName} version {AgentVersion}: EnterpriseSearch is declared and web search is disabled.",
+                "Validated Foundry agent {AgentName} version {AgentVersion} managed knowledge configuration. Work IQ required: {RequireWorkIq}; Foundry IQ required: {RequireFoundryIq}; legacy EnterpriseSearch required: {RequireEnterpriseSearch}.",
                 _settings.AgentName,
-                _settings.AgentVersion);
+                _settings.AgentVersion,
+                _settings.RequireWorkIq,
+                _settings.RequireFoundryIq,
+                _settings.RequireEnterpriseSearch);
         }
         finally
         {
