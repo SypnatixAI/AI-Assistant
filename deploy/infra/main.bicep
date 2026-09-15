@@ -3,7 +3,6 @@ targetScope = 'resourceGroup'
 param location string = resourceGroup().location
 
 @allowed([
-  'dev'
   'certif'
 ])
 param environmentName string
@@ -29,15 +28,6 @@ param microsoft365ClientId string = environmentName == 'certif'
   ? '558d6670-3549-423e-ae92-c5ff1d3b326b'
   : '00000000-0000-0000-0000-000000000001'
 param spaEntraClientId string = '97fda345-b54e-4243-b05a-31623871df18'
-@description('Microsoft Entra tenant that authenticates SQLPad users.')
-param sqlpadEntraTenantId string
-
-@description('Client ID of the environment-specific SQLPad App Registration.')
-param sqlpadEntraClientId string
-
-@description('Object ID of the Microsoft Entra group allowed to access SQLPad.')
-param sqlpadAllowedGroupObjectId string
-
 param azureSearchEndpoint string = 'https://synaptixsearch.search.windows.net'
 param azureSearchIndexName string = 'microsoft-content-${environmentName}'
 param azureOpenAiEmbeddingEndpoint string = 'https://onpremia-openai-search.openai.azure.com'
@@ -59,25 +49,18 @@ param tags object = {
   managedBy: 'bicep'
 }
 
-var isDev = environmentName == 'dev'
 var acrName = 'acrassistant${nameSuffix}'
 var acrLoginServer = '${acrName}.azurecr.io'
-var keyVaultEnvironmentName = environmentName == 'certif' ? 'cert' : environmentName
+var keyVaultEnvironmentName = 'cert'
 var keyVaultName = 'kv-assistant-${keyVaultEnvironmentName}-${nameSuffix}'
 var containerEnvironmentName = 'cae-assistant-${environmentName}'
 var apiAppName = 'ca-assistant-api-${environmentName}'
 var workerAppName = 'ca-assistant-worker-${environmentName}'
 var spaAppName = 'ca-assistant-spa-${environmentName}'
-var devSpaCustomDomain = 'assistant-dev.onpremia.ca'
-var devBffCustomDomain = 'assistant-bff-dev.onpremia.ca'
-var devSpaCertificateName = 'assistant-dev.onpremia.ca-cae-assi-260903024140'
-var devBffCertificateName = 'assistant-bff-dev.onpremia.c-cae-assi-260903025937'
 var certifSpaCustomDomain = 'assistant-certif.onpremia.ca'
 var certifBffCustomDomain = 'assistant-bff-certif.onpremia.ca'
 var certifSpaCertificateName = 'assistant-certif.onpremia.ca-cae-assi-260904041349'
 var certifBffCertificateName = 'assistant-bff-certif.onpremi-cae-assi-260904035728'
-var wiremockAppName = 'ca-assistant-wiremock-${environmentName}'
-var sqlpadAppName = 'ca-assistant-sqlpad-${environmentName}'
 var migrationsJobName = 'caj-assistant-migrations-${environmentName}'
 var workloadIdentityName = 'id-assistant-workload-${environmentName}'
 var acrPullIdentityName = 'id-assistant-acr-${environmentName}'
@@ -145,23 +128,10 @@ resource containerEnvironment 'Microsoft.App/managedEnvironments@2024-03-01' = {
   }
 }
 
-var apiBaseUrl = isDev ? 'https://${devBffCustomDomain}' : 'https://${certifBffCustomDomain}'
-var spaBaseUrl = isDev ? 'https://${devSpaCustomDomain}' : 'https://${certifSpaCustomDomain}'
-var wiremockPublicBaseUrl = 'https://${wiremockAppName}.${containerEnvironment.properties.defaultDomain}'
-var wiremockInternalBaseUrl = 'http://${wiremockAppName}'
-var sqlpadBaseUrl = 'https://${sqlpadAppName}.${containerEnvironment.properties.defaultDomain}'
+var apiBaseUrl = 'https://${certifBffCustomDomain}'
+var spaBaseUrl = 'https://${certifSpaCustomDomain}'
 var keyVaultBaseUrl = '${keyVault.properties.vaultUri}secrets'
 
-var devSpaCertificateId = resourceId(
-  'Microsoft.App/managedEnvironments/managedCertificates',
-  containerEnvironmentName,
-  devSpaCertificateName
-)
-var devBffCertificateId = resourceId(
-  'Microsoft.App/managedEnvironments/managedCertificates',
-  containerEnvironmentName,
-  devBffCertificateName
-)
 var certifSpaCertificateId = resourceId(
   'Microsoft.App/managedEnvironments/managedCertificates',
   containerEnvironmentName,
@@ -191,17 +161,8 @@ var databaseSecret = {
   identity: workloadIdentity.id
 }
 
-var apiSecrets = isDev
-  ? [
-      databaseSecret
-      {
-        name: 'dev-jwt-signing-key'
-        keyVaultUrl: '${keyVaultBaseUrl}/dev-jwt-signing-key'
-        identity: workloadIdentity.id
-      }
-    ]
-  : [
-      databaseSecret
+var apiSecrets = [
+  databaseSecret
       {
         name: 'microsoft365-client-secret'
         keyVaultUrl: '${keyVaultBaseUrl}/microsoft365-client-secret'
@@ -220,6 +181,11 @@ var apiSecrets = isDev
       {
         name: 'microsoft365-sharepoint-certificate-password'
         keyVaultUrl: '${keyVaultBaseUrl}/microsoft365-sharepoint-certificate-password'
+        identity: workloadIdentity.id
+      }
+      {
+        name: 'azure-vision-ocr-api-key'
+        keyVaultUrl: '${keyVaultBaseUrl}/azure-vision-ocr-api-key'
         identity: workloadIdentity.id
       }
       {
@@ -242,7 +208,7 @@ var apiSecrets = isDev
 var commonApiEnvironmentVariables = [
   {
     name: 'ASPNETCORE_ENVIRONMENT'
-    value: isDev ? 'Dev' : 'Certif'
+    value: 'Certif'
   }
   {
     name: 'ConnectionStrings__AssistantCoreDatabase'
@@ -267,29 +233,6 @@ var commonApiEnvironmentVariables = [
   {
     name: 'Microsoft365__WebhookBaseUrl'
     value: apiBaseUrl
-  }
-]
-
-var devApiEnvironmentVariables = [
-  {
-    name: 'Authentication__LocalJwt__SigningKey'
-    secretRef: 'dev-jwt-signing-key'
-  }
-  {
-    name: 'Microsoft365__AuthorityBaseUrl'
-    value: '${wiremockPublicBaseUrl}/microsoft'
-  }
-  {
-    name: 'Microsoft365__GraphBaseUrl'
-    value: '${wiremockPublicBaseUrl}/graph'
-  }
-  {
-    name: 'Microsoft365__EmbeddingEndpoint'
-    value: '${wiremockPublicBaseUrl}/openai/v1'
-  }
-  {
-    name: 'AzureSearch__Endpoint'
-    value: '${wiremockPublicBaseUrl}/azure-search'
   }
 ]
 
@@ -325,6 +268,14 @@ var certifApiEnvironmentVariables = [
   {
     name: 'Microsoft365__SharePointCertificatePassword'
     secretRef: 'microsoft365-sharepoint-certificate-password'
+  }
+  {
+    name: 'Microsoft365__OcrApiKey'
+    secretRef: 'azure-vision-ocr-api-key'
+  }
+  {
+    name: 'Microsoft365__OcrEndpoint'
+    value: 'https://vision-assistant.cognitiveservices.azure.com/'
   }
   {
     name: 'Microsoft365__EmbeddingApiKey'
@@ -393,13 +344,7 @@ resource api 'Microsoft.App/containerApps@2024-03-01' = {
         allowInsecure: false
         targetPort: 8080
         transport: 'auto'
-        customDomains: isDev ? [
-          {
-            name: devBffCustomDomain
-            certificateId: devBffCertificateId
-            bindingType: 'SniEnabled'
-          }
-        ] : [
+        customDomains: [
           {
             name: certifBffCustomDomain
             certificateId: certifBffCertificateId
@@ -415,12 +360,22 @@ resource api 'Microsoft.App/containerApps@2024-03-01' = {
         {
           name: 'api'
           image: '${acrLoginServer}/assistant-api:${backendImageTag}'
-          env: concat(commonApiEnvironmentVariables, isDev ? devApiEnvironmentVariables : certifApiEnvironmentVariables)
+          env: concat(commonApiEnvironmentVariables, certifApiEnvironmentVariables)
           resources: {
             cpu: json('0.5')
             memory: '1Gi'
           }
           probes: [
+            {
+              type: 'Startup'
+              httpGet: {
+                path: '/health/live'
+                port: 8080
+                scheme: 'HTTP'
+              }
+              periodSeconds: 5
+              failureThreshold: 24
+            }
             {
               type: 'Liveness'
               httpGet: {
@@ -453,10 +408,8 @@ resource api 'Microsoft.App/containerApps@2024-03-01' = {
   dependsOn: [acrPullRole, keyVaultSecretsUser]
 }
 
-var workerSecrets = isDev
-  ? [databaseSecret]
-  : [
-      databaseSecret
+var workerSecrets = [
+  databaseSecret
       {
         name: 'microsoft365-client-secret'
         keyVaultUrl: '${keyVaultBaseUrl}/microsoft365-client-secret'
@@ -465,6 +418,21 @@ var workerSecrets = isDev
       {
         name: 'microsoft365-clientstate-hmac-key'
         keyVaultUrl: '${keyVaultBaseUrl}/microsoft365-clientstate-hmac-key'
+        identity: workloadIdentity.id
+      }
+      {
+        name: 'microsoft365-sharepoint-certificate-pfx'
+        keyVaultUrl: '${keyVaultBaseUrl}/microsoft365-sharepoint-certificate-pfx'
+        identity: workloadIdentity.id
+      }
+      {
+        name: 'microsoft365-sharepoint-certificate-password'
+        keyVaultUrl: '${keyVaultBaseUrl}/microsoft365-sharepoint-certificate-password'
+        identity: workloadIdentity.id
+      }
+      {
+        name: 'azure-vision-ocr-api-key'
+        keyVaultUrl: '${keyVaultBaseUrl}/azure-vision-ocr-api-key'
         identity: workloadIdentity.id
       }
       {
@@ -487,7 +455,7 @@ var workerSecrets = isDev
 var commonWorkerEnvironmentVariables = [
   {
     name: 'DOTNET_ENVIRONMENT'
-    value: isDev ? 'Dev' : 'Certif'
+    value: 'Certif'
   }
   {
     name: 'ConnectionStrings__AssistantCoreDatabase'
@@ -511,25 +479,6 @@ var commonWorkerEnvironmentVariables = [
   }
 ]
 
-var devWorkerEnvironmentVariables = [
-  {
-    name: 'Microsoft365__AuthorityBaseUrl'
-    value: '${wiremockInternalBaseUrl}/microsoft'
-  }
-  {
-    name: 'Microsoft365__GraphBaseUrl'
-    value: '${wiremockInternalBaseUrl}/graph'
-  }
-  {
-    name: 'Microsoft365__EmbeddingEndpoint'
-    value: '${wiremockInternalBaseUrl}/openai/v1'
-  }
-  {
-    name: 'AzureSearch__Endpoint'
-    value: '${wiremockInternalBaseUrl}/azure-search'
-  }
-]
-
 var certifWorkerEnvironmentVariables = [
   {
     name: 'Microsoft365__ClientId'
@@ -542,6 +491,22 @@ var certifWorkerEnvironmentVariables = [
   {
     name: 'Microsoft365__ClientStateHmacKey'
     secretRef: 'microsoft365-clientstate-hmac-key'
+  }
+  {
+    name: 'Microsoft365__SharePointCertificateBase64'
+    secretRef: 'microsoft365-sharepoint-certificate-pfx'
+  }
+  {
+    name: 'Microsoft365__SharePointCertificatePassword'
+    secretRef: 'microsoft365-sharepoint-certificate-password'
+  }
+  {
+    name: 'Microsoft365__OcrApiKey'
+    secretRef: 'azure-vision-ocr-api-key'
+  }
+  {
+    name: 'Microsoft365__OcrEndpoint'
+    value: 'https://vision-assistant.cognitiveservices.azure.com/'
   }
   {
     name: 'Microsoft365__EmbeddingApiKey'
@@ -613,7 +578,7 @@ resource worker 'Microsoft.App/containerApps@2024-03-01' = {
         {
           name: 'worker'
           image: '${acrLoginServer}/assistant-worker:${backendImageTag}'
-          env: concat(commonWorkerEnvironmentVariables, isDev ? devWorkerEnvironmentVariables : certifWorkerEnvironmentVariables)
+          env: concat(commonWorkerEnvironmentVariables, certifWorkerEnvironmentVariables)
           resources: {
             cpu: json('0.5')
             memory: '1Gi'
@@ -621,9 +586,8 @@ resource worker 'Microsoft.App/containerApps@2024-03-01' = {
         }
       ]
       scale: {
-        // DEV remains explicitly controlled. CERTIF must continuously reconcile
-        // Microsoft 365 content and permissions.
-        minReplicas: isDev ? 0 : 1
+        // CERTIF continuously reconciles Microsoft 365 content and permissions.
+        minReplicas: 1
         maxReplicas: 1
       }
     }
@@ -650,13 +614,7 @@ resource spa 'Microsoft.App/containerApps@2024-03-01' = {
         allowInsecure: false
         targetPort: 8080
         transport: 'auto'
-        customDomains: isDev ? [
-          {
-            name: devSpaCustomDomain
-            certificateId: devSpaCertificateId
-            bindingType: 'SniEnabled'
-          }
-        ] : [
+        customDomains: [
           {
             name: certifSpaCustomDomain
             certificateId: certifSpaCertificateId
@@ -678,15 +636,15 @@ resource spa 'Microsoft.App/containerApps@2024-03-01' = {
             }
             {
               name: 'SPA_AUTHENTICATION_MODE'
-              value: isDev ? 'LocalJwt' : 'MicrosoftEntra'
+              value: 'MicrosoftEntra'
             }
             {
               name: 'SPA_LAUNCH_MODE'
-              value: isDev ? 'Dev' : 'Certification'
+              value: 'Certification'
             }
             {
               name: 'SPA_AUTHENTICATION_URL'
-              value: isDev ? '${wiremockPublicBaseUrl}/local-auth/token' : '${apiBaseUrl}/local-auth/token'
+              value: '${apiBaseUrl}/local-auth/token'
             }
             {
               name: 'SPA_ENTRA_CLIENT_ID'
@@ -714,209 +672,6 @@ resource spa 'Microsoft.App/containerApps@2024-03-01' = {
     }
   }
   dependsOn: [acrPullRole]
-}
-
-resource wiremock 'Microsoft.App/containerApps@2024-03-01' = if (isDev) {
-  name: wiremockAppName
-  location: location
-  tags: tags
-  identity: {
-    type: 'UserAssigned'
-    userAssignedIdentities: managedIdentities
-  }
-  properties: {
-    managedEnvironmentId: containerEnvironment.id
-    configuration: {
-      activeRevisionsMode: 'Single'
-      ingress: {
-        external: true
-        allowInsecure: false
-        targetPort: 8080
-        transport: 'auto'
-      }
-      registries: registryConfiguration
-      secrets: [
-        {
-          name: 'dev-jwt-signing-key'
-          keyVaultUrl: '${keyVaultBaseUrl}/dev-jwt-signing-key'
-          identity: workloadIdentity.id
-        }
-      ]
-    }
-    template: {
-      containers: [
-        {
-          name: 'wiremock'
-          image: '${acrLoginServer}/assistant-wiremock:${backendImageTag}'
-          env: [
-            {
-              name: 'DEV_JWT_SIGNING_KEY'
-              secretRef: 'dev-jwt-signing-key'
-            }
-            {
-              name: 'SPA_ORIGIN'
-              value: spaBaseUrl
-            }
-          ]
-          resources: {
-            cpu: json('0.25')
-            memory: '0.5Gi'
-          }
-        }
-      ]
-      scale: {
-        minReplicas: 0
-        maxReplicas: 1
-      }
-    }
-  }
-  dependsOn: [acrPullRole, keyVaultSecretsUser]
-}
-
-resource sqlpad 'Microsoft.App/containerApps@2024-03-01' = {
-  name: sqlpadAppName
-  location: location
-  tags: tags
-  identity: {
-    type: 'UserAssigned'
-    userAssignedIdentities: {
-      '${workloadIdentity.id}': {}
-    }
-  }
-  properties: {
-    managedEnvironmentId: containerEnvironment.id
-    configuration: {
-      activeRevisionsMode: 'Single'
-      ingress: {
-        external: true
-        allowInsecure: false
-        targetPort: 3000
-        transport: 'auto'
-      }
-      secrets: [
-        {
-          name: 'sql-admin-password'
-          keyVaultUrl: '${keyVaultBaseUrl}/sql-admin-password'
-          identity: workloadIdentity.id
-        }
-        {
-          name: 'sqlpad-entra-client-secret'
-          keyVaultUrl: '${keyVaultBaseUrl}/sqlpad-entra-client-secret'
-          identity: workloadIdentity.id
-        }
-      ]
-    }
-    template: {
-      containers: [
-        {
-          name: 'sqlpad'
-          image: 'sqlpad/sqlpad:7.5.7'
-          env: [
-            {
-              name: 'SQLPAD_AUTH_DISABLED'
-              value: 'true'
-            }
-            {
-              name: 'SQLPAD_AUTH_DISABLED_DEFAULT_ROLE'
-              value: 'admin'
-            }
-            {
-              name: 'SQLPAD_APP_LOG_LEVEL'
-              value: 'info'
-            }
-            {
-              name: 'SQLPAD_DB_PATH'
-              value: '/tmp/sqlpad'
-            }
-            {
-              name: 'SQLPAD_CONNECTIONS__assistantcore__name'
-              value: 'AssistantCoreDb ${toUpper(environmentName)}'
-            }
-            {
-              name: 'SQLPAD_CONNECTIONS__assistantcore__driver'
-              value: 'sqlserver'
-            }
-            {
-              name: 'SQLPAD_CONNECTIONS__assistantcore__host'
-              value: sql.outputs.serverFqdn
-            }
-            {
-              name: 'SQLPAD_CONNECTIONS__assistantcore__port'
-              value: '1433'
-            }
-            {
-              name: 'SQLPAD_CONNECTIONS__assistantcore__database'
-              value: sql.outputs.databaseName
-            }
-            {
-              name: 'SQLPAD_CONNECTIONS__assistantcore__username'
-              value: sqlAdministratorLogin
-            }
-            {
-              name: 'SQLPAD_CONNECTIONS__assistantcore__password'
-              secretRef: 'sql-admin-password'
-            }
-            {
-              name: 'SQLPAD_CONNECTIONS__assistantcore__sqlserverEncrypt'
-              value: 'true'
-            }
-            {
-              name: 'SQLPAD_CONNECTIONS__assistantcore__trustServerCertificate'
-              value: 'false'
-            }
-          ]
-          resources: {
-            cpu: json('0.5')
-            memory: '1Gi'
-          }
-        }
-      ]
-      scale: {
-        minReplicas: 0
-        maxReplicas: 1
-      }
-    }
-  }
-  dependsOn: [keyVaultSecretsUser]
-}
-
-resource sqlpadAuthentication 'Microsoft.App/containerApps/authConfigs@2024-03-01' = {
-  parent: sqlpad
-  name: 'current'
-  properties: {
-    platform: {
-      enabled: true
-      runtimeVersion: '~1'
-    }
-    globalValidation: {
-      unauthenticatedClientAction: 'RedirectToLoginPage'
-      redirectToProvider: 'azureactivedirectory'
-    }
-    httpSettings: {
-      requireHttps: true
-    }
-    identityProviders: {
-      azureActiveDirectory: {
-        enabled: true
-        registration: {
-          clientId: sqlpadEntraClientId
-          clientSecretSettingName: 'sqlpad-entra-client-secret'
-          openIdIssuer: '${environment().authentication.loginEndpoint}${sqlpadEntraTenantId}/v2.0'
-        }
-        validation: {
-          allowedAudiences: [
-            sqlpadEntraClientId
-            'api://${sqlpadEntraClientId}'
-          ]
-          defaultAuthorizationPolicy: {
-            allowedPrincipals: {
-              groups: [sqlpadAllowedGroupObjectId]
-            }
-          }
-        }
-      }
-    }
-  }
 }
 
 resource migrationsJob 'Microsoft.App/jobs@2024-03-01' = {
@@ -990,9 +745,6 @@ output apiUrl string = apiBaseUrl
 output spaName string = spa.name
 output spaUrl string = spaBaseUrl
 output workerName string = worker.name
-output wiremockName string = isDev ? wiremockAppName : ''
-output sqlpadName string = sqlpad.name
-output sqlpadUrl string = sqlpadBaseUrl
 output migrationsJobName string = migrationsJob.name
 output keyVaultName string = keyVault.name
 output sqlServerName string = sql.outputs.serverName
