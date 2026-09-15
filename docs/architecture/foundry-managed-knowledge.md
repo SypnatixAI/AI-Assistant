@@ -61,13 +61,17 @@ La Knowledge Base Foundry IQ est attachée à l'agent via MCP.
 4. Aligner `FoundryAgent:FoundryIqServerLabel` sur le label réellement publié.
 5. Conserver les futures sources non-Microsoft 365 dans cette Knowledge Base : Azure SQL, Blob, index Azure AI Search spécifiques et serveurs MCP métier.
 
-## EnterpriseSearch legacy
+## Retrieval Microsoft 365 legacy
 
-`EnterpriseSearch` existe encore physiquement dans le code à cette étape afin que sa suppression complète puisse être faite séparément et proprement.
+Le retrieval Microsoft 365 général a été retiré du cœur applicatif. Le runtime ne possède plus de tool local `search_microsoft_365` et les composants qui servaient uniquement à ce chemin ont été supprimés : connector, handler, adapter d'agentic retrieval, modèles de requête/résultat et filtres Azure AI Search.
 
-Il n'est cependant plus exposé au Foundry Agent dans le runtime `/messages` et `FoundryAgent:RequireEnterpriseSearch` vaut désormais `false`.
+Le chemin documentaire cible est donc directement :
 
-Le retrieval Microsoft 365 général doit donc venir de Work IQ une fois les ressources Foundry configurées.
+```text
+Foundry Agent -> Work IQ -> Microsoft 365
+```
+
+Les composants liés à l'ingestion, l'indexation et aux ACL de l'ancien pipeline ne sont pas tous supprimés à cette étape, car `AnalyzeSpreadsheet` dépend encore temporairement des métadonnées indexées et de la vérification d'accès. Ils seront retirés après découplage de l'analyse Excel.
 
 ## AnalyzeSpreadsheet
 
