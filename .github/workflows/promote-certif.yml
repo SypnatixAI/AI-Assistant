@@ -144,13 +144,14 @@ jobs:
           echo "Flyway did not finish within 10 minutes." >&2
           exit 1
 
-      - name: Deploy CERTIF release candidate at zero replicas
+      - name: Deploy CERTIF release candidate for readiness checks
+        id: deploy
         run: |
           az containerapp update \
             --name ca-assistant-api-certif \
             --resource-group "$CERTIF_RESOURCE_GROUP" \
             --image "$API_IMAGE" \
-            --min-replicas 0
+            --min-replicas 1
           az containerapp update \
             --name ca-assistant-worker-certif \
             --resource-group "$CERTIF_RESOURCE_GROUP" \
@@ -159,7 +160,8 @@ jobs:
           az containerapp update \
             --name ca-assistant-spa-certif \
             --resource-group "$CERTIF_RESOURCE_GROUP" \
-            --image "$SPA_IMAGE"
+            --image "$SPA_IMAGE" \
+            --min-replicas 1
 
       - name: Verify CERTIF readiness
         run: |
@@ -178,3 +180,17 @@ jobs:
             --query properties.configuration.ingress.fqdn --output tsv)"
           curl --fail --retry 12 --retry-delay 10 --retry-all-errors \
             "https://${SPA_FQDN}/"
+          curl --fail --retry 12 --retry-delay 10 --retry-all-errors \
+            "https://${SPA_FQDN}/assets/config/config.json"
+
+      - name: Stop CERTIF API and SPA after readiness checks
+        if: ${{ always() && steps.deploy.outcome != 'skipped' }}
+        run: |
+          az containerapp update \
+            --name ca-assistant-api-certif \
+            --resource-group "$CERTIF_RESOURCE_GROUP" \
+            --min-replicas 0
+          az containerapp update \
+            --name ca-assistant-spa-certif \
+            --resource-group "$CERTIF_RESOURCE_GROUP" \
+            --min-replicas 0

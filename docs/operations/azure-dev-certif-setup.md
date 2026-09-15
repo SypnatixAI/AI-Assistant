@@ -127,25 +127,29 @@ que la configuration locale.
 <a id="azure-setup-deployments"></a>
 ## Déployer une version CERTIF
 
-1. Dans le workflow **Create release candidate** du dépôt BFF, saisir le tag
-   backend `sha-...` et le tag SPA `sha-...` publiés par les workflows CI.
+1. Dans le workflow **Create release candidate** du dépôt BFF, laisser les tags
+   backend et SPA vides pour prendre les dernières images publiées, ou indiquer
+   les tags SHA `sha-...` voulus.
 2. Vérifier que le manifeste produit référence les quatre images ACR par digest.
 3. Lancer **Promote release candidate to CERTIF** dans le dépôt BFF et choisir
    l’artifact candidat.
 4. Vérifier Flyway, les endpoints `/health/live` et `/health/ready`, puis le
    chargement de la SPA dans le résumé du workflow.
 
-Pour publier seulement la SPA, le dépôt SPA offre aussi **Promote SPA to
-CERTIF** avec un tag SHA présent dans ACR. Cette action vérifie le chargement de
-la SPA et de sa configuration runtime.
+Pour promouvoir seulement la SPA, le dépôt SPA offre aussi **Promote SPA to
+CERTIF**. Le tag SHA est facultatif : sans tag, le workflow choisit le plus
+récent dans ACR. Cette promotion conserve l’approbation de l’environnement
+GitHub `certif`, puis vérifie la SPA et sa configuration runtime.
 
 <a id="azure-setup-control-certif"></a>
 ## Démarrer et arrêter CERTIF
 
 Dans le dépôt BFF, lancer **Start or stop CERTIF** avec `start` et `all` avant
-une séance. Pour réduire le calcul du worker seulement, choisir le scope
-`worker`. L’action `stop` avec `all` arrête le worker et désactive les ingress
-publics des applications.
+une séance. Cette action remet l’API et la SPA à une réplique et réactive leurs
+ingress publics; le worker démarre aussi, puis s’arrête automatiquement après
+30 minutes. Pour réduire le calcul du worker seulement, choisir le scope
+`worker`. L’action `stop` avec `all` arrête le worker et les applications
+publiques, puis désactive leurs ingress.
 
 <a id="azure-setup-troubleshooting"></a>
 ## Problèmes fréquents
