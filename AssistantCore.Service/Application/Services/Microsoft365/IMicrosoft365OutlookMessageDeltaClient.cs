@@ -8,6 +8,7 @@ public interface IMicrosoft365OutlookMessageDeltaClient
         string tenantId,
         string mailboxUserId,
         string mailFolderId,
+        DateTimeOffset receivedSince,
         CancellationToken cancellationToken = default);
 
     IAsyncEnumerable<Microsoft365OutlookMessageDeltaPage> GetDeltaPagesAsync(

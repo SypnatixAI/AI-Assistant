@@ -16,10 +16,11 @@ public sealed class MicrosoftGraphOutlookMessageDeltaClient(HttpClient httpClien
         string accessToken,
         string mailboxUserId,
         string mailFolderId,
+        DateTimeOffset receivedSince,
         [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
         await foreach (var page in GetPagesAsync(
-                           CreateInitialDeltaUri(graphBaseUrl, mailboxUserId, mailFolderId),
+                           CreateInitialDeltaUri(graphBaseUrl, mailboxUserId, mailFolderId, receivedSince),
                            accessToken,
                            cancellationToken))
         {
@@ -70,7 +71,8 @@ public sealed class MicrosoftGraphOutlookMessageDeltaClient(HttpClient httpClien
     private static Uri CreateInitialDeltaUri(
         string graphBaseUrl,
         string mailboxUserId,
-        string mailFolderId)
+        string mailFolderId,
+        DateTimeOffset receivedSince)
     {
         if (string.IsNullOrWhiteSpace(mailboxUserId))
         {
@@ -85,9 +87,10 @@ public sealed class MicrosoftGraphOutlookMessageDeltaClient(HttpClient httpClien
         var graphBaseUri = ValidateGraphBaseUrl(graphBaseUrl);
         var normalizedBaseUri = new Uri($"{graphBaseUri.GetLeftPart(UriPartial.Authority)}/");
         var select = Uri.EscapeDataString("id,subject,body,webLink,createdDateTime,lastModifiedDateTime,receivedDateTime");
+        var filter = Uri.EscapeDataString($"receivedDateTime ge {receivedSince.UtcDateTime:O}");
         return new Uri(
             normalizedBaseUri,
-            $"v1.0/users/{Uri.EscapeDataString(mailboxUserId)}/mailFolders/{Uri.EscapeDataString(mailFolderId)}/messages/delta?$select={select}");
+            $"v1.0/users/{Uri.EscapeDataString(mailboxUserId)}/mailFolders/{Uri.EscapeDataString(mailFolderId)}/messages/delta?$select={select}&$filter={filter}");
     }
 
     private static Uri CreateStoredDeltaUri(string graphBaseUrl, string deltaLink)

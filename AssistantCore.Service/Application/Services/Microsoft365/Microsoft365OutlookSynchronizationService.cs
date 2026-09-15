@@ -148,6 +148,7 @@ public sealed class Microsoft365OutlookSynchronizationService(
                 lease.Source.Microsoft365Connection.TenantId!,
                 lease.Source.ExternalResourceId,
                 lease.Source.ParentExternalResourceId!,
+                GetRetentionCutoff(),
                 cancellationToken),
             cancellationToken);
 
@@ -204,6 +205,7 @@ public sealed class Microsoft365OutlookSynchronizationService(
         var ignoredCount = 0;
         string? finalDeltaLink = null;
         var organization = lease.Source.Microsoft365Connection.OrganizationConnector.Organization;
+        var retentionCutoff = GetRetentionCutoff();
 
         await foreach (var page in pages.WithCancellation(cancellationToken))
         {
@@ -217,6 +219,17 @@ public sealed class Microsoft365OutlookSynchronizationService(
                         message.Id,
                         cancellationToken);
                     deletedCount++;
+                    continue;
+                }
+
+                if (IsOutsideRetention(message, retentionCutoff))
+                {
+                    await indexingService.DeleteAsync(
+                        organization.Id,
+                        lease.Source.Id,
+                        message.Id,
+                        cancellationToken);
+                    ignoredCount++;
                     continue;
                 }
 
@@ -278,6 +291,15 @@ public sealed class Microsoft365OutlookSynchronizationService(
             ignoredCount,
             FailedCount: 0);
     }
+
+    private DateTimeOffset GetRetentionCutoff() =>
+        timeProvider.GetUtcNow().AddDays(-options.Value.OutlookRetentionDays);
+
+    private static bool IsOutsideRetention(
+        Microsoft365OutlookMessageDelta message,
+        DateTimeOffset retentionCutoff) =>
+        message.ReceivedDateTime is not null
+        && message.ReceivedDateTime.Value < retentionCutoff;
 
     private async Task<SynchronizationLease> PrepareLeaseAsync(
         Guid sourceId,

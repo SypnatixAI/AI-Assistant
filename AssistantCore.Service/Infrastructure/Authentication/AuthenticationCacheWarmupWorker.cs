@@ -71,6 +71,10 @@ public sealed class AuthenticationCacheWarmupWorker(
                     scope.ServiceProvider,
                     request,
                     stoppingToken);
+                await EnsureCurrentUserOutlookIndexedAsync(
+                    scope.ServiceProvider,
+                    request,
+                    stoppingToken);
 
                 if (!string.IsNullOrWhiteSpace(request.ExternalTenantId)
                     && !string.IsNullOrWhiteSpace(request.EntraUserId))
@@ -133,6 +137,39 @@ public sealed class AuthenticationCacheWarmupWorker(
             logger.LogWarning(
                 exception,
                 "Automatic OneDrive indexing failed for organization {OrganizationId} and authenticated user {EntraUserId}.",
+                request.OrganizationId,
+                request.EntraUserId);
+        }
+    }
+
+    private async Task EnsureCurrentUserOutlookIndexedAsync(
+        IServiceProvider serviceProvider,
+        WarmupRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(request.EntraUserId))
+        {
+            return;
+        }
+
+        try
+        {
+            var outlookIndexingService = serviceProvider
+                .GetRequiredService<IMicrosoft365CurrentUserOutlookIndexingService>();
+            await outlookIndexingService.EnsureIndexedAsync(
+                request.OrganizationId,
+                request.EntraUserId,
+                cancellationToken);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception exception)
+        {
+            logger.LogWarning(
+                exception,
+                "Automatic Outlook indexing failed for organization {OrganizationId} and authenticated user {EntraUserId}.",
                 request.OrganizationId,
                 request.EntraUserId);
         }

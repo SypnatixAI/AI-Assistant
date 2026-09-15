@@ -33,6 +33,7 @@ public sealed class MicrosoftGraphOutlookMessageDeltaClientTests
                            accessToken,
                            "user@contoso.com",
                            "inbox",
+                           new DateTimeOffset(2026, 3, 19, 0, 0, 0, TimeSpan.Zero),
                            CancellationToken.None))
         {
             pages.Add(page);
@@ -51,6 +52,11 @@ public sealed class MicrosoftGraphOutlookMessageDeltaClientTests
         Assert.Null(deleted.BodyContent);
         Assert.Equal(deltaLink, pages[1].DeltaLink);
         Assert.Contains("$select=", requests[0].RequestUri?.OriginalString, StringComparison.Ordinal);
+        Assert.Contains("$filter=", requests[0].RequestUri?.OriginalString, StringComparison.Ordinal);
+        Assert.Contains(
+            Uri.EscapeDataString("receivedDateTime ge 2026-03-19T00:00:00.0000000Z"),
+            requests[0].RequestUri?.OriginalString,
+            StringComparison.Ordinal);
         Assert.All(requests, request =>
         {
             Assert.Equal("Bearer", request.Headers.Authorization?.Scheme);
@@ -89,6 +95,7 @@ public sealed class MicrosoftGraphOutlookMessageDeltaClientTests
                            accessToken,
                            "user-id",
                            "inbox",
+                           DateTimeOffset.UtcNow.AddDays(-180),
                            CancellationToken.None))
         {
             pages.Add(page);
@@ -136,6 +143,7 @@ public sealed class MicrosoftGraphOutlookMessageDeltaClientTests
                                accessToken,
                                "user-id",
                                "inbox",
+                               DateTimeOffset.UtcNow.AddDays(-180),
                                CancellationToken.None))
             {
             }

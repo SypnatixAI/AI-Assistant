@@ -32,7 +32,9 @@ public sealed class Microsoft365SourceConfiguration : IEntityTypeConfiguration<M
         {
             source.Microsoft365ConnectionId,
             source.Kind,
-            source.ExternalResourceId
-        }).IsUnique();
+            source.ExternalResourceId,
+            source.ParentExternalResourceId
+        }).IsUnique()
+            .HasDatabaseName("IX_Microsoft365Source_Connection_Type_Resource_Parent");
     }
 }

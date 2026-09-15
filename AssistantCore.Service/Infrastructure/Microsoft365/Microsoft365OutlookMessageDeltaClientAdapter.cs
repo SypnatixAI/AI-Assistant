@@ -18,6 +18,7 @@ public sealed class Microsoft365OutlookMessageDeltaClientAdapter(
         string tenantId,
         string mailboxUserId,
         string mailFolderId,
+        DateTimeOffset receivedSince,
         CancellationToken cancellationToken = default) =>
         ReadPagesAsync(
             tenantId,
@@ -26,6 +27,7 @@ public sealed class Microsoft365OutlookMessageDeltaClientAdapter(
                 accessToken,
                 mailboxUserId,
                 mailFolderId,
+                receivedSince,
                 cancellationToken),
             cancellationToken);
 

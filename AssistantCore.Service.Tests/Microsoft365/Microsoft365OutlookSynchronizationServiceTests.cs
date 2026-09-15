@@ -35,7 +35,8 @@ public sealed class Microsoft365OutlookSynchronizationServiceTests
                 deltaLink)
         };
         var indexing = new RecordingIndexingService();
-        var service = CreateService(repository, new StubDeltaClient(pages), indexing, now);
+        var deltaClient = new StubDeltaClient(pages);
+        var service = CreateService(repository, deltaClient, indexing, now);
 
         await service.StartInitialSynchronizationAsync(sourceId, synchronizationId, CancellationToken.None);
 
@@ -46,6 +47,7 @@ public sealed class Microsoft365OutlookSynchronizationServiceTests
         Assert.Equal(organizationId, indexing.IndexedMessages[0].OrganizationId);
         Assert.Equal(sourceId, indexing.IndexedMessages[0].SourceId);
         Assert.Equal("user@contoso.com", indexing.IndexedMessages[0].MailboxUserId);
+        Assert.Equal(now.AddDays(-180), deltaClient.ReceivedSince);
         Assert.Equal(deltaLink, repository.ConfirmedDeltaLink);
         Assert.Equal(Microsoft365SynchronizationStatus.Succeeded, repository.RecordedStatus);
         Assert.Equal(1, repository.RecordedCounters?.CreatedCount);
@@ -105,6 +107,33 @@ public sealed class Microsoft365OutlookSynchronizationServiceTests
         await Assert.ThrowsAsync<InvalidOperationException>(action);
         Assert.Equal(0, repository.LeaseAttemptCount);
         Assert.Equal(0, deltaClient.InitialCallCount);
+    }
+
+    [Theory, AutoDomainData]
+    public async Task Given_AnActiveMessageOlderThanRetention_When_StartInitialSynchronizationAsync_Then_DeletesItWithoutIndexing(
+        Guid sourceId,
+        Guid synchronizationId,
+        Guid organizationId,
+        DateTimeOffset now)
+    {
+        const string deltaLink = "https://graph.microsoft.com/v1.0/users/user/mailFolders/inbox/messages/delta?$deltatoken=next";
+        var source = CreateSource(sourceId, organizationId);
+        var repository = new RecordingRepository(source);
+        var staleReceivedAt = now.AddDays(-181);
+        var page = new Microsoft365OutlookMessageDeltaPage(
+            [CreateMessage("stale", "stale body", staleReceivedAt, staleReceivedAt)],
+            deltaLink);
+        var indexing = new RecordingIndexingService();
+        var service = CreateService(repository, new StubDeltaClient([page]), indexing, now);
+
+        await service.StartInitialSynchronizationAsync(sourceId, synchronizationId, CancellationToken.None);
+
+        Assert.Empty(indexing.IndexedMessages);
+        Assert.Equal(["stale"], indexing.DeletedMessageIds);
+        Assert.Equal(0, repository.RecordedCounters?.CreatedCount);
+        Assert.Equal(0, repository.RecordedCounters?.ModifiedCount);
+        Assert.Equal(0, repository.RecordedCounters?.DeletedCount);
+        Assert.Equal(1, repository.RecordedCounters?.IgnoredCount);
     }
 
     private static Microsoft365OutlookSynchronizationService CreateService(
@@ -297,14 +326,17 @@ public sealed class Microsoft365OutlookSynchronizationServiceTests
         : IMicrosoft365OutlookMessageDeltaClient
     {
         public int InitialCallCount { get; private set; }
+        public DateTimeOffset? ReceivedSince { get; private set; }
 
         public async IAsyncEnumerable<Microsoft365OutlookMessageDeltaPage> GetInitialPagesAsync(
             string tenantId,
             string mailboxUserId,
             string mailFolderId,
+            DateTimeOffset receivedSince,
             [EnumeratorCancellation] CancellationToken cancellationToken = default)
         {
             InitialCallCount++;
+            ReceivedSince = receivedSince;
             foreach (var page in pages)
             {
                 cancellationToken.ThrowIfCancellationRequested();
@@ -317,7 +349,7 @@ public sealed class Microsoft365OutlookSynchronizationServiceTests
             string tenantId,
             string deltaLink,
             CancellationToken cancellationToken = default) =>
-            GetInitialPagesAsync(tenantId, string.Empty, string.Empty, cancellationToken);
+            GetInitialPagesAsync(tenantId, string.Empty, string.Empty, DateTimeOffset.MinValue, cancellationToken);
     }
 
     private sealed class InvalidCheckpointThenInitialClient(
@@ -331,6 +363,7 @@ public sealed class Microsoft365OutlookSynchronizationServiceTests
             string tenantId,
             string mailboxUserId,
             string mailFolderId,
+            DateTimeOffset receivedSince,
             [EnumeratorCancellation] CancellationToken cancellationToken = default)
         {
             InitialCallCount++;
