@@ -4,7 +4,6 @@ using AssistantCore.Service.Application.Models.Messages.Connectors;
 using AssistantCore.Service.Application.Models.Messages.Tabular;
 using AssistantCore.Service.Application.Models.Messages.Tools.Arguments;
 using AssistantCore.Service.Application.Services.Messages.Tabular;
-using AssistantCore.Service.Application.Services.Microsoft365;
 
 namespace AssistantCore.Service.Tests.Messages;
 
@@ -18,9 +17,7 @@ public sealed class Microsoft365SpreadsheetAnalysisServiceTests
         fileName = $"{fileName}.xlsx";
         var document = new Microsoft365SpreadsheetDocument(
             fileName,
-            "tenant-id",
-            "drive-id",
-            "item-id",
+            [1, 2, 3],
             "document-reference",
             "https://contoso.sharepoint.com/workbook.xlsx");
         var rows = new IReadOnlyDictionary<string, string>[]
@@ -29,16 +26,16 @@ public sealed class Microsoft365SpreadsheetAnalysisServiceTests
             Row("2", "200", "2.0", "0.10", "0.70"),
             Row("3", "600", "3.2", "0.25", "0.85")
         };
+        var workbookReader = new StubWorkbookReader(new SpreadsheetWorkbook(
+        [
+            new SpreadsheetWorksheet(
+                "Transactions",
+                ["Transaction ID", "Transaction Amount", "Debt-to-Equity Ratio", "Profit Margin", "Accuracy Score"],
+                rows)
+        ]));
         var service = new Microsoft365SpreadsheetAnalysisService(
             new StubDocumentResolver(document),
-            new StubContentClient(),
-            new StubWorkbookReader(new SpreadsheetWorkbook(
-            [
-                new SpreadsheetWorksheet(
-                    "Transactions",
-                    ["Transaction ID", "Transaction Amount", "Debt-to-Equity Ratio", "Profit Margin", "Accuracy Score"],
-                    rows)
-            ])),
+            workbookReader,
             new SpreadsheetAnalysisEngine());
         var request = new SpreadsheetAnalysisRequest(
             fileName,
@@ -64,6 +61,7 @@ public sealed class Microsoft365SpreadsheetAnalysisServiceTests
         Assert.Equal(1, result.MatchingRowCount);
         Assert.Equal("3", Assert.Single(result.Rows)["Transaction ID"]);
         Assert.False(result.RowsTruncated);
+        Assert.Equal(document.Content, workbookReader.ReceivedContent);
     }
 
     private static IReadOnlyDictionary<string, string> Row(
@@ -115,20 +113,17 @@ public sealed class Microsoft365SpreadsheetAnalysisServiceTests
             CancellationToken cancellationToken) => Task.FromResult(document);
     }
 
-    private sealed class StubContentClient : IMicrosoft365DriveContentClient
-    {
-        public Task<byte[]> DownloadAsync(
-            string tenantId,
-            string driveId,
-            string driveItemId,
-            CancellationToken cancellationToken = default) => Task.FromResult(Array.Empty<byte>());
-    }
-
     private sealed class StubWorkbookReader(SpreadsheetWorkbook workbook) : ISpreadsheetWorkbookReader
     {
+        public byte[]? ReceivedContent { get; private set; }
+
         public Task<SpreadsheetWorkbook> ReadAsync(
             string fileName,
             byte[] content,
-            CancellationToken cancellationToken) => Task.FromResult(workbook);
+            CancellationToken cancellationToken)
+        {
+            ReceivedContent = content;
+            return Task.FromResult(workbook);
+        }
     }
 }
