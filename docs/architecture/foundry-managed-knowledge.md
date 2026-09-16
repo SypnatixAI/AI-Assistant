@@ -39,8 +39,12 @@ Work IQ utilise une identité utilisateur déléguée. L'authentification app-on
 3. Accorder le consentement administrateur dans chaque organisation cliente qui active Work IQ.
 4. L'utilisateur doit se connecter via l'autorité de son tenant d'origine.
 5. Configurer les droits Foundry requis pour les identités impliquées dans le flow OAuth.
+6. Pour `AnalyzeSpreadsheet`, configurer les permissions Microsoft Graph déléguées permettant de rechercher et lire les fichiers Microsoft 365 accessibles par l'utilisateur.
 
-Le backend utilise `AcquireOnBehalfOfTokenAsync` pour échanger le token API utilisateur contre un token délégué destiné à `https://ai.azure.com/.default`.
+Le backend utilise `AcquireOnBehalfOfTokenAsync` pour échanger le token API utilisateur contre :
+
+- un token délégué `https://ai.azure.com/.default` pour l'exécution Foundry/Work IQ ;
+- un token délégué `https://graph.microsoft.com/.default` pour le téléchargement direct d'un classeur utilisé par `AnalyzeSpreadsheet`.
 
 ### Configuration Foundry à réaliser dans l'environnement
 
@@ -71,13 +75,42 @@ Le chemin documentaire cible est donc directement :
 Foundry Agent -> Work IQ -> Microsoft 365
 ```
 
-Les composants liés à l'ingestion, l'indexation et aux ACL de l'ancien pipeline ne sont pas tous supprimés à cette étape, car `AnalyzeSpreadsheet` dépend encore temporairement des métadonnées indexées et de la vérification d'accès. Ils seront retirés après découplage de l'analyse Excel.
-
 ## AnalyzeSpreadsheet
 
 `AnalyzeSpreadsheet` reste un tool local. Il sert uniquement aux opérations qui exigent un calcul déterministe et exhaustif sur un classeur XLSX/XLSM : sommes, moyennes, comptages, filtres de lignes et autres calculs tabulaires.
 
-Si l'utilisateur ne connaît pas le nom exact du fichier, l'agent doit utiliser Work IQ pour identifier le classeur puis appeler `AnalyzeSpreadsheet`.
+Il ne dépend plus de l'index Microsoft 365 SynaptixAI.
+
+Le flow est maintenant :
+
+```text
+Foundry Agent
+  -> AnalyzeSpreadsheet
+  -> OBO Graph avec le bearer token du user
+  -> Microsoft Search API (driveItem)
+  -> correspondance exacte du nom XLSX/XLSM
+  -> téléchargement Graph avec le même token délégué
+  -> lecture du workbook
+  -> calcul déterministe
+```
+
+La recherche et le téléchargement utilisent tous les deux l'identité de l'utilisateur. Les ACL ne sont donc plus recalculées à partir des passages indexés : Microsoft Graph décide directement si le fichier est visible et téléchargeable par cet utilisateur.
+
+Le resolver Excel ne dépend plus de :
+
+- `IMicrosoft365IndexedContentRepository` ;
+- `IMicrosoft365UserGroupResolver` ;
+- `IMicrosoft365SharePointGroupResolver` ;
+- `IMicrosoft365SearchAccessVerifier` ;
+- l'index Azure AI Search Microsoft 365.
+
+Si l'utilisateur ne connaît pas le nom exact du fichier, l'agent doit utiliser Work IQ pour identifier le classeur puis appeler `AnalyzeSpreadsheet` avec ce nom exact.
+
+## Conséquence architecturale
+
+À partir de cette étape, aucune capacité runtime `/messages` ne nécessite l'ancien index documentaire Microsoft 365 pour fonctionner.
+
+Le worker, les subscriptions Graph, la synchronisation delta, le chunking, les embeddings, l'index Azure AI Search M365 et la réplication des ACL peuvent donc être supprimés lors de l'étape suivante, sous réserve de vérifier qu'ils ne sont pas encore utilisés par une fonctionnalité d'administration ou d'onboarding à conserver.
 
 ## Validation au démarrage du runtime
 
@@ -95,3 +128,5 @@ La version `AgentVersion` doit être mise à jour après la publication de l'age
 - Work IQ API et applications multi-tenant : https://learn.microsoft.com/en-us/microsoft-365/copilot/extensibility/work-iq-api-overview
 - Work IQ MCP avec Foundry : https://learn.microsoft.com/en-us/microsoft-365/copilot/extensibility/work-iq/mcp/quickstart/foundry
 - Foundry IQ et Knowledge Base MCP : https://learn.microsoft.com/en-us/azure/foundry/agents/quickstarts/quickstart-foundry-iq-hosted-agent
+- Microsoft Search API : https://learn.microsoft.com/en-us/graph/api/search-query
+- Get driveItem : https://learn.microsoft.com/en-us/graph/api/driveitem-get
