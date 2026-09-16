@@ -1,4 +1,3 @@
-using AssistantCore.Service.Application.Services.Messages.Connectors.Microsoft365;
 using AssistantCore.Service.Application.Services.Messages.Tools;
 using AssistantCore.Service.Application.Services.Messages.Tabular;
 using AssistantCore.Service.Infrastructure.Connectors.Microsoft365;
@@ -16,7 +15,6 @@ public static class ConnectorServiceCollectionExtensions
         _ = configuration;
 
         services.AddScoped<IToolExecutionRouter, ScopedToolExecutionRouter>();
-        services.AddScoped<IMicrosoft365SearchAccessVerifier, Microsoft365SearchAccessVerifierAdapter>();
         services.AddScoped<IMicrosoft365SpreadsheetDocumentResolver, Microsoft365SpreadsheetDocumentResolver>();
         services.AddScoped<IAiToolExecutionHandler, Microsoft365SpreadsheetAnalysisToolExecutionHandler>();
 
