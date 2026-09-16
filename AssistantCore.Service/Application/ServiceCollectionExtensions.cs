@@ -116,7 +116,6 @@ public static class ServiceCollectionExtensions
 
     public static IServiceCollection AddMicrosoft365Application(this IServiceCollection services)
     {
-        services.AddMicrosoft365WorkerApplication();
         services.AddScoped<IMicrosoft365ConnectionService, Microsoft365ConnectionService>();
         services.AddScoped<IMicrosoft365OnboardingService, Microsoft365OnboardingService>();
         services.AddScoped<IMicrosoft365ListActivationService, Microsoft365ListActivationService>();
@@ -126,45 +125,8 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IMicrosoft365SiteSelectionService, Microsoft365SiteSelectionService>();
         services.AddScoped<IMicrosoft365DriveAdministrationService, Microsoft365DriveAdministrationService>();
         services.AddScoped<IMicrosoft365CurrentUserOneDriveIndexingService, Microsoft365CurrentUserOneDriveIndexingService>();
-
-        return services;
-    }
-
-    public static IServiceCollection AddMicrosoft365WorkerApplication(this IServiceCollection services)
-    {
-        services.AddScoped<IMicrosoft365IngestionOrchestrator, Microsoft365IngestionOrchestrator>();
-        services.AddScoped<IMicrosoft365ListSynchronizationService, Microsoft365ListSynchronizationService>();
-        services.AddScoped<IMicrosoft365DriveSynchronizationService, Microsoft365DriveSynchronizationService>();
-        services.AddScoped<IMicrosoft365SubscriptionMaintenanceService, Microsoft365SubscriptionMaintenanceService>();
-        services.AddScoped<IMicrosoft365ReconciliationService, Microsoft365ReconciliationService>();
-        services.AddScoped<
-            IMicrosoft365AclReconciliationService,
-            Microsoft365AclReconciliationService>();
-        services.AddScoped<IMicrosoftGraphNotificationService, MicrosoftGraphNotificationService>();
-        services.AddSingleton<IMicrosoft365ListSchemaFingerprintGenerator, Microsoft365ListSchemaFingerprintGenerator>();
-        services.AddSingleton<IMicrosoft365ListItemWorkFactory, Microsoft365ListItemWorkFactory>();
-        services.AddSingleton<IMicrosoft365DocumentSupportPolicy, Microsoft365DocumentSupportPolicy>();
-        services.AddSingleton<IMicrosoft365DocumentWorkFactory, Microsoft365DocumentWorkFactory>();
-        services.AddScoped<
-            IMicrosoft365ContentExtractionService,
-            Microsoft365ContentExtractionService>();
-        services.AddSingleton<IMicrosoft365DocumentChunkingService, Microsoft365DocumentChunkingService>();
-        services.AddScoped<IMicrosoft365DocumentProcessingService, Microsoft365DocumentProcessingService>();
-        services.AddScoped<
-            IMicrosoft365PendingSynchronizationService,
-            Microsoft365PendingSynchronizationService>();
-        services.AddScoped<IMicrosoft365IndexCleanupService, Microsoft365IndexCleanupService>();
-        services.AddScoped<
-            IMicrosoft365ContentAclSynchronizationService,
-            Microsoft365ContentAclSynchronizationService>();
-        services.AddScoped<IMicrosoft365PassageIndexingService, Microsoft365PassageIndexingService>();
-        services.AddSingleton<
-            IMicrosoft365SecurityIdentityNormalizer,
-            Microsoft365SecurityIdentityNormalizer>();
-        services.AddSingleton<
-            IMicrosoft365PermissionRoleEvaluator,
-            Microsoft365PermissionRoleEvaluator>();
         services.AddSingleton<TimeProvider>(TimeProvider.System);
+
         return services;
     }
 }
