@@ -7,6 +7,7 @@ namespace AssistantCore.ExternalServices.Services.Microsoft;
 public sealed class MicrosoftIdentityClient(HttpClient httpClient)
 {
     private const string GraphDefaultScope = "https://graph.microsoft.com/.default";
+    private const string OnBehalfOfGrantType = "urn:ietf:params:oauth:grant-type:jwt-bearer";
 
     public Uri CreateAdminConsentUri(
         string authorityBaseUrl,
@@ -49,14 +50,7 @@ public sealed class MicrosoftIdentityClient(HttpClient httpClient)
         string scope,
         CancellationToken cancellationToken = default)
     {
-        if (!Uri.TryCreate(scope, UriKind.Absolute, out var scopeUri)
-            || scopeUri.Scheme != Uri.UriSchemeHttps
-            || !scope.EndsWith("/.default", StringComparison.OrdinalIgnoreCase))
-        {
-            throw new ArgumentException(
-                "Microsoft application token scope must be an HTTPS .default scope.",
-                nameof(scope));
-        }
+        ValidateApplicationScope(scope);
 
         using var content = new FormUrlEncodedContent(new Dictionary<string, string>
         {
@@ -65,6 +59,56 @@ public sealed class MicrosoftIdentityClient(HttpClient httpClient)
             ["grant_type"] = "client_credentials",
             ["scope"] = scope
         });
+        return await AcquireTokenAsync(
+            authorityBaseUrl,
+            tenantId,
+            content,
+            "Microsoft application token acquisition",
+            cancellationToken);
+    }
+
+    public async Task<MicrosoftAuthorizationCodeToken> AcquireOnBehalfOfTokenAsync(
+        string authorityBaseUrl,
+        string tenantId,
+        string clientId,
+        string clientSecret,
+        string userAccessToken,
+        string scope,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(userAccessToken))
+        {
+            throw new ArgumentException("The user access token is required.", nameof(userAccessToken));
+        }
+        if (string.IsNullOrWhiteSpace(scope))
+        {
+            throw new ArgumentException("The delegated scope is required.", nameof(scope));
+        }
+
+        using var content = new FormUrlEncodedContent(new Dictionary<string, string>
+        {
+            ["client_id"] = clientId,
+            ["client_secret"] = clientSecret,
+            ["grant_type"] = OnBehalfOfGrantType,
+            ["requested_token_use"] = "on_behalf_of",
+            ["assertion"] = userAccessToken,
+            ["scope"] = scope
+        });
+        return await AcquireTokenAsync(
+            authorityBaseUrl,
+            tenantId,
+            content,
+            "Microsoft on-behalf-of token acquisition",
+            cancellationToken);
+    }
+
+    private async Task<MicrosoftAuthorizationCodeToken> AcquireTokenAsync(
+        string authorityBaseUrl,
+        string tenantId,
+        HttpContent content,
+        string operationName,
+        CancellationToken cancellationToken)
+    {
         using var response = await httpClient.PostAsync(
             $"{authorityBaseUrl.TrimEnd('/')}/{Uri.EscapeDataString(tenantId)}/oauth2/v2.0/token",
             content,
@@ -73,7 +117,7 @@ public sealed class MicrosoftIdentityClient(HttpClient httpClient)
         if (!response.IsSuccessStatusCode)
         {
             throw new MicrosoftExternalException(
-                $"Microsoft application token acquisition failed with status {(int)response.StatusCode}.",
+                $"{operationName} failed with status {(int)response.StatusCode}.",
                 statusCode: response.StatusCode);
         }
 
@@ -85,6 +129,18 @@ public sealed class MicrosoftIdentityClient(HttpClient httpClient)
         }
 
         return new MicrosoftAuthorizationCodeToken(payload.AccessToken, payload.ExpiresIn);
+    }
+
+    private static void ValidateApplicationScope(string scope)
+    {
+        if (!Uri.TryCreate(scope, UriKind.Absolute, out var scopeUri)
+            || scopeUri.Scheme != Uri.UriSchemeHttps
+            || !scope.EndsWith("/.default", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new ArgumentException(
+                "Microsoft application token scope must be an HTTPS .default scope.",
+                nameof(scope));
+        }
     }
 
     private sealed record TokenResponse(

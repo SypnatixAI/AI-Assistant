@@ -55,69 +55,15 @@ public sealed class AiToolRegistry(
         OrganizationConnector connector,
         IReadOnlySet<string> executableTools)
     {
-        if (connector.Type != ConnectorType.Microsoft365)
+        if (connector.Type != ConnectorType.Microsoft365
+            || !executableTools.Contains(AiToolNames.AnalyzeMicrosoft365Spreadsheet)
+            || !connector.Sources.Any(source => source.SourceType is
+                Microsoft365SourceType.SharePoint or Microsoft365SourceType.OneDrive))
         {
             return [];
         }
 
-        var tools = new List<AiToolDefinition>();
-        if (executableTools.Contains(AiToolNames.SearchMicrosoft365))
-        {
-            var searchTool = CreateMicrosoft365SearchTool(connector);
-            if (searchTool is not null)
-            {
-                tools.Add(searchTool);
-            }
-        }
-
-        if (executableTools.Contains(AiToolNames.AnalyzeMicrosoft365Spreadsheet)
-            && connector.Sources.Any(source => source.SourceType is
-                Microsoft365SourceType.SharePoint or Microsoft365SourceType.OneDrive))
-        {
-            tools.Add(CreateMicrosoft365SpreadsheetAnalysisTool());
-        }
-
-        return tools;
-    }
-
-    private static AiToolDefinition? CreateMicrosoft365SearchTool(OrganizationConnector connector)
-    {
-        var allowedSourceTypes = connector.Sources
-            .Select(source => source.SourceType switch
-            {
-                Microsoft365SourceType.SharePoint => "sharepoint",
-                Microsoft365SourceType.OneDrive => "onedrive",
-                _ => null
-            })
-            .OfType<string>()
-            .Distinct(StringComparer.Ordinal)
-            .OrderBy(sourceType => sourceType, StringComparer.Ordinal)
-            .ToArray();
-
-        if (allowedSourceTypes.Length == 0)
-        {
-            return null;
-        }
-
-        return new AiToolDefinition(
-            AiToolNames.SearchMicrosoft365,
-            "Rechercher dans les contenus Microsoft 365 autorises et deja indexes.",
-            CreateObjectSchema(
-                new Dictionary<string, object>
-                {
-                    ["query"] = StringProperty(
-                        "Termes a rechercher dans les contenus Microsoft 365."),
-                    ["sourceTypes"] = NullableProperty(new
-                    {
-                        type = "array",
-                        items = new { type = "string", @enum = allowedSourceTypes },
-                        description = "Sources a limiter, ou null pour toutes les sources autorisees."
-                    }),
-                    ["dateFrom"] = NullableDateProperty(
-                        "Date minimale de modification des fichiers. Ne filtre pas les dates mentionnees dans leur contenu."),
-                    ["dateTo"] = NullableDateProperty(
-                        "Date maximale de modification des fichiers. Ne filtre pas les dates mentionnees dans leur contenu.")
-                }));
+        return [CreateMicrosoft365SpreadsheetAnalysisTool()];
     }
 
     private static AiToolDefinition CreateMicrosoft365SpreadsheetAnalysisTool() =>
@@ -195,13 +141,6 @@ public sealed class AiToolRegistry(
         @enum = values,
         description
     };
-
-    private static object NullableDateProperty(string description) =>
-        NullableProperty(new
-        {
-            type = "string",
-            description = $"{description} Format YYYY-MM-DD."
-        });
 
     private static object NullableScalarProperty(string description) => new
     {

@@ -5,9 +5,7 @@ namespace AssistantCore.Service.Application.Models.Messages.Tabular;
 
 public sealed record Microsoft365SpreadsheetDocument(
     string FileName,
-    string TenantId,
-    string DriveId,
-    string DriveItemId,
+    byte[] Content,
     string Reference,
     string? Url);
 

@@ -1,14 +1,13 @@
 using System.Text.Json;
-using AssistantCore.Service.Application.Models.Messages;
 using AssistantCore.Service.Application.Models.Messages.Connectors;
-using AssistantCore.Service.Application.Models.Messages.Tools;
-using AssistantCore.Service.Application.Models.Messages.Tools.Arguments;
 using AssistantCore.Service.Application.Services.Messages.Tools;
 
 namespace AssistantCore.Service.Tests.Messages;
 
 public sealed class ToolExecutionRouterTests
 {
+    private const string TestToolName = "test_read_only_tool";
+
     [Theory, AutoDomainData]
     public async Task Given_AMatchingHandler_When_ExecuteAsync_Then_MapsArgumentsAndReturnsHandlerResult(
         Guid callId,
@@ -17,7 +16,7 @@ public sealed class ToolExecutionRouterTests
     {
         // Given
         var expectedResult = ToolExecutionResult.Succeeded(callId.ToString(), [evidence]);
-        var handler = new RecordingMicrosoft365Handler(expectedResult);
+        var handler = new RecordingHandler(expectedResult);
         var router = new ToolExecutionRouter([handler]);
         var validatedToolCall = CreateValidatedToolCall(callId, query);
         var executionContext = new ConnectorExecutionContext(Guid.NewGuid(), Guid.NewGuid());
@@ -66,10 +65,7 @@ public sealed class ToolExecutionRouterTests
         // Given
         var handlerResult = ToolExecutionResult.Succeeded(callId.ToString(), [evidence]);
         var router = new ToolExecutionRouter(
-            [
-                new RecordingMicrosoft365Handler(handlerResult),
-                new RecordingMicrosoft365Handler(handlerResult)
-            ]);
+            [new RecordingHandler(handlerResult), new RecordingHandler(handlerResult)]);
         var validatedToolCall = CreateValidatedToolCall(callId, query);
         var executionContext = new ConnectorExecutionContext(Guid.NewGuid(), Guid.NewGuid());
 
@@ -90,12 +86,11 @@ public sealed class ToolExecutionRouterTests
         RetrievedEvidence evidence)
     {
         // Given
-        var handlerResult = ToolExecutionResult.Succeeded(callId.ToString(), [evidence]);
-        var handler = new RecordingMicrosoft365Handler(handlerResult);
+        var handler = new RecordingHandler(ToolExecutionResult.Succeeded(callId.ToString(), [evidence]));
         var router = new ToolExecutionRouter([handler]);
         var validatedToolCall = new ValidatedToolCall(
             callId.ToString(),
-            AiToolNames.SearchMicrosoft365,
+            TestToolName,
             JsonSerializer.SerializeToElement(new { query = 123 }));
         var executionContext = new ConnectorExecutionContext(Guid.NewGuid(), Guid.NewGuid());
 
@@ -136,22 +131,21 @@ public sealed class ToolExecutionRouterTests
 
     private static ValidatedToolCall CreateValidatedToolCall(Guid callId, string query) => new(
         callId.ToString(),
-        AiToolNames.SearchMicrosoft365,
+        TestToolName,
         JsonSerializer.SerializeToElement(new { query }));
 
-    private sealed class RecordingMicrosoft365Handler(ToolExecutionResult result)
-        : AiToolExecutionHandler<SearchMicrosoft365ToolArguments>(
-            AiToolNames.SearchMicrosoft365)
+    private sealed record TestToolArguments(string Query);
+
+    private sealed class RecordingHandler(ToolExecutionResult result)
+        : AiToolExecutionHandler<TestToolArguments>(TestToolName)
     {
         public string? ReceivedToolCallId { get; private set; }
-
-        public SearchMicrosoft365ToolArguments? ReceivedArguments { get; private set; }
-
+        public TestToolArguments? ReceivedArguments { get; private set; }
         public ConnectorExecutionContext? ReceivedExecutionContext { get; private set; }
 
         protected override Task<ToolExecutionResult> ExecuteAsync(
             string toolCallId,
-            SearchMicrosoft365ToolArguments arguments,
+            TestToolArguments arguments,
             ConnectorExecutionContext executionContext,
             CancellationToken cancellationToken)
         {

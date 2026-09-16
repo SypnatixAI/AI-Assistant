@@ -98,6 +98,7 @@ public static class Microsoft365ServiceCollectionExtensions
         services.AddHttpClient<MicrosoftGraphListItemDeltaClient>();
         services.AddHttpClient<MicrosoftGraphDriveItemDeltaClient>();
         services.AddHttpClient<MicrosoftGraphSharedDriveItemSearchClient>();
+        AddProtectedHttpClient<MicrosoftGraphDriveItemSearchClient>(services);
         AddProtectedHttpClient<MicrosoftGraphDriveContentClient>(services);
         services.AddHttpClient<MicrosoftGraphSiteSourcesClient>();
         AddProtectedHttpClient<MicrosoftGraphSiteClient>(services);
@@ -122,6 +123,7 @@ public static class Microsoft365ServiceCollectionExtensions
             .RedactLoggedHeaders(["api-key", "Authorization"]);
         services.AddHttpClient<MicrosoftVisionReadClient>()
             .RedactLoggedHeaders(["Ocp-Apim-Subscription-Key"]);
+        services.AddScoped<IMicrosoft365DelegatedTokenProvider, Microsoft365DelegatedTokenProvider>();
         services.AddScoped<IMicrosoft365ConsentClient, Microsoft365ConsentClientAdapter>();
         services.AddScoped<IMicrosoft365ListItemDeltaClient, Microsoft365ListItemDeltaClientAdapter>();
         services.AddScoped<IMicrosoft365DriveItemDeltaClient, Microsoft365DriveItemDeltaClientAdapter>();

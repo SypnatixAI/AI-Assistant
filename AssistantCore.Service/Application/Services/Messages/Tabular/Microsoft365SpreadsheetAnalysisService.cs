@@ -1,13 +1,11 @@
 using AssistantCore.Repository.Domain.Enums;
 using AssistantCore.Service.Application.Models.Messages.Connectors;
 using AssistantCore.Service.Application.Models.Messages.Tabular;
-using AssistantCore.Service.Application.Services.Microsoft365;
 
 namespace AssistantCore.Service.Application.Services.Messages.Tabular;
 
 public sealed class Microsoft365SpreadsheetAnalysisService(
     IMicrosoft365SpreadsheetDocumentResolver documentResolver,
-    IMicrosoft365DriveContentClient contentClient,
     ISpreadsheetWorkbookReader workbookReader,
     ISpreadsheetAnalysisEngine analysisEngine) : IMicrosoft365SpreadsheetAnalysisService
 {
@@ -33,14 +31,9 @@ public sealed class Microsoft365SpreadsheetAnalysisService(
             request.FileName,
             context,
             cancellationToken);
-        var content = await contentClient.DownloadAsync(
-            document.TenantId,
-            document.DriveId,
-            document.DriveItemId,
-            cancellationToken);
         var workbook = await workbookReader.ReadAsync(
             document.FileName,
-            content,
+            document.Content,
             cancellationToken);
         var computation = analysisEngine.Analyze(workbook, request);
 

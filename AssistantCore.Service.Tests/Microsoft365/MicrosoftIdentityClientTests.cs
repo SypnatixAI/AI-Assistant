@@ -43,6 +43,49 @@ public sealed class MicrosoftIdentityClientTests
     }
 
     [Theory, AutoDomainData]
+    public async Task Given_AUserAssertion_When_AcquireOnBehalfOfTokenAsync_Then_UsesDelegatedGrant(
+        string tenantId,
+        string clientId,
+        string clientSecret,
+        string userAccessToken,
+        string accessToken)
+    {
+        // Given
+        const string scope = "api://workiq.svc.cloud.microsoft/WorkIQAgent.Ask";
+        string? body = null;
+        using var httpClient = new HttpClient(new StubHttpMessageHandler(request =>
+        {
+            body = request.Content!.ReadAsStringAsync().GetAwaiter().GetResult();
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(
+                    $$"""{"access_token":"{{accessToken}}","expires_in":3600}""")
+            };
+        }));
+        var client = new MicrosoftIdentityClient(httpClient);
+
+        // When
+        var result = await client.AcquireOnBehalfOfTokenAsync(
+            "https://login.microsoftonline.com",
+            tenantId,
+            clientId,
+            clientSecret,
+            userAccessToken,
+            scope,
+            CancellationToken.None);
+
+        // Then
+        Assert.Contains(
+            "grant_type=urn%3Aietf%3Aparams%3Aoauth%3Agrant-type%3Ajwt-bearer",
+            body,
+            StringComparison.Ordinal);
+        Assert.Contains("requested_token_use=on_behalf_of", body, StringComparison.Ordinal);
+        Assert.Contains($"assertion={Uri.EscapeDataString(userAccessToken)}", body, StringComparison.Ordinal);
+        Assert.Contains($"scope={Uri.EscapeDataString(scope)}", body, StringComparison.Ordinal);
+        Assert.Equal(accessToken, result.AccessToken);
+    }
+
+    [Theory, AutoDomainData]
     public void Given_ConsentState_When_CreateAdminConsentUri_Then_UsesMultitenantAdminConsentFlow(
         string clientId,
         string state)

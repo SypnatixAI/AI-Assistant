@@ -87,7 +87,7 @@ public sealed class FoundryAgentRuntime(
             .ToArray();
 
         logger.LogInformation(
-            "Foundry execution context prepared in {ElapsedMilliseconds} ms with {ToolCount} authorized tools: {ToolNames}.",
+            "Foundry execution context prepared in {ElapsedMilliseconds} ms with {ToolCount} local authorized tools: {ToolNames}. Managed knowledge is provided by Work IQ and Foundry IQ on the published agent.",
             Stopwatch.GetElapsedTime(contextStartedAt).TotalMilliseconds,
             authorizedTools.Length,
             string.Join(", ", authorizedTools.Select(tool => tool.Name)));
@@ -102,12 +102,12 @@ public sealed class FoundryAgentRuntime(
         {
             if (!authorizedToolMappings.TryGetValue(toolCall.Name, out var internalTool))
             {
-                throw new InvalidOperationException($"Foundry requested an unauthorized tool '{toolCall.Name}'.");
+                throw new InvalidOperationException($"Foundry requested an unauthorized local tool '{toolCall.Name}'.");
             }
 
             var toolStopwatch = Stopwatch.StartNew();
             logger.LogInformation(
-                "Foundry requested tool {ToolName}.",
+                "Foundry requested local tool {ToolName}.",
                 toolCall.Name);
 
             var requestedCall = new AiRequestedToolCall(
@@ -130,7 +130,7 @@ public sealed class FoundryAgentRuntime(
 
             toolStopwatch.Stop();
             logger.LogInformation(
-                "Foundry tool {ToolName} completed in {ElapsedMilliseconds} ms with status {ToolStatus}.",
+                "Foundry local tool {ToolName} completed in {ElapsedMilliseconds} ms with status {ToolStatus}.",
                 toolCall.Name,
                 toolStopwatch.Elapsed.TotalMilliseconds,
                 result.Status);
@@ -171,7 +171,6 @@ public sealed class FoundryAgentRuntime(
         {
             var foundryName = tool.Name switch
             {
-                AiToolNames.SearchMicrosoft365 => "EnterpriseSearch",
                 AiToolNames.AnalyzeMicrosoft365Spreadsheet => "AnalyzeSpreadsheet",
                 _ => null
             };
@@ -186,16 +185,11 @@ public sealed class FoundryAgentRuntime(
 
     private static string GetFoundryToolDescription(string toolName) => toolName switch
     {
-        "EnterpriseSearch" =>
-            "Search authorized internal enterprise information when the answer depends on organization-specific data. "
-            + "When an exhaustive spreadsheet calculation is requested without an exact Excel file name, use this tool first "
-            + "to identify the exact XLSX or XLSM title, then call AnalyzeSpreadsheet. Do not infer exhaustive spreadsheet "
-            + "results from search excerpts.",
         "AnalyzeSpreadsheet" =>
             "Use deterministic calculations over every row of an authorized Microsoft 365 XLSX or XLSM file. Always use "
-            + "this tool for averages, sums, minima, maxima, counts and exhaustive row filtering; do not use semantic search "
-            + "for those operations. If the exact file name is unknown, call EnterpriseSearch first to identify it, then call "
-            + "this tool with that exact file name.",
+            + "this tool for averages, sums, minima, maxima, counts and exhaustive row filtering; do not rely on semantic "
+            + "knowledge retrieval for those operations. If the exact file name is unknown, use Work IQ first to identify "
+            + "the exact XLSX or XLSM title, then call this tool with that exact file name.",
         _ => throw new ArgumentOutOfRangeException(nameof(toolName), toolName, null)
     };
 
@@ -233,7 +227,7 @@ public sealed class FoundryAgentRuntime(
             .ToArray();
 
         logger.LogInformation(
-            "Foundry agent turn completed in {ElapsedMilliseconds} ms with {ModelCallCount} model calls, {ToolCallCount} tool calls, {InputTokens} input tokens and {OutputTokens} output tokens.",
+            "Foundry agent turn completed in {ElapsedMilliseconds} ms with {ModelCallCount} model calls, {ToolCallCount} local tool calls, {InputTokens} input tokens and {OutputTokens} output tokens.",
             executionTime.TotalMilliseconds,
             response.ModelCallCount,
             executedToolResults.Count,

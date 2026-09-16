@@ -22,11 +22,16 @@ public sealed record FoundryAgentExternalToolCall(
     string Name,
     JsonElement Arguments);
 
+public sealed record FoundryAgentExternalAccessToken(
+    string AccessToken,
+    DateTimeOffset ExpiresOn);
+
 public sealed record FoundryAgentExternalRequest(
     IReadOnlyCollection<FoundryAgentExternalMessage> ConversationHistory,
     string UserMessage,
     IReadOnlyCollection<FoundryAgentExternalToolDefinition> Tools,
-    Guid ConversationId = default);
+    Guid ConversationId,
+    FoundryAgentExternalAccessToken DelegatedAccessToken);
 
 public sealed record FoundryAgentExternalResult(
     string Content,

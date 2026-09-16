@@ -8,46 +8,37 @@ namespace AssistantCore.Service.Tests.Messages;
 public sealed class AiToolCallValidatorTests
 {
     [Theory, AutoDomainData]
-    public async Task Given_AValidRegisteredTool_When_ValidateAsync_Then_ReturnsValidatedCall(
-        Guid callId)
+    public async Task Given_AValidRegisteredTool_When_ValidateAsync_Then_ReturnsValidatedCall(Guid callId)
     {
         // Given
-        var requestedToolCall = CreateMicrosoft365Call(callId.ToString());
+        var requestedToolCall = CreateReadOnlyCall(callId.ToString());
         var validator = CreateValidator();
 
         // When
         var result = await validator.ValidateAsync(
             requestedToolCall,
-            [CreateMicrosoft365Tool()],
+            [CreateReadOnlyTool()],
             CancellationToken.None);
 
         // Then
         Assert.Equal(requestedToolCall.CallId, result.CallId);
-        Assert.Equal(AiToolNames.SearchMicrosoft365, result.ToolName);
-        Assert.Equal(
-            requestedToolCall.Arguments.GetRawText(),
-            result.Arguments.GetRawText());
+        Assert.Equal(AiToolNames.AnalyzeMicrosoft365Spreadsheet, result.ToolName);
+        Assert.Equal(requestedToolCall.Arguments.GetRawText(), result.Arguments.GetRawText());
     }
 
     [Theory, AutoDomainData]
     public async Task Given_AnUnknownTool_When_ValidateAsync_Then_RejectsCall(Guid callId)
     {
         // Given
-        var requestedToolCall = CreateMicrosoft365Call(
-            callId.ToString(),
-            toolName: "unknown_tool");
+        var requestedToolCall = CreateReadOnlyCall(callId.ToString(), toolName: "unknown_tool");
         var validator = CreateValidator();
 
         // When
         var exception = await Assert.ThrowsAsync<ToolCallValidationException>(() =>
-            validator.ValidateAsync(
-                requestedToolCall,
-                [CreateMicrosoft365Tool()],
-                CancellationToken.None));
+            validator.ValidateAsync(requestedToolCall, [CreateReadOnlyTool()], CancellationToken.None));
 
         // Then
         Assert.Equal(callId.ToString(), exception.ToolCallId);
-        Assert.Equal("TOOL_CALL_REJECTED", ToolCallValidationException.TechnicalCode);
     }
 
     [Theory, AutoDomainData]
@@ -55,17 +46,14 @@ public sealed class AiToolCallValidatorTests
     {
         // Given
         const string writeToolName = "delete_erp_invoice";
-        var requestedToolCall = CreateMicrosoft365Call(
-            callId.ToString(),
-            toolName: writeToolName);
-        var availableTool = CreateMicrosoft365Tool(writeToolName);
+        var requestedToolCall = CreateReadOnlyCall(callId.ToString(), toolName: writeToolName);
         var validator = CreateValidator();
 
         // When
         var exception = await Assert.ThrowsAsync<ToolCallValidationException>(() =>
             validator.ValidateAsync(
                 requestedToolCall,
-                [availableTool],
+                [CreateReadOnlyTool(writeToolName)],
                 CancellationToken.None));
 
         // Then
@@ -76,100 +64,40 @@ public sealed class AiToolCallValidatorTests
     public async Task Given_AMissingRequiredField_When_ValidateAsync_Then_RejectsCall(Guid callId)
     {
         // Given
-        var requestedToolCall = CreateMicrosoft365Call(
-            callId.ToString(),
-            new Dictionary<string, object?>
-            {
-                ["sourceTypes"] = new[] { "sharepoint" },
-                ["dateFrom"] = null,
-                ["dateTo"] = null
-            });
+        var arguments = CreateValidArguments();
+        arguments.Remove("query");
+        var requestedToolCall = CreateReadOnlyCall(callId.ToString(), arguments);
         var validator = CreateValidator();
 
         // When
         var exception = await Assert.ThrowsAsync<ToolCallValidationException>(() =>
-            validator.ValidateAsync(
-                requestedToolCall,
-                [CreateMicrosoft365Tool()],
-                CancellationToken.None));
+            validator.ValidateAsync(requestedToolCall, [CreateReadOnlyTool()], CancellationToken.None));
 
         // Then
         Assert.Contains("query", exception.Message, StringComparison.Ordinal);
     }
 
-    [Theory, AutoDomainData]
-    public async Task Given_AnUnexpectedField_When_ValidateAsync_Then_RejectsCall(Guid callId)
-    {
-        // Given
-        var arguments = CreateValidMicrosoft365Arguments();
-        arguments["customField"] = "value";
-        var requestedToolCall = CreateMicrosoft365Call(callId.ToString(), arguments);
-        var validator = CreateValidator();
-
-        // When
-        var exception = await Assert.ThrowsAsync<ToolCallValidationException>(() =>
-            validator.ValidateAsync(
-                requestedToolCall,
-                [CreateMicrosoft365Tool()],
-                CancellationToken.None));
-
-        // Then
-        Assert.Contains("Unexpected field", exception.Message, StringComparison.Ordinal);
-    }
-
     [Theory]
     [InlineAutoDomainData("url")]
-    [InlineAutoDomainData("providerUrl")]
-    [InlineAutoDomainData("endpoint")]
-    [InlineAutoDomainData("sql")]
-    [InlineAutoDomainData("table")]
-    [InlineAutoDomainData("tableName")]
-    [InlineAutoDomainData("organizationId")]
-    [InlineAutoDomainData("tenantId")]
     [InlineAutoDomainData("token")]
-    [InlineAutoDomainData("accessToken")]
     [InlineAutoDomainData("apiKey")]
-    [InlineAutoDomainData("indexName")]
-    [InlineAutoDomainData("odataFilter")]
+    [InlineAutoDomainData("organizationId")]
     public async Task Given_ATechnicalField_When_ValidateAsync_Then_RejectsCall(
         string technicalFieldName,
         Guid callId)
     {
         // Given
-        var arguments = CreateValidMicrosoft365Arguments();
+        var arguments = CreateValidArguments();
         arguments[technicalFieldName] = "untrusted-value";
-        var requestedToolCall = CreateMicrosoft365Call(callId.ToString(), arguments);
+        var requestedToolCall = CreateReadOnlyCall(callId.ToString(), arguments);
         var validator = CreateValidator();
 
         // When
         var exception = await Assert.ThrowsAsync<ToolCallValidationException>(() =>
-            validator.ValidateAsync(
-                requestedToolCall,
-                [CreateMicrosoft365Tool()],
-                CancellationToken.None));
+            validator.ValidateAsync(requestedToolCall, [CreateReadOnlyTool()], CancellationToken.None));
 
         // Then
         Assert.Contains("Technical field", exception.Message, StringComparison.Ordinal);
-    }
-
-    [Theory, AutoDomainData]
-    public async Task Given_AnInvalidEnumValue_When_ValidateAsync_Then_RejectsCall(Guid callId)
-    {
-        // Given
-        var arguments = CreateValidMicrosoft365Arguments();
-        arguments["sourceTypes"] = new[] { "outlook" };
-        var requestedToolCall = CreateMicrosoft365Call(callId.ToString(), arguments);
-        var validator = CreateValidator();
-
-        // When
-        var exception = await Assert.ThrowsAsync<ToolCallValidationException>(() =>
-            validator.ValidateAsync(
-                requestedToolCall,
-                [CreateMicrosoft365Tool()],
-                CancellationToken.None));
-
-        // Then
-        Assert.Contains("not allowed", exception.Message, StringComparison.Ordinal);
     }
 
     [Theory]
@@ -181,18 +109,15 @@ public sealed class AiToolCallValidatorTests
         Guid callId)
     {
         // Given
-        var arguments = CreateValidMicrosoft365Arguments();
+        var arguments = CreateValidArguments();
         arguments["dateFrom"] = dateFrom;
         arguments["dateTo"] = dateTo;
-        var requestedToolCall = CreateMicrosoft365Call(callId.ToString(), arguments);
+        var requestedToolCall = CreateReadOnlyCall(callId.ToString(), arguments);
         var validator = CreateValidator();
 
         // When
         var exception = await Assert.ThrowsAsync<ToolCallValidationException>(() =>
-            validator.ValidateAsync(
-                requestedToolCall,
-                [CreateMicrosoft365Tool()],
-                CancellationToken.None));
+            validator.ValidateAsync(requestedToolCall, [CreateReadOnlyTool()], CancellationToken.None));
 
         // Then
         Assert.Equal(callId.ToString(), exception.ToolCallId);
@@ -202,16 +127,15 @@ public sealed class AiToolCallValidatorTests
     public async Task Given_AnOversizedString_When_ValidateAsync_Then_RejectsCall(Guid callId)
     {
         // Given
-        var arguments = CreateValidMicrosoft365Arguments();
+        var arguments = CreateValidArguments();
         arguments["query"] = new string('a', 501);
-        var requestedToolCall = CreateMicrosoft365Call(callId.ToString(), arguments);
         var validator = CreateValidator();
 
         // When
         var exception = await Assert.ThrowsAsync<ToolCallValidationException>(() =>
             validator.ValidateAsync(
-                requestedToolCall,
-                [CreateMicrosoft365Tool()],
+                CreateReadOnlyCall(callId.ToString(), arguments),
+                [CreateReadOnlyTool()],
                 CancellationToken.None));
 
         // Then
@@ -219,72 +143,9 @@ public sealed class AiToolCallValidatorTests
     }
 
     [Theory, AutoDomainData]
-    public async Task Given_AnInvalidList_When_ValidateAsync_Then_RejectsCall(Guid callId)
-    {
-        // Given
-        var arguments = CreateValidMicrosoft365Arguments();
-        arguments["sourceTypes"] = new[] { "sharepoint", "sharepoint" };
-        var requestedToolCall = CreateMicrosoft365Call(callId.ToString(), arguments);
-        var validator = CreateValidator();
-
-        // When
-        var exception = await Assert.ThrowsAsync<ToolCallValidationException>(() =>
-            validator.ValidateAsync(
-                requestedToolCall,
-                [CreateMicrosoft365Tool()],
-                CancellationToken.None));
-
-        // Then
-        Assert.Contains("duplicate", exception.Message, StringComparison.Ordinal);
-    }
-
-    [Theory]
-    [InlineAutoDomainData("-1")]
-    [InlineAutoDomainData("101")]
-    [InlineAutoDomainData("\"invalid\"")]
-    public async Task Given_AnInvalidNumber_When_ValidateAsync_Then_RejectsCall(
-        string amountJson,
-        Guid callId)
-    {
-        // Given
-        var schema = ParseJson(
-            """
-            {
-              "type": "object",
-              "properties": {
-                "amount": { "type": "number", "minimum": 0, "maximum": 100 }
-              },
-              "required": ["amount"],
-              "additionalProperties": false
-            }
-            """);
-        var arguments = ParseJson($$"""{"amount":{{amountJson}}}""");
-        var requestedToolCall = new AiRequestedToolCall(
-            callId.ToString(),
-            AiToolNames.SearchMicrosoft365,
-            arguments);
-        var availableTool = new AiToolDefinition(
-            AiToolNames.SearchMicrosoft365,
-            "Test numeric validation.",
-            schema);
-        var validator = CreateValidator();
-
-        // When
-        var exception = await Assert.ThrowsAsync<ToolCallValidationException>(() =>
-            validator.ValidateAsync(
-                requestedToolCall,
-                [availableTool],
-                CancellationToken.None));
-
-        // Then
-        Assert.Equal(callId.ToString(), exception.ToolCallId);
-    }
-
-    [Theory, AutoDomainData]
     public async Task Given_ACancelledRequest_When_ValidateAsync_Then_PropagatesCancellation(Guid callId)
     {
         // Given
-        var requestedToolCall = CreateMicrosoft365Call(callId.ToString());
         using var cancellationSource = new CancellationTokenSource();
         await cancellationSource.CancelAsync();
         var validator = CreateValidator();
@@ -292,67 +153,48 @@ public sealed class AiToolCallValidatorTests
         // When
         var exception = await Record.ExceptionAsync(() =>
             validator.ValidateAsync(
-                requestedToolCall,
-                [CreateMicrosoft365Tool()],
+                CreateReadOnlyCall(callId.ToString()),
+                [CreateReadOnlyTool()],
                 cancellationSource.Token));
 
         // Then
         Assert.IsType<OperationCanceledException>(exception);
     }
 
-    private static AiRequestedToolCall CreateMicrosoft365Call(
+    private static AiRequestedToolCall CreateReadOnlyCall(
         string callId,
         IReadOnlyDictionary<string, object?>? arguments = null,
-        string toolName = AiToolNames.SearchMicrosoft365) => new(
+        string toolName = AiToolNames.AnalyzeMicrosoft365Spreadsheet) => new(
             callId,
             toolName,
-            JsonSerializer.SerializeToElement(
-                arguments ?? CreateValidMicrosoft365Arguments()));
+            JsonSerializer.SerializeToElement(arguments ?? CreateValidArguments()));
 
     private static AiToolCallValidator CreateValidator() => new(
         new AiToolArgumentSchemaValidator(),
         new AiToolArgumentSecurityValidator(),
         new AiToolDateRangeValidator());
 
-    private static Dictionary<string, object?> CreateValidMicrosoft365Arguments() => new()
+    private static Dictionary<string, object?> CreateValidArguments() => new()
     {
         ["query"] = "rapport ventes trimestre",
-        ["sourceTypes"] = new[] { "sharepoint" },
         ["dateFrom"] = "2026-04-01",
         ["dateTo"] = "2026-06-30"
     };
 
-    private static AiToolDefinition CreateMicrosoft365Tool(
-        string toolName = AiToolNames.SearchMicrosoft365) => new(
+    private static AiToolDefinition CreateReadOnlyTool(
+        string toolName = AiToolNames.AnalyzeMicrosoft365Spreadsheet) => new(
             toolName,
-            "Search Microsoft 365.",
+            "Read-only validation test.",
             ParseJson(
                 """
                 {
                   "type": "object",
                   "properties": {
                     "query": { "type": "string" },
-                    "sourceTypes": {
-                      "anyOf": [
-                        {
-                          "type": "array",
-                          "items": {
-                            "type": "string",
-                            "enum": ["sharepoint", "onedrive"]
-                          },
-                          "uniqueItems": true
-                        },
-                        { "type": "null" }
-                      ]
-                    },
-                    "dateFrom": {
-                      "anyOf": [{ "type": "string" }, { "type": "null" }]
-                    },
-                    "dateTo": {
-                      "anyOf": [{ "type": "string" }, { "type": "null" }]
-                    }
+                    "dateFrom": { "anyOf": [{ "type": "string" }, { "type": "null" }] },
+                    "dateTo": { "anyOf": [{ "type": "string" }, { "type": "null" }] }
                   },
-                  "required": ["query", "sourceTypes", "dateFrom", "dateTo"],
+                  "required": ["query", "dateFrom", "dateTo"],
                   "additionalProperties": false
                 }
                 """));

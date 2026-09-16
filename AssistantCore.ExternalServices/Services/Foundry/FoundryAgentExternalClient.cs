@@ -45,7 +45,8 @@ public sealed class FoundryAgentExternalClient
         ArgumentNullException.ThrowIfNull(toolExecutor);
 
         await ValidateConfigurationOnceAsync(cancellationToken);
-        var agent = CreateAgent(request.Tools, toolExecutor);
+        var projectClient = CreateDelegatedProjectClient(request.DelegatedAccessToken);
+        var agent = CreateAgent(projectClient, request.Tools, toolExecutor);
 
         AgentResponse response;
         if (request.ConversationId == Guid.Empty)
@@ -70,7 +71,7 @@ public sealed class FoundryAgentExternalClient
                     cancellationToken: cancellationToken);
 
                 _logger.LogInformation(
-                    "Foundry conversation {ConversationId} used a {SessionMode} agent session.",
+                    "Foundry conversation {ConversationId} used a {SessionMode} delegated agent session.",
                     request.ConversationId,
                     isNewSession ? "new" : "reused");
             }
@@ -108,7 +109,13 @@ public sealed class FoundryAgentExternalClient
         ArgumentNullException.ThrowIfNull(onActivityCompleted);
 
         await ValidateConfigurationOnceAsync(cancellationToken);
-        var agent = CreateAgent(request.Tools, toolExecutor, onActivityDelta, onActivityCompleted);
+        var projectClient = CreateDelegatedProjectClient(request.DelegatedAccessToken);
+        var agent = CreateAgent(
+            projectClient,
+            request.Tools,
+            toolExecutor,
+            onActivityDelta,
+            onActivityCompleted);
 
         if (request.ConversationId == Guid.Empty)
         {
@@ -142,7 +149,7 @@ public sealed class FoundryAgentExternalClient
                 cancellationToken);
 
             _logger.LogInformation(
-                "Foundry conversation {ConversationId} used a {SessionMode} streaming agent session.",
+                "Foundry conversation {ConversationId} used a {SessionMode} delegated streaming agent session.",
                 request.ConversationId,
                 isNewSession ? "new" : "reused");
             return result;
@@ -251,13 +258,16 @@ public sealed class FoundryAgentExternalClient
                 agentVersion.Definition,
                 new ModelReaderWriterOptions("W"));
             using var document = JsonDocument.Parse(serializedDefinition.ToStream());
-            FoundryAgentDefinitionValidator.Validate(document.RootElement);
+            FoundryAgentDefinitionValidator.Validate(document.RootElement, _settings);
 
             _configurationValidated = true;
             _logger.LogInformation(
-                "Validated Foundry agent {AgentName} version {AgentVersion}: EnterpriseSearch is declared and web search is disabled.",
+                "Validated Foundry agent {AgentName} version {AgentVersion} managed knowledge configuration. Work IQ required: {RequireWorkIq}; Foundry IQ required: {RequireFoundryIq}; legacy EnterpriseSearch required: {RequireEnterpriseSearch}.",
                 _settings.AgentName,
-                _settings.AgentVersion);
+                _settings.AgentVersion,
+                _settings.RequireWorkIq,
+                _settings.RequireFoundryIq,
+                _settings.RequireEnterpriseSearch);
         }
         finally
         {
@@ -265,7 +275,25 @@ public sealed class FoundryAgentExternalClient
         }
     }
 
+    private AIProjectClient CreateDelegatedProjectClient(
+        FoundryAgentExternalAccessToken accessToken)
+    {
+        if (string.IsNullOrWhiteSpace(accessToken.AccessToken)
+            || accessToken.ExpiresOn <= DateTimeOffset.UtcNow)
+        {
+            throw new UnauthorizedAccessException(
+                "The delegated Foundry access token is missing or expired.");
+        }
+
+        return new AIProjectClient(
+            new Uri(_settings.ProjectEndpoint),
+            new FixedAccessTokenCredential(
+                accessToken.AccessToken,
+                accessToken.ExpiresOn));
+    }
+
     private AIAgent CreateAgent(
+        AIProjectClient projectClient,
         IReadOnlyCollection<FoundryAgentExternalToolDefinition> toolDefinitions,
         Func<FoundryAgentExternalToolCall, CancellationToken, Task<string>> toolExecutor,
         Func<string, CancellationToken, ValueTask>? onActivityDelta = null,
@@ -281,12 +309,12 @@ public sealed class FoundryAgentExternalClient
             .ToArray();
 
         _logger.LogInformation(
-            "Using Foundry agent {AgentName} version {AgentVersion} from {ProjectEndpoint}.",
+            "Using Foundry agent {AgentName} version {AgentVersion} from {ProjectEndpoint} with delegated user authentication.",
             _settings.AgentName,
             _settings.AgentVersion,
             _settings.ProjectEndpoint);
 
-        return _projectClient.AsAIAgent(
+        return projectClient.AsAIAgent(
             new AgentReference(
                 _settings.AgentName,
                 _settings.AgentVersion),

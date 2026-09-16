@@ -6,15 +6,17 @@ using AssistantCore.Service.Application.Services.Messages.AgentRuntime;
 namespace AssistantCore.Service.Infrastructure.Foundry;
 
 public sealed class FoundryAgentClientAdapter(
-    FoundryAgentExternalClient externalClient) : IFoundryAgentClient
+    FoundryAgentExternalClient externalClient,
+    IFoundryDelegatedAccessTokenProvider delegatedAccessTokenProvider) : IFoundryAgentClient
 {
     public async Task<FoundryAgentClientResult> RunAsync(
         FoundryAgentClientRequest request,
         FoundryAgentToolExecutor toolExecutor,
         CancellationToken cancellationToken)
     {
+        var delegatedToken = await delegatedAccessTokenProvider.GetAsync(cancellationToken);
         var result = await externalClient.RunAsync(
-            MapRequest(request),
+            MapRequest(request, delegatedToken),
             (toolCall, token) => toolExecutor(
                 new FoundryAgentToolCall(toolCall.Name, toolCall.Arguments),
                 token),
@@ -31,8 +33,9 @@ public sealed class FoundryAgentClientAdapter(
         Func<CancellationToken, ValueTask> onActivityCompleted,
         CancellationToken cancellationToken)
     {
+        var delegatedToken = await delegatedAccessTokenProvider.GetAsync(cancellationToken);
         var result = await externalClient.RunStreamingAsync(
-            MapRequest(request),
+            MapRequest(request, delegatedToken),
             (toolCall, token) => toolExecutor(
                 new FoundryAgentToolCall(toolCall.Name, toolCall.Arguments),
                 token),
@@ -45,7 +48,8 @@ public sealed class FoundryAgentClientAdapter(
     }
 
     private static FoundryAgentExternalRequest MapRequest(
-        FoundryAgentClientRequest request) =>
+        FoundryAgentClientRequest request,
+        FoundryDelegatedAccessToken delegatedToken) =>
         new(
             request.ConversationHistory.Select(MapMessage).ToArray(),
             request.UserMessage,
@@ -56,7 +60,10 @@ public sealed class FoundryAgentClientAdapter(
                     tool.InputSchema,
                     tool.DisplayName))
                 .ToArray(),
-            request.ConversationId);
+            request.ConversationId,
+            new FoundryAgentExternalAccessToken(
+                delegatedToken.AccessToken,
+                delegatedToken.ExpiresOn));
 
     private static FoundryAgentExternalMessage MapMessage(AiConversationMessage message) =>
         new(
